@@ -181,10 +181,8 @@ miss.
   `spail_test` databases.
 - **D2 — SSE token persistence cadence.** Debounce interval vs. tokens-per-
   flush; measure in M3.
-- **D3 — Markdown pipeline.** `marked` vs `markdown-it`; sanitizer choice.
-  Decide in M4; keep it swappable behind one `renderMarkdown()`.
-- **D4 — Attachment storage.** bytea in Postgres vs. files on disk + path in
-  DB. Decide in M5-ish; bytea is simpler until proven slow.
+- ~~**D3 — Markdown pipeline.**~~ **Resolved 2026-07-06: `marked` (GFM out of the box) + `highlight.js` (sync API) + `sanitize-html` (runs last, allowlist), behind `renderMarkdown()` in `src/utils/markdown.ts`.**
+- ~~**D4 — Attachment storage.**~~ **Resolved 2026-07-06: bytea in Postgres — the importer decodes attachments straight into the existing `attachments` table; no new migration.**
 
 ## Reference material (the organ donor)
 

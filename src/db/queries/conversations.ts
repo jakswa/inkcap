@@ -57,3 +57,55 @@ export async function setConversationCurrNode(input: { id: string; currNode: str
 
   return conversation
 }
+
+// Importer-only: the llama-ui export carries its own id (reused verbatim as
+// our conversation id when it's UUID-shaped) and original timestamps, so this
+// bypasses the randomUUIDv7()/now() defaults that createConversation uses.
+export async function createImportedConversation(input: {
+  id: string
+  userId: string
+  title?: string | null
+  pinned?: boolean
+  forkedFromConversationId?: string | null
+  createdAt: Date
+}) {
+  const [conversation] = await sql.CreateImportedConversation`
+    INSERT INTO conversations (
+      id, user_id, title, pinned, forked_from_conversation_id, created_at, updated_at
+    )
+    VALUES (
+      ${input.id},
+      ${input.userId},
+      ${input.title ?? null},
+      ${input.pinned ?? false},
+      ${input.forkedFromConversationId ?? null},
+      ${input.createdAt},
+      ${input.createdAt}
+    )
+    RETURNING id, user_id, title, provider_id, model, curr_node, pinned,
+              forked_from_conversation_id, created_at, updated_at
+  `
+
+  return conversation
+}
+
+// Importer idempotency fallback for conversations whose source id isn't
+// UUID-shaped (the fork's crypto.randomUUID-unavailable fallback): match on
+// (user, title, created_at) instead, since we set created_at from the
+// export's earliest-message timestamp specifically so a re-import matches.
+export async function findConversationMatch(input: {
+  userId: string
+  title: string | null
+  createdAt: Date
+}) {
+  const [conversation] = await sql.FindConversationMatch`
+    SELECT id, user_id, title, provider_id, model, curr_node, pinned,
+           forked_from_conversation_id, created_at, updated_at
+    FROM conversations
+    WHERE user_id = ${input.userId}
+      AND title IS NOT DISTINCT FROM ${input.title}
+      AND created_at = ${input.createdAt}
+  `
+
+  return conversation
+}

@@ -1,0 +1,7 @@
+this is not valid json at all
+{"type":"message","message":{"id":"orphan","role":"user","content":"a message before any session line"}}
+{"type":"session","harness":"llama.app","currNode":"does-not-resolve","id":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","lastModified":1751900010000,"name":"Malformed convo"}
+{"type":"message","message":{"id":"msg-root","convId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"root","timestamp":1751900000000,"role":"system","content":"","parent":null,"children":["msg-1"]}}
+{"type":"message","message":{"id":"msg-1","convId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"text","timestamp":1751900001000,"role":"user","content":"hello","parent":"msg-root","children":["msg-wizard","msg-2"]}}
+{"type":"message","message":{"id":"msg-wizard","convId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"text","timestamp":1751900002000,"role":"wizard","content":"a message with an unrecognized role","parent":"msg-1","children":[]}}
+{"type":"message","message":{"id":"msg-2","convId":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee","type":"text","timestamp":1751900003000,"role":"assistant","content":"a reply whose parent reference is dangling","parent":"does-not-exist","children":[],"extra":[{"type":"SOMETHING_NEW","content":"unrecognized attachment type"}]}}

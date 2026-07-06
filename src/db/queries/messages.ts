@@ -57,6 +57,57 @@ export async function listMessageChildren(parentId: string) {
   `
 }
 
+// Importer-only: inserts with the original export timestamp (so sibling
+// ordering by created_at matches the source tree) and always parent_id NULL —
+// the importer wires up parent_id in a second pass once every row in the
+// batch exists, so a message can be inserted before its parent shows up.
+export async function createImportedMessage(input: {
+  id: string
+  conversationId: string
+  role: 'system' | 'user' | 'assistant' | 'tool'
+  content: string
+  reasoningContent?: string | null
+  model?: string | null
+  toolCalls?: unknown
+  timings?: unknown
+  createdAt: Date
+}) {
+  const [message] = await sql.CreateImportedMessage`
+    INSERT INTO messages (
+      id, conversation_id, parent_id, role, content, reasoning_content,
+      model, tool_calls, timings, created_at
+    )
+    VALUES (
+      ${input.id},
+      ${input.conversationId},
+      NULL,
+      ${input.role},
+      ${input.content},
+      ${input.reasoningContent ?? null},
+      ${input.model ?? null},
+      ${input.toolCalls == null ? null : JSON.stringify(input.toolCalls)},
+      ${input.timings == null ? null : JSON.stringify(input.timings)},
+      ${input.createdAt}
+    )
+    RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
+              model, status, tool_calls, timings, created_at
+  `
+
+  return message
+}
+
+export async function setMessageParentId(input: { id: string; parentId: string }) {
+  const [message] = await sql.SetMessageParentId`
+    UPDATE messages
+    SET parent_id = ${input.parentId}
+    WHERE id = ${input.id}
+    RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
+              model, status, tool_calls, timings, created_at
+  `
+
+  return message
+}
+
 // Walk from a leaf message (typically conversations.curr_node) up to the root
 // via parent_id, returning the linear active path in root-first order.
 export async function getActivePath(leafId: string) {
