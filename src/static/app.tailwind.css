@@ -94,6 +94,26 @@
     color: inherit;
   }
 
+  /* Native popups (notably <select> menus) do not inherit Tailwind utility
+     backgrounds from their transparent triggers consistently. Pin options to
+     semantic tokens so dark mode never falls back to a white system menu. */
+  select,
+  option,
+  optgroup {
+    color-scheme: light dark;
+  }
+
+  option,
+  optgroup {
+    background-color: var(--surface-raised);
+    color: var(--ink);
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    accent-color: var(--accent);
+  }
+
   summary {
     list-style: none;
   }

@@ -42,7 +42,7 @@
         <textarea class="max-h-64 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-ink-faint" name="content" rows="2" placeholder="Type a message…" data-chat-input autofocus><%= it.values.content || '' %></textarea>
 
         <div class="flex flex-wrap items-center gap-2">
-          <details class="relative">
+          <details class="relative" data-close-on-outside>
             <summary class="chip cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink">
               <%~ include('../partials/icon', { name: 'sliders', class: 'size-3.5' }) %>
               Options

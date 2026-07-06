@@ -190,21 +190,32 @@
     var control = select.form.querySelector('[data-reasoning-control]');
     var hidden = select.form.querySelector('[data-reasoning-hidden]');
     var effort = control ? control.querySelector('select[name="reasoning_effort"]') : null;
+    var radios = control ? control.querySelectorAll('[data-reasoning-radio]') : [];
     if (control) control.classList.toggle('hidden', !supported);
     if (hidden) hidden.disabled = !!supported;
     if (effort) effort.disabled = !supported;
+    for (var i = 0; i < radios.length; i++) radios[i].disabled = !supported;
   }
 
-  // The reasoning control is an icon-only button (lit bulb when on) with the
-  // real <select> stretched invisibly over it; mirror its value onto the
-  // wrapper so CSS can restyle, and surface the level in the tooltip.
-  function syncReasoningState(select) {
-    var control = select.closest('[data-reasoning-control]');
+  // The reasoning control is an icon-only button (lit bulb when on) backed by
+  // theme-styled radio options; mirror its value onto the wrapper so CSS can
+  // restyle, and surface the level in the tooltip/accessible label.
+  function syncReasoningState(input) {
+    var control = input.closest('[data-reasoning-control]');
     if (!control) return;
-    if (select.value === 'off') control.removeAttribute('data-on');
+    if (input.value === 'off') control.removeAttribute('data-on');
     else control.setAttribute('data-on', '');
-    var option = select.options[select.selectedIndex];
-    control.title = 'Reasoning: ' + (option ? option.textContent : select.value);
+    var label = input.getAttribute('data-label') || input.value;
+    if (input.options) {
+      var option = input.options[input.selectedIndex];
+      label = option ? option.textContent : label;
+    }
+    control.title = 'Reasoning: ' + label;
+    var summary = control.querySelector('summary');
+    if (summary) summary.setAttribute('aria-label', 'Reasoning: ' + label);
+    var srLabel = control.querySelector('[data-reasoning-label]');
+    if (srLabel) srLabel.textContent = 'Reasoning: ' + label;
+    if (input.matches && input.matches('[data-reasoning-radio]')) control.open = false;
   }
 
   function syncProviderControls(select) {
@@ -272,7 +283,23 @@
     var el = e.target;
     if (el && el.matches && el.matches('[data-model-select]')) syncReasoningControl(el);
     if (el && el.matches && el.matches('[data-provider-select]')) syncProviderControls(el);
-    if (el && el.matches && el.matches('select[name="reasoning_effort"]')) syncReasoningState(el);
+    if (el && el.matches && el.matches('select[name="reasoning_effort"], [data-reasoning-radio]')) syncReasoningState(el);
+  });
+
+  // Theme-styled <details> menus should behave like native popups: clicking
+  // elsewhere (or pressing Escape) closes them.
+  document.addEventListener('pointerdown', function (e) {
+    var target = e.target;
+    var menus = document.querySelectorAll('details[data-close-on-outside][open]');
+    for (var i = 0; i < menus.length; i++) {
+      if (!menus[i].contains(target)) menus[i].removeAttribute('open');
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var menus = document.querySelectorAll('details[data-close-on-outside][open]');
+    for (var i = 0; i < menus.length; i++) menus[i].removeAttribute('open');
   });
 
   // Landing hero: creating an empty conversation from a blank composer is
