@@ -10,8 +10,12 @@
       <a class="btn btn-primary" href="/conversations">Open your chats</a>
       <a class="btn btn-ghost" href="/providers">Providers</a>
     <% } else { %>
-      <a class="btn btn-primary" href="/register">Create an account</a>
-      <a class="btn btn-ghost" href="/login">Log in</a>
+      <% if (it.registrationOpen) { %>
+        <a class="btn btn-primary" href="/register">Create an account</a>
+        <a class="btn btn-ghost" href="/login">Log in</a>
+      <% } else { %>
+        <a class="btn btn-primary" href="/login">Log in</a>
+      <% } %>
     <% } %>
   </div>
 </section>

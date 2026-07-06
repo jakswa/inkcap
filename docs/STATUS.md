@@ -37,14 +37,31 @@ not built, 429s surface as run errors with the upstream message, and the
 loopback flow needs the browser on the server's machine (or an SSH tunnel of
 1455) — no device-code fallback yet.
 
+### Post-M8: accounts, ownership scoping, registration gate (issue 02)
+
+Providers and MCP servers are no longer a global catalog: `accounts` +
+`account_memberships` (migration 012; personal account id = user id, created
+atomically with registration), `account_id NOT NULL` on both tables with a
+backfill to the earliest user, and every route fetching through a membership
+join so a foreign id 404s. The runner's `listEnabledMcpServersForConversation`
+joins memberships via the conversation owner — a stray override row cannot
+expose another account's server. Self-serve registration is gated by
+`REGISTRATION` (default closed in production; `src/tasks/create-user.ts`
+bootstraps), and the MCP edit form stopped echoing stored auth headers
+(blank = keep, checkbox = clear). Sharing later is additive: insert a
+membership row into an account; the scoped queries already grant access.
+`docs/issues/02` has the details; the cross-tenant halves of 03/04/05 died
+with it.
+
 ## How to run it
 
 ```sh
 bun install
 bun run db:migrate                 # .env.development -> spail database
-bun src/tasks/seed-provider.ts     # creates/updates the "llama-server" provider
+bun run dev                        # http://localhost:3000 — register first
+bun src/tasks/seed-provider.ts --user you@example.com
+                                   # creates/updates the "llama-server" provider
                                    # from DEV_LLAMA_SERVER / DEV_LLAMA_KEY
-bun run dev                        # http://localhost:3000
 ```
 
 Register an account in the UI, then import your llama-ui history:

@@ -6,6 +6,7 @@ export const env = {
   PORT: readPort(),
   NODE_ENV: nodeEnv,
   ASSET_VERSION: readAssetVersion(),
+  REGISTRATION: readRegistration(),
 }
 
 const placeholderSessionSecrets = new Set([
@@ -45,6 +46,18 @@ function readSessionSecret() {
   }
 
   return value
+}
+
+// Self-serve registration: "open" or "closed". Defaults to closed in
+// production — a public deployment should not accept strangers. Bootstrap a
+// closed deployment with `bun build/tasks/create-user.js` (or set
+// REGISTRATION=open for the first boot, register, and flip it back).
+function readRegistration(): 'open' | 'closed' {
+  const raw = process.env['REGISTRATION'] ?? (nodeEnv === 'production' ? 'closed' : 'open')
+  if (raw !== 'open' && raw !== 'closed') {
+    throw new Error(`Invalid REGISTRATION value: ${raw} (use "open" or "closed")`)
+  }
+  return raw
 }
 
 function readAssetVersion() {

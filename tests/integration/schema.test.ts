@@ -3,7 +3,7 @@ import { randomUUIDv7 } from 'bun'
 
 const { sql } = await import('../../src/db/client')
 const { createUser } = await import('../../src/db/queries/users')
-const { createProvider, getProviderById, listProviders, setProviderEnabled } =
+const { createProvider, getProviderById, listProvidersForUser, setProviderEnabled } =
   await import('../../src/db/queries/providers')
 const {
   createConversation,
@@ -39,8 +39,9 @@ async function makeUser() {
   })
 }
 
-async function makeProvider() {
+async function makeProvider(accountId: string) {
   return createProvider({
+    accountId,
     name: `provider-${randomUUIDv7()}`,
     kind: 'llama-server',
     baseUrl: 'http://localhost:8001',
@@ -51,14 +52,15 @@ async function makeProvider() {
 
 describe('providers', () => {
   test('create, get, list, and toggle enabled', async () => {
-    const created = await makeProvider()
+    const owner = await makeUser()
+    const created = await makeProvider(owner.id)
     expect(created.enabled).toBe(true)
     expect(created.kind).toBe('llama-server')
 
     const fetched = await getProviderById(created.id)
     expect(fetched?.base_url).toBe('http://localhost:8001')
 
-    const all = await listProviders()
+    const all = await listProvidersForUser(owner.id)
     expect(all.some((p) => p.id === created.id)).toBe(true)
 
     const toggled = await setProviderEnabled({ id: created.id, enabled: false })
@@ -78,7 +80,7 @@ describe('providers', () => {
 describe('conversations', () => {
   test('create, list-for-user, and default fields', async () => {
     const user = await makeUser()
-    const provider = await makeProvider()
+    const provider = await makeProvider(user.id)
 
     const convo = await createConversation({
       userId: user.id,
@@ -101,7 +103,7 @@ describe('conversations', () => {
 
   test('deleting a provider keeps the conversation (SET NULL)', async () => {
     const user = await makeUser()
-    const provider = await makeProvider()
+    const provider = await makeProvider(user.id)
     const convo = await createConversation({
       userId: user.id,
       providerId: provider.id,

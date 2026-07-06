@@ -63,8 +63,9 @@ function sessionFor(user: { id: string; name: string; email: string; created_at:
   })}`
 }
 
-async function makeProvider(modeSegment: string) {
+async function makeProvider(accountId: string, modeSegment: string) {
   return createProvider({
+    accountId,
     name: `mock-${randomUUIDv7()}`,
     kind: 'openai-compat',
     baseUrl: `${mockBaseUrl}/${modeSegment}`,
@@ -80,7 +81,7 @@ async function setupToolConversation(
   options: { autoApprove?: boolean } = {},
 ) {
   const user = await makeUser()
-  const provider = await makeProvider(modeSegment)
+  const provider = await makeProvider(user.id, modeSegment)
   const stub = startStubMcpServer()
   const conversation = await createConversation({
     userId: user.id,
@@ -88,6 +89,7 @@ async function setupToolConversation(
     model: 'mock-model',
   })
   const server = await createMcpServer({
+    accountId: user.id,
     name: `stub-${randomUUIDv7()}`,
     url: stub.url,
     autoApprove: options.autoApprove ?? false,

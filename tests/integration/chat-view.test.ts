@@ -114,8 +114,11 @@ describe('message partial rendering', () => {
     expect(html).toContain('<details')
     expect(html).toContain('Reasoning')
     expect(html).toContain('let me think about it')
-    // subtle footer: model + timings
+    // subtle footer: model + prompt/generation timings
     expect(html).toContain('test-model')
+    expect(html).toContain('prompt')
+    expect(html).toContain('50.0 tok/s')
+    expect(html).toContain('gen')
     expect(html).toContain('20.0 tok/s')
   })
 
@@ -144,6 +147,7 @@ describe('message-final SSE payload', () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
     const provider = await createProvider({
+      accountId: user.id,
       name: `md-stub-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
@@ -198,6 +202,7 @@ describe('conversation delete', () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
     const provider = await createProvider({
+      accountId: user.id,
       name: `del-stub-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
@@ -219,6 +224,7 @@ describe('conversation delete', () => {
     const owner = await makeUser()
     const ownerCookie = sessionFor(owner)
     const provider = await createProvider({
+      accountId: owner.id,
       name: `del-owned-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,

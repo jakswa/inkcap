@@ -64,8 +64,9 @@ function sessionFor(user: { id: string; name: string; email: string; created_at:
 
 // Provider whose base_url routes to the mock in a given mode, e.g.
 // "drip,tokens=30,interval=10" (see src/tasks/mock-provider.ts).
-async function makeProvider(modeSegment: string) {
+async function makeProvider(accountId: string, modeSegment: string) {
   return createProvider({
+    accountId,
     name: `mock-${randomUUIDv7()}`,
     kind: 'openai-compat',
     baseUrl: `${mockBaseUrl}/${modeSegment}`,
@@ -77,7 +78,7 @@ async function makeProvider(modeSegment: string) {
 async function setupConversation(modeSegment: string) {
   const user = await makeUser()
   const cookie = sessionFor(user)
-  const provider = await makeProvider(modeSegment)
+  const provider = await makeProvider(user.id, modeSegment)
   const res = await app.request(url('/conversations'), {
     method: 'POST',
     headers: { Cookie: cookie, Origin: origin },
@@ -379,7 +380,7 @@ describe('durable runner', () => {
   // and other tests rely on hang mode staying silent until they cancel).
   test('provider that hangs forever: stall watchdog parks the run as error, partial kept', async () => {
     const user = await makeUser()
-    const provider = await makeProvider('hang,after=4,interval=5')
+    const provider = await makeProvider(user.id, 'hang,after=4,interval=5')
     const conversation = await createConversation({
       userId: user.id,
       providerId: provider.id,

@@ -50,6 +50,10 @@ function setSessionCookie(
 }
 
 authRoutes.get('/register', async (c) => {
+  // Closed registration 404s rather than redirecting: the page's existence
+  // is not advertised, matching the hidden register links in the views.
+  if (env.REGISTRATION !== 'open') return c.notFound()
+
   return c.var.render('auth/register', {
     title: 'Register',
     errors: [],
@@ -58,6 +62,8 @@ authRoutes.get('/register', async (c) => {
 })
 
 authRoutes.post('/register', async (c) => {
+  if (env.REGISTRATION !== 'open') return c.notFound()
+
   const form = await c.req.formData()
   const name = readString(form, 'name').trim()
   const email = readString(form, 'email').trim()

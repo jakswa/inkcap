@@ -51,6 +51,7 @@ export type ProviderModelMetadata = Record<string, ProviderModelInfo>
 export type ProviderKind = 'openai-compat' | 'llama-server' | 'openai-codex'
 
 export async function createProvider(input: {
+  accountId: string
   name: string
   kind: ProviderKind
   baseUrl: string
@@ -62,9 +63,10 @@ export async function createProvider(input: {
   enabled?: boolean
 }): Promise<ProviderRow> {
   const [provider] = await sql.CreateProvider`
-    INSERT INTO providers (id, name, kind, base_url, api_key, default_model, models, model_metadata, oauth_credentials, enabled)
+    INSERT INTO providers (id, account_id, name, kind, base_url, api_key, default_model, models, model_metadata, oauth_credentials, enabled)
     VALUES (
       ${randomUUIDv7()},
+      ${input.accountId},
       ${input.name},
       ${input.kind},
       ${input.baseUrl},
@@ -81,6 +83,10 @@ export async function createProvider(input: {
   return provider as ProviderRow
 }
 
+// Internal, unscoped lookup — for callers that derived the id from a row the
+// user already owns (the runner via conversations.provider_id, codex-auth
+// token refresh). Routes must use getProviderForUser so a foreign id is
+// indistinguishable from a missing one.
 export async function getProviderById(id: string) {
   const [provider] = await sql.GetProviderById`
     SELECT id, name, kind, base_url, api_key, default_model, models, model_metadata, oauth_credentials, enabled, created_at, updated_at
@@ -91,11 +97,23 @@ export async function getProviderById(id: string) {
   return provider
 }
 
-export async function listProviders() {
-  return sql.ListProviders`
-    SELECT id, name, kind, base_url, api_key, default_model, models, model_metadata, oauth_credentials, enabled, created_at, updated_at
-    FROM providers
-    ORDER BY created_at ASC
+export async function getProviderForUser(input: { id: string; userId: string }) {
+  const [provider] = await sql.GetProviderForUser`
+    SELECT p.id, p.name, p.kind, p.base_url, p.api_key, p.default_model, p.models, p.model_metadata, p.oauth_credentials, p.enabled, p.created_at, p.updated_at
+    FROM providers p
+    JOIN account_memberships m ON m.account_id = p.account_id AND m.user_id = ${input.userId}
+    WHERE p.id = ${input.id}
+  `
+
+  return provider
+}
+
+export async function listProvidersForUser(userId: string) {
+  return sql.ListProvidersForUser`
+    SELECT p.id, p.name, p.kind, p.base_url, p.api_key, p.default_model, p.models, p.model_metadata, p.oauth_credentials, p.enabled, p.created_at, p.updated_at
+    FROM providers p
+    JOIN account_memberships m ON m.account_id = p.account_id AND m.user_id = ${userId}
+    ORDER BY p.created_at ASC
   `
 }
 
@@ -110,11 +128,11 @@ export async function setProviderEnabled(input: { id: string; enabled: boolean }
   return provider
 }
 
-export async function getProviderByName(name: string) {
-  const [provider] = await sql.GetProviderByName`
+export async function getProviderByNameForAccount(input: { name: string; accountId: string }) {
+  const [provider] = await sql.GetProviderByNameForAccount`
     SELECT id, name, kind, base_url, api_key, default_model, models, model_metadata, oauth_credentials, enabled, created_at, updated_at
     FROM providers
-    WHERE name = ${name}
+    WHERE name = ${input.name} AND account_id = ${input.accountId}
   `
 
   return provider

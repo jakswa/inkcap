@@ -25,6 +25,8 @@
     </label>
 
     <button class="btn btn-primary" type="submit">Log in</button>
-    <p class="mb-0 text-ink-dim">Need an account? <a class="link" href="/register">Register</a>.</p>
+    <% if (it.registrationOpen) { %>
+      <p class="mb-0 text-ink-dim">Need an account? <a class="link" href="/register">Register</a>.</p>
+    <% } %>
   </form>
 </section>

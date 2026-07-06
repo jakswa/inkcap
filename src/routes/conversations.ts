@@ -9,7 +9,7 @@ import {
   setConversationCurrNode,
   updateConversationModelSettings,
 } from '../db/queries/conversations'
-import { getProviderById, listProviders } from '../db/queries/providers'
+import { getProviderForUser, listProvidersForUser } from '../db/queries/providers'
 import {
   createMessage,
   deleteMessageSubtree,
@@ -24,7 +24,7 @@ import {
   getRunningRunForConversation,
 } from '../db/queries/runs'
 import {
-  listMcpServers,
+  listMcpServersForUser,
   listMcpServersWithOverride,
   setConversationMcpOverride,
 } from '../db/queries/mcp-servers'
@@ -189,13 +189,18 @@ async function renderShow(
   options: { error?: string; draft?: string } = {},
 ) {
   const [provider, activeRun, sidebar, latestRun, mcpServers] = await Promise.all([
+    // Scoped by the conversation owner: a provider the owner's accounts can
+    // no longer see renders as "no provider" instead of leaking its details.
     conversation.provider_id
-      ? getProviderById(conversation.provider_id)
+      ? getProviderForUser({ id: conversation.provider_id, userId: conversation.user_id })
       : Promise.resolve(null),
     getRunningRunForConversation(conversation.id),
     listConversationsForUser(conversation.user_id),
     getLatestRunForConversation(conversation.id),
-    listMcpServersWithOverride(conversation.id),
+    listMcpServersWithOverride({
+      conversationId: conversation.id,
+      userId: conversation.user_id,
+    }),
   ])
 
   const path = conversation.curr_node
@@ -286,8 +291,8 @@ async function renderLanding(
 ) {
   const [conversations, providers, mcpServers] = await Promise.all([
     listConversationsForUser(userId),
-    listProviders(),
-    listMcpServers(),
+    listProvidersForUser(userId),
+    listMcpServersForUser(userId),
   ])
   const selectedMcpServerIds = new Set(options.selectedMcpServerIds ?? [])
 
@@ -350,7 +355,7 @@ conversationRoutes.post('/conversations', async (c) => {
   const content = readString(form, 'content').trim()
   const selectedMcpServerIds = readStringList(form, 'enabled_mcp_server_id')
 
-  const providers = await listProviders()
+  const providers = await listProvidersForUser(user.id)
   const enabledProviders = providers.filter((p) => p.enabled)
 
   const errors: string[] = []
@@ -388,7 +393,9 @@ conversationRoutes.post('/conversations', async (c) => {
   })
 
   if (selectedMcpServerIds.length > 0) {
-    const validIds = new Set((await listMcpServers()).map((server) => server.id))
+    const validIds = new Set(
+      (await listMcpServersForUser(user.id)).map((server) => server.id),
+    )
     await Promise.all(
       selectedMcpServerIds
         .filter((id) => validIds.has(id))
@@ -509,11 +516,12 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
     })
   }
 
-  // Pre-flight: the provider must exist and be enabled. provider_id is ON
-  // DELETE SET NULL, so a deleted provider surfaces as a friendly prompt to
-  // pick another rather than a crash. Nothing is saved when we can't send.
+  // Pre-flight: the provider must exist, be enabled, and be visible to the
+  // conversation owner's accounts. provider_id is ON DELETE SET NULL, so a
+  // deleted provider surfaces as a friendly prompt to pick another rather
+  // than a crash. Nothing is saved when we can't send.
   const provider = conversation.provider_id
-    ? await getProviderById(conversation.provider_id)
+    ? await getProviderForUser({ id: conversation.provider_id, userId: conversation.user_id })
     : null
   if (!provider) {
     return renderShow(c, conversation, {
@@ -578,7 +586,7 @@ async function runPreflightError(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
 ): Promise<string | null> {
   const provider = conversation.provider_id
-    ? await getProviderById(conversation.provider_id)
+    ? await getProviderForUser({ id: conversation.provider_id, userId: conversation.user_id })
     : null
   if (!provider) {
     return 'This conversation has no provider. Assign one before sending.'
@@ -836,7 +844,10 @@ conversationRoutes.get('/conversations/:id/tools', async (c) => {
   const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
   if (!conversation) return c.notFound()
 
-  const servers = await listMcpServersWithOverride(conversation.id)
+  const servers = await listMcpServersWithOverride({
+    conversationId: conversation.id,
+    userId: user.id,
+  })
 
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/tools', {
@@ -856,7 +867,13 @@ conversationRoutes.post('/conversations/:id/tools', async (c) => {
   if (!conversation) return c.notFound()
 
   const form = await c.req.formData()
-  const serverIds = readStringList(form, 'mcp_server_id')
+  // Override rows may only point at servers the user can see; foreign ids
+  // from a tampered form are dropped (the runner's membership join would
+  // refuse them anyway, but don't persist garbage).
+  const ownedIds = new Set(
+    (await listMcpServersForUser(user.id)).map((server) => server.id),
+  )
+  const serverIds = readStringList(form, 'mcp_server_id').filter((id) => ownedIds.has(id))
   if (serverIds.length > 1 || form.has('enabled_mcp_server_id')) {
     const enabledIds = new Set(readStringList(form, 'enabled_mcp_server_id'))
     await Promise.all(

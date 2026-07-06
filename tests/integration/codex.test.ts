@@ -39,24 +39,36 @@ function form(input: Record<string, string>) {
   return body
 }
 
-function authCookie() {
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 1)
-  const cookie = encryptSession({
-    expiresAt: expiresAt.toISOString(),
-    user: {
-      id: randomUUIDv7(),
-      name: 'Codex Test User',
-      email: `codex-${randomUUIDv7()}@example.com`,
-      created_at: new Date('2026-01-01T00:00:00.000Z').toISOString(),
-    },
-    issuedAt: new Date().toISOString(),
+async function makeUser() {
+  const suffix = randomUUIDv7()
+  return createUser({
+    name: 'Codex Test User',
+    email: `codex-${suffix}@example.com`,
+    emailNormalized: `codex-${suffix}@example.com`,
+    passwordHash: 'x',
   })
-  return `session=${cookie}`
 }
 
-function authHeaders(extra: Record<string, string> = {}) {
-  return { Cookie: authCookie(), Origin: origin, ...extra }
+function sessionFor(user: { id: string; name: string; email: string; created_at: Date }) {
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 1)
+  return `session=${encryptSession({
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      created_at: user.created_at.toISOString(),
+    },
+    issuedAt: new Date().toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  })}`
+}
+
+// Providers are account-scoped: a test keeps one real identity across its
+// requests (the connect callback inserts a provider row FK'd to the account).
+async function authHeadersFor() {
+  const user = await makeUser()
+  return { user, headers: { Cookie: sessionFor(user), Origin: origin } }
 }
 
 // Unsigned JWT with the claim block the account-id extraction reads. Only the
@@ -213,8 +225,9 @@ function issuerStub() {
   return { server, tokenRequests, issuer: `http://localhost:${server.port}` }
 }
 
-async function createCodexProvider(baseUrl: string, accessToken: string) {
+async function createCodexProvider(baseUrl: string, accessToken: string, accountId?: string) {
   return createProvider({
+    accountId: accountId ?? (await makeUser()).id,
     name: `codex-${randomUUIDv7()}`,
     kind: 'openai-codex',
     baseUrl,
@@ -437,6 +450,7 @@ describe('codex streaming', () => {
 
 describe('codex connect flow', () => {
   test('sign-in redirects to the issuer; the loopback callback creates the provider', async () => {
+    const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
     process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
@@ -445,7 +459,7 @@ describe('codex connect flow', () => {
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({ name }),
       })
       expect(start.status).toBe(302)
@@ -471,7 +485,7 @@ describe('codex connect flow', () => {
       expect(exchange['code']).toBe('test-code')
       expect(exchange['code_verifier']!.length).toBeGreaterThan(20)
 
-      const list = await app.request(url('/providers'), { headers: authHeaders() })
+      const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
       expect(listBody).toContain(name)
       expect(listBody).toContain('ChatGPT OAuth: connected')
@@ -495,7 +509,7 @@ describe('codex connect flow', () => {
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers: authHeaders(),
+        headers: (await authHeadersFor()).headers,
         body: form({ name: `codex-badstate-${randomUUIDv7()}` }),
       })
       expect(start.status).toBe(302)
@@ -516,7 +530,6 @@ describe('codex connect flow', () => {
   test('a full run through the durable runner streams and finalizes', async () => {
     const backend = codexBackendStub()
     try {
-      const provider = await createCodexProvider(backend.baseUrl, fakeAccessToken(60 * 60 * 1000))
       const suffix = randomUUIDv7()
       const user = await createUser({
         name: 'Codex Runner User',
@@ -524,6 +537,11 @@ describe('codex connect flow', () => {
         emailNormalized: `codex-runner-${suffix}@example.com`,
         passwordHash: 'x',
       })
+      const provider = await createCodexProvider(
+        backend.baseUrl,
+        fakeAccessToken(60 * 60 * 1000),
+        user!.id,
+      )
       const expiresAt = new Date()
       expiresAt.setDate(expiresAt.getDate() + 1)
       const cookie = `session=${encryptSession({
@@ -579,7 +597,7 @@ describe('codex connect flow', () => {
   test('the standard provider form refuses the openai-codex kind', async () => {
     const res = await app.request(url('/providers'), {
       method: 'POST',
-      headers: authHeaders(),
+      headers: (await authHeadersFor()).headers,
       body: form({
         name: `codex-form-${randomUUIDv7()}`,
         kind: 'openai-codex',

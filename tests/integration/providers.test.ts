@@ -3,6 +3,7 @@ import { randomUUIDv7 } from 'bun'
 
 const { app } = await import('../../src/app')
 const { createProvider } = await import('../../src/db/queries/providers')
+const { createUser } = await import('../../src/db/queries/users')
 const { encryptSession } = await import('../../src/utils/private-session')
 
 const origin = 'http://localhost:3000'
@@ -17,26 +18,36 @@ function form(input: Record<string, string>) {
   return body
 }
 
-function authCookie() {
-  const expiresAt = new Date()
-  expiresAt.setDate(expiresAt.getDate() + 1)
-
-  const cookie = encryptSession({
-    expiresAt: expiresAt.toISOString(),
-    user: {
-      id: randomUUIDv7(),
-      name: 'Providers Test User',
-      email: `providers-${randomUUIDv7()}@example.com`,
-      created_at: new Date('2026-01-01T00:00:00.000Z').toISOString(),
-    },
-    issuedAt: new Date().toISOString(),
+async function makeUser() {
+  const suffix = randomUUIDv7()
+  return createUser({
+    name: 'Providers Test User',
+    email: `providers-${suffix}@example.com`,
+    emailNormalized: `providers-${suffix}@example.com`,
+    passwordHash: 'x',
   })
-
-  return `session=${cookie}`
 }
 
-function authHeaders(extra: Record<string, string> = {}) {
-  return { Cookie: authCookie(), Origin: origin, ...extra }
+function sessionFor(user: { id: string; name: string; email: string; created_at: Date }) {
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 1)
+  return `session=${encryptSession({
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      created_at: user.created_at.toISOString(),
+    },
+    issuedAt: new Date().toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  })}`
+}
+
+// Providers are account-scoped, so a test keeps one identity for all its
+// requests; each call creates a fresh user + personal account.
+async function authHeadersFor() {
+  const user = await makeUser()
+  return { user, headers: { Cookie: sessionFor(user), Origin: origin } }
 }
 
 function uniqueName(label: string) {
@@ -75,13 +86,14 @@ describe('providers CRUD', () => {
   })
 
   test('create, list, edit, update, disable, enable, and delete', async () => {
+    const { headers } = await authHeadersFor()
     const name = uniqueName('openai-provider')
     const server = openAiStub()
 
     try {
       const create = await app.request(url('/providers'), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({
           name,
           kind: 'openai-compat',
@@ -94,7 +106,7 @@ describe('providers CRUD', () => {
       expect(create.status).toBe(302)
       expect(create.headers.get('location')).toBe('/providers')
 
-      const list = await app.request(url('/providers'), { headers: authHeaders() })
+      const list = await app.request(url('/providers'), { headers })
       expect(list.status).toBe(200)
       const listBody = await list.text()
       expect(listBody).toContain(name)
@@ -108,7 +120,7 @@ describe('providers CRUD', () => {
       const id = idMatch?.[1] ?? ''
 
       const editForm = await app.request(url(`/providers/${id}/edit`), {
-        headers: authHeaders(),
+        headers,
       })
       expect(editForm.status).toBe(200)
       const editBody = await editForm.text()
@@ -118,7 +130,7 @@ describe('providers CRUD', () => {
       const updatedName = uniqueName('openai-provider-renamed')
       const update = await app.request(url(`/providers/${id}`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({
           name: updatedName,
           kind: 'openai-compat',
@@ -129,34 +141,34 @@ describe('providers CRUD', () => {
       })
       expect(update.status).toBe(302)
 
-      const afterUpdate = await app.request(url('/providers'), { headers: authHeaders() })
+      const afterUpdate = await app.request(url('/providers'), { headers })
       const afterUpdateBody = await afterUpdate.text()
       expect(afterUpdateBody).toContain(updatedName)
       expect(afterUpdateBody).toContain('1234')
 
       const disable = await app.request(url(`/providers/${id}/disable`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
       })
       expect(disable.status).toBe(302)
       const disabledBody = await (
-        await app.request(url('/providers'), { headers: authHeaders() })
+        await app.request(url('/providers'), { headers })
       ).text()
       expect(disabledBody).toContain('Disabled')
 
       const enable = await app.request(url(`/providers/${id}/enable`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
       })
       expect(enable.status).toBe(302)
       const enabledBody = await (
-        await app.request(url('/providers'), { headers: authHeaders() })
+        await app.request(url('/providers'), { headers })
       ).text()
       expect(enabledBody).toContain('Enabled')
 
       const clearKey = await app.request(url(`/providers/${id}`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({
           name: updatedName,
           kind: 'openai-compat',
@@ -168,18 +180,18 @@ describe('providers CRUD', () => {
       })
       expect(clearKey.status).toBe(302)
       const clearedBody = await (
-        await app.request(url('/providers'), { headers: authHeaders() })
+        await app.request(url('/providers'), { headers })
       ).text()
       expect(clearedBody).toContain('API key: Not set')
 
       const del = await app.request(url(`/providers/${id}/delete`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
       })
       expect(del.status).toBe(302)
 
       const afterDelete = await (
-        await app.request(url('/providers'), { headers: authHeaders() })
+        await app.request(url('/providers'), { headers })
       ).text()
       expect(afterDelete).not.toContain(updatedName)
     } finally {
@@ -187,10 +199,57 @@ describe('providers CRUD', () => {
     }
   })
 
+  test('providers are invisible and immutable across accounts', async () => {
+    const owner = await authHeadersFor()
+    const stranger = await authHeadersFor()
+    const server = openAiStub()
+    const name = uniqueName('tenant-provider')
+
+    try {
+      const provider = await createProvider({
+        accountId: owner.user.id,
+        name,
+        kind: 'openai-compat',
+        baseUrl: `http://localhost:${server.port}/v1/`,
+        apiKey: 'sk-tenant-secret',
+        defaultModel: 'gpt-test',
+        enabled: true,
+      })
+
+      // Not listed for another account.
+      const list = await app.request(url('/providers'), { headers: stranger.headers })
+      expect(await list.text()).not.toContain(name)
+
+      // Every per-id route 404s for a non-member; state is untouched.
+      for (const attempt of [
+        { path: `/providers/${provider.id}/edit`, method: 'GET' },
+        { path: `/providers/${provider.id}/test`, method: 'POST' },
+        { path: `/providers/${provider.id}/disable`, method: 'POST' },
+        { path: `/providers/${provider.id}/delete`, method: 'POST' },
+        { path: `/providers/${provider.id}/reauth`, method: 'POST' },
+      ]) {
+        const res = await app.request(url(attempt.path), {
+          method: attempt.method,
+          headers: stranger.headers,
+          ...(attempt.method === 'POST' ? { body: form({}) } : {}),
+        })
+        expect(res.status).toBe(404)
+      }
+
+      const after = await app.request(url('/providers'), { headers: owner.headers })
+      const afterBody = await after.text()
+      expect(afterBody).toContain(name)
+      expect(afterBody).toContain('Enabled')
+    } finally {
+      server.stop(true)
+    }
+  })
+
   test('validation errors re-render the new provider form', async () => {
+    const { headers } = await authHeadersFor()
     const res = await app.request(url('/providers'), {
       method: 'POST',
-      headers: authHeaders(),
+      headers,
       body: form({ name: '', kind: 'bogus', base_url: 'not-a-url', api_key: '', default_model: '' }),
     })
 
@@ -202,11 +261,12 @@ describe('providers CRUD', () => {
   })
 
   test('provider creation is blocked when inference fails', async () => {
+    const { headers } = await authHeadersFor()
     const server = openAiStub({ status: 401 })
     try {
       const res = await app.request(url('/providers'), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({
           name: uniqueName('blocked-provider'),
           kind: 'openai-compat',
@@ -228,6 +288,7 @@ describe('providers CRUD', () => {
 
 describe('providers test connection', () => {
   test('llama-server kind succeeds against a stub /props endpoint', async () => {
+    const { headers } = await authHeadersFor()
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
@@ -252,7 +313,7 @@ describe('providers test connection', () => {
     try {
       const created = await app.request(url('/providers'), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
         body: form({
           name: uniqueName('llama-stub'),
           kind: 'llama-server',
@@ -263,7 +324,7 @@ describe('providers test connection', () => {
       })
       expect(created.status).toBe(302)
 
-      const list = await app.request(url('/providers'), { headers: authHeaders() })
+      const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
       const rowMatch = listBody.match(
         new RegExp(`localhost:${server.port}[\\s\\S]*?/providers/([0-9a-f-]+)/test`),
@@ -273,7 +334,7 @@ describe('providers test connection', () => {
 
       const testResult = await app.request(url(`/providers/${id}/test`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
       })
       expect(testResult.status).toBe(200)
       const testBody = await testResult.text()
@@ -287,10 +348,12 @@ describe('providers test connection', () => {
   })
 
   test('openai-compat kind reports the upstream error on 401', async () => {
+    const { user, headers } = await authHeadersFor()
     const server = openAiStub({ status: 401 })
 
     try {
       const provider = await createProvider({
+        accountId: user.id,
         name: uniqueName('openai-stub'),
         kind: 'openai-compat',
         baseUrl: `http://localhost:${server.port}`,
@@ -300,7 +363,7 @@ describe('providers test connection', () => {
 
       const testResult = await app.request(url(`/providers/${provider.id}/test`), {
         method: 'POST',
-        headers: authHeaders(),
+        headers,
       })
       expect(testResult.status).toBe(200)
       const testBody = await testResult.text()

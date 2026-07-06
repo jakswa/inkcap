@@ -118,8 +118,9 @@ async function waitForRunSettled(conversationId: string) {
   })
 }
 
-async function makeProvider(baseUrl = stubBaseUrl) {
+async function makeProvider(accountId: string, baseUrl = stubBaseUrl) {
   return createProvider({
+    accountId,
     name: `branch-stub-${randomUUIDv7()}`,
     kind: 'openai-compat',
     baseUrl,
@@ -132,7 +133,7 @@ async function makeProvider(baseUrl = stubBaseUrl) {
 async function setup(baseUrl = stubBaseUrl) {
   const user = await makeUser()
   const cookie = sessionFor(user)
-  const provider = await makeProvider(baseUrl)
+  const provider = await makeProvider(user.id, baseUrl)
   const conversation = await createConversation({
     userId: user.id,
     title: 'branch',

@@ -26,8 +26,18 @@
 
     <label class="grid gap-1.5">
       <span>Headers (JSON)</span>
-      <textarea class="input font-mono text-sm" name="headers" rows="3" placeholder='{"Authorization":"Bearer ..."}'><%= it.values.headers || '' %></textarea>
+      <textarea class="input font-mono text-sm" name="headers" rows="3" placeholder='<%= it.storedHeaderCount > 0 ? `${it.storedHeaderCount} stored header${it.storedHeaderCount === 1 ? "" : "s"} kept if left blank` : '{"Authorization":"Bearer ..."}' %>'><%= it.values.headers || '' %></textarea>
+      <% if (it.storedHeaderCount > 0) { %>
+        <span class="text-sm text-ink-dim">Stored header values are never shown. Leave blank to keep them, or paste a full replacement.</span>
+      <% } %>
     </label>
+
+    <% if (it.storedHeaderCount > 0) { %>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="clear_headers" <%= it.values.clearHeaders ? 'checked' : '' %>>
+        <span>Clear stored headers</span>
+      </label>
+    <% } %>
 
     <label class="grid gap-1.5">
       <span>Request timeout (ms)</span>

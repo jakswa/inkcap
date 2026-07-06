@@ -40,8 +40,10 @@ Needs local PostgreSQL with `spail` and `spail_test` databases.
 bun install
 cp .env.example .env.local         # DATABASE_URL, SESSION_SECRET
 bun run db:migrate
-bun src/tasks/seed-provider.ts     # llama-server provider from DEV_LLAMA_SERVER / DEV_LLAMA_KEY
-bun run dev                        # http://localhost:3000 — register, then chat
+bun run dev                        # http://localhost:3000 — register first
+bun src/tasks/seed-provider.ts --user you@example.com
+                                   # llama-server provider from DEV_LLAMA_SERVER /
+                                   # DEV_LLAMA_KEY, owned by that user's account
 ```
 
 Import llama-ui history (idempotent; JSONL or zip, attachments, branch trees):
@@ -59,11 +61,14 @@ protocol details and caveats (undocumented backend, personal use only).
 
 ## Env
 
-`DATABASE_URL`, `SESSION_SECRET`, `ASSET_VERSION`, `PORT`, `NODE_ENV` (see
-`.env.example`); `DEV_LLAMA_SERVER` / `DEV_LLAMA_KEY` feed the provider seed
-task. In production, `SESSION_SECRET` must be ≥32 bytes and not a placeholder,
-and `ASSET_VERSION` must be set (pass as a Docker build arg so asset URLs roll
-back with the image).
+`DATABASE_URL`, `SESSION_SECRET`, `ASSET_VERSION`, `PORT`, `NODE_ENV`,
+`REGISTRATION` (see `.env.example`); `DEV_LLAMA_SERVER` / `DEV_LLAMA_KEY` feed
+the provider seed task. In production, `SESSION_SECRET` must be ≥32 bytes and
+not a placeholder, and `ASSET_VERSION` must be set (pass as a Docker build arg
+so asset URLs roll back with the image). `REGISTRATION` defaults to `closed`
+in production (`open` elsewhere); bootstrap a closed deployment with
+`bun build/tasks/create-user.js --name ... --email ...` (password via the
+`CREATE_USER_PASSWORD` env var).
 
 ## Scripts
 
@@ -95,10 +100,10 @@ src/
 ├── views/                  # .eta templates (conversations/, providers/, mcp-servers/, auth/, partials/)
 ├── static/                 # app.tailwind.css → generated app.css, chat.js island, svgs
 ├── db/
-│   ├── migrations/         # 001_init ... 011_openai_codex (raw SQL)
+│   ├── migrations/         # 001_init ... 012_accounts (raw SQL)
 │   └── queries/            # named bun-sqlgen queries per table + queries.gen.d.ts
 ├── middleware/             # render.ts, current-user.ts
-├── tasks/                  # migrate, seed-provider, import-llama-ui, mock-provider
+├── tasks/                  # migrate, seed-provider, create-user, import-llama-ui, mock-provider
 ├── utils/                  # env, markdown, message-view, outbound-url, private-session, ...
 └── build.ts                # build-time tooling, never shipped
 ```
@@ -124,14 +129,20 @@ src/
 - `bun test` resets and migrates the `.env.test` database (name must end with
   `test`) and runs concurrently — tests create unique data, no global
   row-count assertions.
-- Core tables: `users`, `providers`, `conversations`, `messages` (tree),
-  `runs` (+ partial unique index: one active run per conversation),
-  `run_events` (SSE replay log), `attachments` (bytea), `mcp_servers`.
+- Core tables: `users`, `accounts` + `account_memberships` (ownership scope;
+  a user's personal account id equals their user id), `providers`,
+  `conversations`, `messages` (tree), `runs` (+ partial unique index: one
+  active run per conversation), `run_events` (SSE replay log), `attachments`
+  (bytea), `mcp_servers`.
 
 ## Auth
 
 - `Bun.password` hash/verify; session payload encrypted into an HTTP-only
   cookie via `SESSION_SECRET` with an `issuedAt` timestamp.
+- Registering creates the user plus a personal account and owner membership in
+  one statement. Providers and MCP servers belong to accounts; every route
+  fetches them through an `account_memberships` join, so a foreign id 404s.
+  Sharing later = adding membership rows, not re-scoping queries.
 - Stateless sessions are non-revocable by default (`docs/issues/09`): re-fetch
   users on sensitive routes; add an invalidation watermark before shipping
   password changes or "log out everywhere".

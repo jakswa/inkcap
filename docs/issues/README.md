@@ -6,27 +6,30 @@ reviewers converged on the top items.
 
 ## Main Remaining Root Causes
 
-1. **Providers and MCP servers are a global, unowned catalog** — no `user_id`, no admin
-   role, routes gate only on "is authenticated." With open registration this is a
-   multi-tenant app where any user can read/edit/delete every other user's catalog rows.
-2. **The durable runner still has recovery/transactional gaps** even though the
+1. **The durable runner still has recovery/transactional gaps** even though the
    non-terminal-run uniqueness invariant is now enforced in Postgres.
+
+~~Providers and MCP servers are a global, unowned catalog~~ — resolved 2026-07-06 by
+`012_accounts.sql` (accounts + memberships, ownership-scoped queries, registration
+gate). The cross-tenant halves of 03/04/05 died with it; their single-tenant residue
+is noted in each file.
 
 ## Priority order
 
 Fix in this sequence:
 
-1. [02 — Ownership-scope the provider/MCP catalog](02-global-unowned-catalog.md) (High) — collapses 03, 04, 05
-2. [06 — Add runner leases/heartbeat recovery](06-runner-active-run-invariant-in-process.md) (High)
-3. [07 — Transactional runner state transitions](07-runner-nontransactional-writes.md) (High)
+1. [06 — Add runner leases/heartbeat recovery](06-runner-active-run-invariant-in-process.md) (High)
+2. [07 — Transactional runner state transitions](07-runner-nontransactional-writes.md) (High)
 
 ## Index
 
+### Resolved
+- [02 — Global unowned provider/MCP catalog (broken access control)](02-global-unowned-catalog.md) — accounts + ownership scoping + registration gate
+
 ### High
-- [02 — Global unowned provider/MCP catalog (broken access control)](02-global-unowned-catalog.md)
-- [03 — Provider/MCP credential exfiltration via base_url swap](03-credential-exfiltration.md)
-- [04 — Approval bypass via global auto_approve](04-approval-bypass-auto-approve.md)
-- [05 — Tool approval not bound to execution endpoint (TOCTOU)](05-approval-toctou.md)
+- [03 — Provider/MCP credential exfiltration via base_url swap](03-credential-exfiltration.md) — cross-tenant vector closed by 02; base_url-change credential invalidation still open
+- [04 — Approval bypass via global auto_approve](04-approval-bypass-auto-approve.md) — cross-tenant vector closed by 02; prompt-injection surface remains
+- [05 — Tool approval not bound to execution endpoint (TOCTOU)](05-approval-toctou.md) — single-tenant TOCTOU + name-collision routing still open
 - [06 — Runner recovery lacks ownership leases/heartbeats](06-runner-active-run-invariant-in-process.md)
 - [07 — Non-transactional multi-row writes leave zombie streaming messages](07-runner-nontransactional-writes.md)
 

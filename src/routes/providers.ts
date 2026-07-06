@@ -6,8 +6,8 @@ import {
   type ProviderModelMetadata,
   createProvider,
   deleteProvider,
-  getProviderById,
-  listProviders,
+  getProviderForUser,
+  listProvidersForUser,
   setProviderEnabled,
   updateProvider,
   updateProviderOauthCredentials,
@@ -107,6 +107,9 @@ function validateProviderForm(values: ProviderFormValues): string[] {
   if (models.some((model) => model.length > maxModelLength)) {
     errors.push(`Each model must be ${maxModelLength} characters or fewer`)
   }
+  if (values.clearApiKey && values.apiKey) {
+    errors.push('Choose one: clear the stored API key, or enter a replacement — not both')
+  }
 
   return errors
 }
@@ -136,10 +139,11 @@ function mergeModelMetadata(
 }
 
 providerRoutes.get('/providers', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   c.header('Cache-Control', 'private, no-store')
-  const providers = await listProviders()
+  const providers = await listProvidersForUser(user.id)
   return c.var.render('providers/index', {
     title: 'Providers',
     providers: providers.map(toProviderView),
@@ -148,14 +152,15 @@ providerRoutes.get('/providers', async (c) => {
 })
 
 providerRoutes.post('/providers/:id/test', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   const id = c.req.param('id')
-  const provider = await getProviderById(id)
+  const provider = await getProviderForUser({ id, userId: user.id })
   if (!provider) return c.notFound()
 
   const result = await testProviderConnection(provider)
-  const providers = await listProviders()
+  const providers = await listProvidersForUser(user.id)
 
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('providers/index', {
@@ -184,7 +189,8 @@ providerRoutes.get('/providers/new', async (c) => {
 })
 
 providerRoutes.post('/providers', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   const form = await c.req.formData()
   const values = readProviderForm(form)
@@ -231,6 +237,9 @@ providerRoutes.post('/providers', async (c) => {
   const savedModels = mergeTestedModels(models, defaultModel ?? '', [])
 
   await createProvider({
+    // Personal account id === user id (migration 012); when shared accounts
+    // grow a picker, this is the one line that changes.
+    accountId: user.id,
     name: values.name,
     kind: values.kind as ProviderKind,
     baseUrl: normalizedBaseUrl,
@@ -249,8 +258,15 @@ const defaultCodexName = 'ChatGPT Codex'
 // Login completion for a NEW codex provider: persist the token bundle first
 // (the row is the canonical credential store), then best-effort model
 // discovery — a changed /models endpoint must not strand a fresh login.
-async function connectCodexProvider(name: string, credentials: CodexOauthCredentials) {
+// The OAuth callback arrives sessionless on the loopback listener, so the
+// owning account is captured here, when the signed-in user starts the flow.
+async function connectCodexProvider(
+  accountId: string,
+  name: string,
+  credentials: CodexOauthCredentials,
+) {
   const provider = await createProvider({
+    accountId,
     name,
     kind: 'openai-codex',
     baseUrl: codexDefaultBaseUrl(),
@@ -294,17 +310,19 @@ function codexLoginError(c: Context, error: unknown) {
 }
 
 providerRoutes.post('/providers/codex/connect', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   const form = await c.req.formData()
   const name = (readString(form, 'name').trim() || defaultCodexName).slice(0, maxNameLength)
   const returnTo = `${new URL(c.req.url).origin}/providers`
+  const accountId = user.id
 
   try {
     const { authorizeUrl } = startCodexLogin({
       returnTo,
       complete: async (credentials) => {
-        await connectCodexProvider(name, credentials)
+        await connectCodexProvider(accountId, name, credentials)
         return returnTo
       },
     })
@@ -315,10 +333,11 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
 })
 
 providerRoutes.post('/providers/:id/reauth', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   const id = c.req.param('id')
-  const provider = await getProviderById(id)
+  const provider = await getProviderForUser({ id, userId: user.id })
   if (!provider || provider.kind !== 'openai-codex') return c.notFound()
 
   const returnTo = `${new URL(c.req.url).origin}/providers`
@@ -337,9 +356,10 @@ providerRoutes.post('/providers/:id/reauth', async (c) => {
 })
 
 providerRoutes.get('/providers/:id/edit', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
-  const provider = await getProviderById(c.req.param('id'))
+  const provider = await getProviderForUser({ id: c.req.param('id'), userId: user.id })
   if (!provider) return c.notFound()
 
   return c.var.render('providers/edit', {
@@ -359,10 +379,11 @@ providerRoutes.get('/providers/:id/edit', async (c) => {
 })
 
 providerRoutes.post('/providers/:id', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
   const id = c.req.param('id')
-  const provider = await getProviderById(id)
+  const provider = await getProviderForUser({ id, userId: user.id })
   if (!provider) return c.notFound()
 
   const form = await c.req.formData()
@@ -438,22 +459,34 @@ providerRoutes.post('/providers/:id', async (c) => {
 })
 
 providerRoutes.post('/providers/:id/enable', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
-  await setProviderEnabled({ id: c.req.param('id'), enabled: true })
+  const provider = await getProviderForUser({ id: c.req.param('id'), userId: user.id })
+  if (!provider) return c.notFound()
+
+  await setProviderEnabled({ id: provider.id, enabled: true })
   return c.redirect('/providers')
 })
 
 providerRoutes.post('/providers/:id/disable', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
-  await setProviderEnabled({ id: c.req.param('id'), enabled: false })
+  const provider = await getProviderForUser({ id: c.req.param('id'), userId: user.id })
+  if (!provider) return c.notFound()
+
+  await setProviderEnabled({ id: provider.id, enabled: false })
   return c.redirect('/providers')
 })
 
 providerRoutes.post('/providers/:id/delete', async (c) => {
-  if (!c.var.user) return c.redirect('/login')
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
 
-  await deleteProvider(c.req.param('id'))
+  const provider = await getProviderForUser({ id: c.req.param('id'), userId: user.id })
+  if (!provider) return c.notFound()
+
+  await deleteProvider(provider.id)
   return c.redirect('/providers')
 })

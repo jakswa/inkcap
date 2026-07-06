@@ -145,8 +145,8 @@ export interface ICreateMcpServerResult {
     updated_at: Date;
 }
 
-/** Result of query `GetMcpServerById`. */
-export interface IGetMcpServerByIdResult {
+/** Result of query `GetMcpServerForUser`. */
+export interface IGetMcpServerForUserResult {
     id: string;
     name: string;
     url: string;
@@ -158,8 +158,8 @@ export interface IGetMcpServerByIdResult {
     updated_at: Date;
 }
 
-/** Result of query `ListMcpServers`. */
-export interface IListMcpServersResult {
+/** Result of query `ListMcpServersForUser`. */
+export interface IListMcpServersForUserResult {
     id: string;
     name: string;
     url: string;
@@ -418,8 +418,24 @@ export interface IGetProviderByIdResult {
     updated_at: Date;
 }
 
-/** Result of query `ListProviders`. */
-export interface IListProvidersResult {
+/** Result of query `GetProviderForUser`. */
+export interface IGetProviderForUserResult {
+    id: string;
+    name: string;
+    kind: string;
+    base_url: string;
+    api_key: string | null;
+    default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
+    enabled: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `ListProvidersForUser`. */
+export interface IListProvidersForUserResult {
     id: string;
     name: string;
     kind: string;
@@ -450,8 +466,8 @@ export interface ISetProviderEnabledResult {
     updated_at: Date;
 }
 
-/** Result of query `GetProviderByName`. */
-export interface IGetProviderByNameResult {
+/** Result of query `GetProviderByNameForAccount`. */
+export interface IGetProviderByNameForAccountResult {
     id: string;
     name: string;
     kind: string;
@@ -732,8 +748,8 @@ export interface Queries {
     CreateImportedConversation: ICreateImportedConversationResult;
     FindConversationMatch: IFindConversationMatchResult;
     CreateMcpServer: ICreateMcpServerResult;
-    GetMcpServerById: IGetMcpServerByIdResult;
-    ListMcpServers: IListMcpServersResult;
+    GetMcpServerForUser: IGetMcpServerForUserResult;
+    ListMcpServersForUser: IListMcpServersForUserResult;
     UpdateMcpServer: IUpdateMcpServerResult;
     SetMcpServerEnabled: ISetMcpServerEnabledResult;
     DeleteMcpServer: IDeleteMcpServerResult;
@@ -753,9 +769,10 @@ export interface Queries {
     GetActivePath: IGetActivePathResult;
     CreateProvider: ICreateProviderResult;
     GetProviderById: IGetProviderByIdResult;
-    ListProviders: IListProvidersResult;
+    GetProviderForUser: IGetProviderForUserResult;
+    ListProvidersForUser: IListProvidersForUserResult;
     SetProviderEnabled: ISetProviderEnabledResult;
-    GetProviderByName: IGetProviderByNameResult;
+    GetProviderByNameForAccount: IGetProviderByNameForAccountResult;
     UpdateProvider: IUpdateProviderResult;
     UpdateProviderOauthCredentials: IUpdateProviderOauthCredentialsResult;
     DeleteProvider: IDeleteProviderResult;

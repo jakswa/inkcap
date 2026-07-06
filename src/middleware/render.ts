@@ -22,6 +22,7 @@ export const renderMiddleware = createMiddleware<{
       ...data,
       user: c.var.user ?? null,
       assetVersion: env.ASSET_VERSION,
+      registrationOpen: env.REGISTRATION === 'open',
     })
 
     return c.html(html)

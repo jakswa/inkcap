@@ -14,7 +14,9 @@
         </form>
       <% } else { %>
         <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/login">Login</a>
-        <a class="btn btn-primary px-3 py-1.5" href="/register">Register</a>
+        <% if (it.registrationOpen) { %>
+          <a class="btn btn-primary px-3 py-1.5" href="/register">Register</a>
+        <% } %>
       <% } %>
     </nav>
   </div>

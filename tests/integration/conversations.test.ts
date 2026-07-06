@@ -117,6 +117,7 @@ describe('conversations chat loop', () => {
     const cookie = sessionFor(user)
     const model = `reasoning-${randomUUIDv7()}`
     const provider = await createProvider({
+      accountId: user.id,
       name: `controls-${randomUUIDv7()}`,
       kind: 'llama-server',
       baseUrl: stubBaseUrl,
@@ -152,6 +153,7 @@ describe('conversations chat loop', () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
     const provider = await createProvider({
+      accountId: user.id,
       name: `stub-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
@@ -207,6 +209,7 @@ describe('conversations chat loop', () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
     const provider = await createProvider({
+      accountId: user.id,
       name: `disabled-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
@@ -241,6 +244,7 @@ describe('conversations chat loop', () => {
     const cookie = sessionFor(user)
     // Point at a dead port so the provider fetch fails inside the run.
     const provider = await createProvider({
+      accountId: user.id,
       name: `dead-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: 'http://127.0.0.1:1',
@@ -275,6 +279,7 @@ describe('conversations chat loop', () => {
     const owner = await makeUser()
     const ownerCookie = sessionFor(owner)
     const provider = await createProvider({
+      accountId: owner.id,
       name: `owned-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,

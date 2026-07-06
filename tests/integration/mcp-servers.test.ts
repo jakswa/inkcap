@@ -5,9 +5,8 @@ const { app } = await import('../../src/app')
 const { createUser } = await import('../../src/db/queries/users')
 const { createConversation } = await import('../../src/db/queries/conversations')
 const { createProvider } = await import('../../src/db/queries/providers')
-const { listMcpServers, listEnabledMcpServersForConversation } = await import(
-  '../../src/db/queries/mcp-servers'
-)
+const { createMcpServer, listMcpServersForUser, listEnabledMcpServersForConversation, setConversationMcpOverride } =
+  await import('../../src/db/queries/mcp-servers')
 const { encryptSession } = await import('../../src/utils/private-session')
 const { startStubMcpServer } = await import('../helpers/mcp-stub')
 
@@ -80,7 +79,7 @@ describe('MCP servers CRUD', () => {
     })
     expect(create.status).toBe(302)
 
-    const listed = await listMcpServers()
+    const listed = await listMcpServersForUser(user.id)
     const created = listed.find((s) => s.name === name)
     expect(created).toBeTruthy()
     expect(created?.auto_approve).toBe(true)
@@ -106,18 +105,144 @@ describe('MCP servers CRUD', () => {
 
     // Disable then enable.
     await app.request(url(`/mcp-servers/${id}/disable`), { method: 'POST', headers })
-    let after = (await listMcpServers()).find((s) => s.id === id)
+    let after = (await listMcpServersForUser(user.id)).find((s) => s.id === id)
     expect(after?.enabled).toBe(false)
     expect(after?.auto_approve).toBe(false)
     expect(after?.name).toBe(`${name}-v2`)
 
     await app.request(url(`/mcp-servers/${id}/enable`), { method: 'POST', headers })
-    after = (await listMcpServers()).find((s) => s.id === id)
+    after = (await listMcpServersForUser(user.id)).find((s) => s.id === id)
     expect(after?.enabled).toBe(true)
 
     const del = await app.request(url(`/mcp-servers/${id}/delete`), { method: 'POST', headers })
     expect(del.status).toBe(302)
-    expect((await listMcpServers()).find((s) => s.id === id)).toBeUndefined()
+    expect((await listMcpServersForUser(user.id)).find((s) => s.id === id)).toBeUndefined()
+  })
+
+  test('MCP servers are invisible and immutable across accounts', async () => {
+    const owner = await makeUser()
+    const stranger = await makeUser()
+    const ownerHeaders = { Cookie: sessionFor(owner), Origin: origin }
+    const strangerHeaders = { Cookie: sessionFor(stranger), Origin: origin }
+    const name = `tenant-srv-${randomUUIDv7()}`
+
+    const server = await createMcpServer({
+      accountId: owner.id,
+      name,
+      url: 'https://mcp.example.com/mcp',
+      headers: { Authorization: 'Bearer tenant-secret' },
+      enabled: true,
+    })
+
+    const list = await app.request(url('/mcp-servers'), { headers: strangerHeaders })
+    expect(await list.text()).not.toContain(name)
+
+    for (const attempt of [
+      { path: `/mcp-servers/${server.id}/edit`, method: 'GET' },
+      { path: `/mcp-servers/${server.id}/test`, method: 'POST' },
+      { path: `/mcp-servers/${server.id}/disable`, method: 'POST' },
+      { path: `/mcp-servers/${server.id}/delete`, method: 'POST' },
+    ]) {
+      const res = await app.request(url(attempt.path), {
+        method: attempt.method,
+        headers: strangerHeaders,
+        ...(attempt.method === 'POST' ? { body: form({}) } : {}),
+      })
+      expect(res.status).toBe(404)
+    }
+
+    const mine = await listMcpServersForUser(owner.id)
+    expect(mine.some((s) => s.id === server.id && s.enabled)).toBe(true)
+    // Still intact for the owner via the UI too.
+    const page = await app.request(url('/mcp-servers'), { headers: ownerHeaders })
+    expect(await page.text()).toContain(name)
+  })
+
+  test('stored auth headers never render into the edit form; blank keeps, checkbox clears', async () => {
+    const user = await makeUser()
+    const headers = { Cookie: sessionFor(user), Origin: origin }
+    const name = `masked-${randomUUIDv7()}`
+    const server = await createMcpServer({
+      accountId: user.id,
+      name,
+      url: 'https://mcp.example.com/mcp',
+      headers: { Authorization: 'Bearer super-secret-header' },
+      enabled: true,
+    })
+
+    const editPage = await app.request(url(`/mcp-servers/${server.id}/edit`), { headers })
+    const editHtml = await editPage.text()
+    expect(editHtml).not.toContain('super-secret-header')
+    expect(editHtml).toContain('Stored header values are never shown')
+    expect(editHtml).toContain('Clear stored headers')
+
+    // Blank submission keeps the stored headers.
+    const keep = await app.request(url(`/mcp-servers/${server.id}`), {
+      method: 'POST',
+      headers,
+      body: form({ name, url: 'https://mcp.example.com/mcp', headers: '', request_timeout_ms: '30000' }),
+    })
+    expect(keep.status).toBe(302)
+    let row = (await listMcpServersForUser(user.id)).find((s) => s.id === server.id)
+    expect(row?.headers).toEqual({ Authorization: 'Bearer super-secret-header' })
+
+    // Clear + replacement together is contradictory input: rejected, and the
+    // re-rendered form keeps the checkbox state.
+    const conflicted = await app.request(url(`/mcp-servers/${server.id}`), {
+      method: 'POST',
+      headers,
+      body: form({
+        name,
+        url: 'https://mcp.example.com/mcp',
+        headers: '{"Authorization":"Bearer replacement"}',
+        clear_headers: 'on',
+        request_timeout_ms: '30000',
+      }),
+    })
+    expect(conflicted.status).toBe(200)
+    const conflictedHtml = await conflicted.text()
+    expect(conflictedHtml).toContain('not both')
+    expect(conflictedHtml).toContain('name="clear_headers" checked')
+    row = (await listMcpServersForUser(user.id)).find((s) => s.id === server.id)
+    expect(row?.headers).toEqual({ Authorization: 'Bearer super-secret-header' })
+
+    // The checkbox is the only way to remove them.
+    const clear = await app.request(url(`/mcp-servers/${server.id}`), {
+      method: 'POST',
+      headers,
+      body: form({
+        name,
+        url: 'https://mcp.example.com/mcp',
+        headers: '',
+        clear_headers: 'on',
+        request_timeout_ms: '30000',
+      }),
+    })
+    expect(clear.status).toBe(302)
+    row = (await listMcpServersForUser(user.id)).find((s) => s.id === server.id)
+    expect(row?.headers).toBeNull()
+  })
+
+  test('a stray override row cannot expose another account\'s server to the runner', async () => {
+    const owner = await makeUser()
+    const stranger = await makeUser()
+    const conversation = await createConversation({ userId: stranger.id })
+    const server = await createMcpServer({
+      accountId: owner.id,
+      name: `foreign-${randomUUIDv7()}`,
+      url: 'https://mcp.example.com/mcp',
+      enabled: true,
+    })
+
+    // Bypass the routes entirely: write the override row directly.
+    await setConversationMcpOverride({
+      conversationId: conversation.id,
+      mcpServerId: server.id,
+      enabled: true,
+    })
+
+    // The runner-side query refuses servers outside the owner's accounts.
+    expect(await listEnabledMcpServersForConversation(conversation.id)).toHaveLength(0)
   })
 
   test('invalid headers JSON is rejected with a form error', async () => {
@@ -148,7 +273,7 @@ describe('MCP servers CRUD', () => {
         headers,
         body: form({ name, url: stub.url, headers: '', request_timeout_ms: '5000' }),
       })
-      const id = (await listMcpServers()).find((s) => s.name === name)!.id
+      const id = (await listMcpServersForUser(user.id)).find((s) => s.name === name)!.id
 
       const res = await app.request(url(`/mcp-servers/${id}/test`), { method: 'POST', headers })
       const html = await res.text()
@@ -172,7 +297,7 @@ describe('MCP servers CRUD', () => {
       headers,
       body: form({ name, url: 'https://mcp.example.com/mcp', headers: '', request_timeout_ms: '30000' }),
     })
-    const id = (await listMcpServers()).find((s) => s.name === name)!.id
+    const id = (await listMcpServersForUser(user.id)).find((s) => s.name === name)!.id
 
     // Default: nothing enabled for the conversation.
     expect(await listEnabledMcpServersForConversation(conversation.id)).toHaveLength(0)
@@ -223,6 +348,7 @@ describe('MCP servers CRUD', () => {
     const cookie = sessionFor(user)
     const headers = { Cookie: cookie, Origin: origin }
     const provider = await createProvider({
+      accountId: user.id,
       name: `provider-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: 'http://127.0.0.1:1',
@@ -236,7 +362,7 @@ describe('MCP servers CRUD', () => {
       headers,
       body: form({ name, url: 'https://mcp.example.com/mcp', headers: '', request_timeout_ms: '30000' }),
     })
-    const id = (await listMcpServers()).find((s) => s.name === name)!.id
+    const id = (await listMcpServersForUser(user.id)).find((s) => s.name === name)!.id
 
     const create = await app.request(url('/conversations'), {
       method: 'POST',

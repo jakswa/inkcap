@@ -59,7 +59,7 @@
       </label>
 
       <label class="flex items-center gap-2">
-        <input type="checkbox" name="clear_api_key">
+        <input type="checkbox" name="clear_api_key" <%= it.values.clearApiKey ? 'checked' : '' %>>
         <span>Clear the stored API key</span>
       </label>
     <% } %>
