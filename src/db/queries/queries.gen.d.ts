@@ -284,6 +284,41 @@ export interface IListMessageChildrenResult {
     created_at: Date;
 }
 
+/** Result of query `ListSiblings`. */
+export interface IListSiblingsResult {
+    id: string;
+    conversation_id: string;
+    parent_id: string | null;
+    role: string;
+    content: string;
+    reasoning_content: string | null;
+    model: string | null;
+    status: string;
+    tool_calls: unknown | null;
+    timings: unknown | null;
+    created_at: Date;
+}
+
+/** Result of query `UpdateMessageContent`. */
+export interface IUpdateMessageContentResult {
+    id: string;
+    conversation_id: string;
+    parent_id: string | null;
+    role: string;
+    content: string;
+    reasoning_content: string | null;
+    model: string | null;
+    status: string;
+    tool_calls: unknown | null;
+    timings: unknown | null;
+    created_at: Date;
+}
+
+/** Result of query `DeleteMessageSubtree`. */
+export interface IDeleteMessageSubtreeResult {
+    id: string;
+}
+
 /** Result of query `CreateImportedMessage`. */
 export interface ICreateImportedMessageResult {
     id: string;
@@ -640,6 +675,9 @@ export interface Queries {
     AppendMessageDeltas: IAppendMessageDeltasResult;
     FinalizeMessage: IFinalizeMessageResult;
     ListMessageChildren: IListMessageChildrenResult;
+    ListSiblings: IListSiblingsResult;
+    UpdateMessageContent: IUpdateMessageContentResult;
+    DeleteMessageSubtree: IDeleteMessageSubtreeResult;
     CreateImportedMessage: ICreateImportedMessageResult;
     SetMessageParentId: ISetMessageParentIdResult;
     GetActivePath: IGetActivePathResult;

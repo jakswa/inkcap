@@ -9,7 +9,15 @@ import {
   setConversationCurrNode,
 } from '../db/queries/conversations'
 import { getProviderById, listProviders } from '../db/queries/providers'
-import { createMessage, getActivePath } from '../db/queries/messages'
+import {
+  createMessage,
+  deleteMessageSubtree,
+  getActivePath,
+  getMessageById,
+  listMessageChildren,
+  listSiblings,
+  updateMessageContent,
+} from '../db/queries/messages'
 import {
   getLatestRunForConversation,
   getRunningRunForConversation,
@@ -32,6 +40,11 @@ import {
 import { readString } from '../utils/validation'
 import { toRenderable } from '../utils/message-view'
 import { relativeTime } from '../utils/relative-time'
+import {
+  findLeafByLastChild,
+  forkConversationPath,
+  siblingNavFor,
+} from '../services/branching'
 
 export const conversationRoutes = new Hono()
 
@@ -42,6 +55,7 @@ const maxModelLength = 200
 // narrow to the shape the transcript needs.
 type PathMessage = {
   id: string | null
+  parent_id: string | null
   role: string | null
   content: string | null
   reasoning_content: string | null
@@ -109,6 +123,23 @@ async function renderShow(
     }
   }
 
+  // Attach sibling-navigation metadata (M7) to each message on the active
+  // path: where a message has siblings (siblingNav.total > 1) the transcript
+  // renders a "‹ i/n ›" switcher. Computed here (not in toRenderable) because
+  // it needs a DB lookup the runner's message-final render doesn't do.
+  const messages = await Promise.all(
+    path.map(async (message) => ({
+      ...toRenderable(message),
+      siblingNav: message.id
+        ? await siblingNavFor({
+            conversationId: conversation.id,
+            parentId: message.parent_id,
+            messageId: message.id,
+          })
+        : null,
+    })),
+  )
+
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/show', {
     title: conversation.title || 'untitled',
@@ -116,7 +147,7 @@ async function renderShow(
     provider,
     // Settled messages carry rendered-markdown HTML; the streaming leaf keeps
     // plain text for the island's live tail (contentHtml === null).
-    messages: path.map((message) => toRenderable(message)),
+    messages,
     sidebar: sidebar.map((row) => ({
       id: row.id,
       title: row.title,
@@ -315,6 +346,230 @@ conversationRoutes.post('/conversations/:id/cancel', async (c) => {
 
   await cancelRun(conversation.id)
   return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// Shared preflight for branch-then-run actions (edit, regenerate): the
+// provider must exist and be enabled, mirroring the send path. Returns a
+// friendly error string, or null when it's safe to start a run.
+async function runPreflightError(
+  conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
+): Promise<string | null> {
+  const provider = conversation.provider_id
+    ? await getProviderById(conversation.provider_id)
+    : null
+  if (!provider) {
+    return 'This conversation has no provider. Assign one before sending.'
+  }
+  if (!provider.enabled) {
+    return `Provider "${provider.name}" is disabled. Enable it before sending.`
+  }
+  return null
+}
+
+// POST /conversations/:id/messages/:messageId/edit — branching edit of a user
+// message (spec C.1a). If the message has no responses yet, edit it in place;
+// otherwise fork a new sibling with the new text, preserving the old branch.
+// Either way curr_node lands on the (edited/new) user message and a fresh run
+// generates the reply.
+conversationRoutes.post('/conversations/:id/messages/:messageId/edit', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  // Guard: one run at a time. Branching mid-stream would race the runner's
+  // curr_node writes, so ask the user to stop first (spec: friendly error).
+  if (getActiveRunHandle(conversation.id)) {
+    return renderShow(c, conversation, {
+      error: 'A reply is streaming. Stop it before editing a message.',
+    })
+  }
+
+  const message = await getMessageById(c.req.param('messageId'))
+  if (!message || message.conversation_id !== conversation.id) return c.notFound()
+  if (message.role !== 'user') {
+    return renderShow(c, conversation, { error: 'Only your messages can be edited.' })
+  }
+
+  const form = await c.req.formData()
+  const content = readString(form, 'content').trim()
+  if (content.length === 0) {
+    return renderShow(c, conversation, { error: 'Type a message before saving.' })
+  }
+
+  const preflight = await runPreflightError(conversation)
+  if (preflight) return renderShow(c, conversation, { error: preflight })
+
+  // No responses downstream → edit in place (spec: no new node). Otherwise
+  // create a sibling so the old branch survives, reachable via the switcher.
+  const children = await listMessageChildren(message.id)
+  let targetId: string
+  if (children.length === 0) {
+    const updated = await updateMessageContent({ id: message.id, content })
+    targetId = updated.id
+  } else {
+    const sibling = await createMessage({
+      conversationId: conversation.id,
+      parentId: message.parent_id,
+      role: 'user',
+      content,
+    })
+    targetId = sibling.id
+  }
+  await setConversationCurrNode({ id: conversation.id, currNode: targetId })
+
+  try {
+    await startRun(conversation.id)
+  } catch (error) {
+    const refreshed = await getConversationById(conversation.id)
+    return renderShow(c, refreshed ?? conversation, {
+      error: `Reply failed: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+
+  return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// POST /conversations/:id/messages/:messageId/regenerate — new sibling reply
+// (spec C.4). Point curr_node at the assistant message's parent (the user turn)
+// and start a run: startRun opens a fresh assistant child there, so the old
+// reply is preserved as a sibling and the LLM context excludes it.
+conversationRoutes.post(
+  '/conversations/:id/messages/:messageId/regenerate',
+  async (c) => {
+    const user = requireUser(c)
+    if (!user) return c.redirect('/login')
+
+    const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+    if (!conversation) return c.notFound()
+
+    if (getActiveRunHandle(conversation.id)) {
+      return renderShow(c, conversation, {
+        error: 'A reply is streaming. Stop it before regenerating.',
+      })
+    }
+
+    const message = await getMessageById(c.req.param('messageId'))
+    if (!message || message.conversation_id !== conversation.id) return c.notFound()
+    if (message.role !== 'assistant') {
+      return renderShow(c, conversation, {
+        error: 'Only assistant replies can be regenerated.',
+      })
+    }
+    if (!message.parent_id) {
+      return renderShow(c, conversation, { error: 'Nothing to regenerate from.' })
+    }
+
+    const preflight = await runPreflightError(conversation)
+    if (preflight) return renderShow(c, conversation, { error: preflight })
+
+    await setConversationCurrNode({
+      id: conversation.id,
+      currNode: message.parent_id,
+    })
+
+    try {
+      await startRun(conversation.id)
+    } catch (error) {
+      const refreshed = await getConversationById(conversation.id)
+      return renderShow(c, refreshed ?? conversation, {
+        error: `Reply failed: ${error instanceof Error ? error.message : String(error)}`,
+      })
+    }
+
+    return c.redirect(`/conversations/${conversation.id}`)
+  },
+)
+
+// POST /conversations/:id/switch — sibling navigation (spec C.3). `target` is a
+// sibling id; curr_node jumps to that sibling's deepest most-recent branch
+// (findLeafByLastChild), so the whole path below the switch point re-derives.
+conversationRoutes.post('/conversations/:id/switch', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  if (getActiveRunHandle(conversation.id)) {
+    return renderShow(c, conversation, {
+      error: 'A reply is streaming. Stop it before switching branches.',
+    })
+  }
+
+  const form = await c.req.formData()
+  const target = readString(form, 'target').trim()
+  if (target) {
+    const message = await getMessageById(target)
+    if (!message || message.conversation_id !== conversation.id) return c.notFound()
+    const leaf = await findLeafByLastChild(target)
+    await setConversationCurrNode({ id: conversation.id, currNode: leaf })
+  }
+
+  return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// POST /conversations/:id/messages/:messageId/delete — prune a message and its
+// whole subtree (spec C.7). If the active leaf was inside the pruned subtree
+// (curr_node → NULL via ON DELETE SET NULL), reposition: prefer the newest
+// remaining sibling's leaf, else collapse to the parent's leaf.
+conversationRoutes.post(
+  '/conversations/:id/messages/:messageId/delete',
+  async (c) => {
+    const user = requireUser(c)
+    if (!user) return c.redirect('/login')
+
+    const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+    if (!conversation) return c.notFound()
+
+    if (getActiveRunHandle(conversation.id)) {
+      return renderShow(c, conversation, {
+        error: 'A reply is streaming. Stop it before deleting a message.',
+      })
+    }
+
+    const message = await getMessageById(c.req.param('messageId'))
+    if (!message || message.conversation_id !== conversation.id) return c.notFound()
+
+    const parentId = message.parent_id
+    const prevCurr = conversation.curr_node
+    await deleteMessageSubtree({ id: message.id, conversationId: conversation.id })
+
+    // curr_node is now NULL only if the deleted subtree contained it — i.e. the
+    // deleted message was on the active path. A dangling branch leaves it alone.
+    const refreshed = await getConversationById(conversation.id)
+    if (refreshed && prevCurr && refreshed.curr_node === null) {
+      const siblings = await listSiblings({
+        conversationId: conversation.id,
+        parentId,
+      })
+      let newCurr: string | null = null
+      if (siblings.length > 0) {
+        // created_at ASC → last row is the newest remaining sibling.
+        newCurr = await findLeafByLastChild(siblings[siblings.length - 1]!.id)
+      } else if (parentId) {
+        newCurr = await findLeafByLastChild(parentId)
+      }
+      await setConversationCurrNode({ id: conversation.id, currNode: newCurr })
+    }
+
+    return c.redirect(`/conversations/${conversation.id}`)
+  },
+)
+
+// POST /conversations/:id/fork — copy the active path into a new conversation
+// (spec C.9), stamping forked_from_conversation_id. Never mutates the source
+// tree; redirects to the fresh copy.
+conversationRoutes.post('/conversations/:id/fork', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  const newId = await forkConversationPath(conversation)
+  return c.redirect(`/conversations/${newId}`)
 })
 
 // POST /conversations/:id/approvals — approve or deny the pending tool call(s)

@@ -18,7 +18,12 @@
     <header class="grid gap-1">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <a class="text-sm text-indigo-600 underline-offset-4 hover:underline lg:hidden" href="/conversations">← All conversations</a>
-        <a class="ml-auto text-sm text-indigo-600 underline-offset-4 hover:underline" href="/conversations/<%= it.conversation.id %>/tools">Tools</a>
+        <div class="ml-auto flex items-center gap-3">
+          <form class="contents" method="post" action="/conversations/<%= it.conversation.id %>/fork">
+            <button class="cursor-pointer border-0 bg-transparent p-0 text-sm text-indigo-600 underline-offset-4 hover:underline" type="submit">Fork</button>
+          </form>
+          <a class="text-sm text-indigo-600 underline-offset-4 hover:underline" href="/conversations/<%= it.conversation.id %>/tools">Tools</a>
+        </div>
       </div>
       <h1 class="text-[clamp(1.5rem,4vw,2.25rem)] font-extrabold leading-tight tracking-[-0.03em]"><%= it.conversation.title || 'untitled' %></h1>
       <p class="text-sm text-slate-500">

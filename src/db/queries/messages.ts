@@ -105,6 +105,58 @@ export async function listMessageChildren(parentId: string) {
   `
 }
 
+// Branching (M7): the siblings of a message are the rows in the same
+// conversation sharing its parent. `parent_id IS NOT DISTINCT FROM` makes the
+// NULL-parent case (top-of-tree messages) a plain equality too, so a system
+// prompt or first user turn still gets sibling navigation. Ordered by
+// created_at so the "‹ i/n ›" index is stable and matches the fork's tree.
+export async function listSiblings(input: {
+  conversationId: string
+  parentId: string | null
+}) {
+  return sql.ListSiblings`
+    SELECT id, conversation_id, parent_id, role, content, reasoning_content,
+           model, status, tool_calls, timings, created_at
+    FROM messages
+    WHERE conversation_id = ${input.conversationId}
+      AND parent_id IS NOT DISTINCT FROM ${input.parentId}
+    ORDER BY created_at ASC, id ASC
+  `
+}
+
+// Branching (M7): in-place content edit of a message (no new node). Used when a
+// user edits a message that has no downstream responses yet — same id, same
+// tree position. Messages carry no updated_at column, so only content changes.
+export async function updateMessageContent(input: { id: string; content: string }) {
+  const [message] = await sql.UpdateMessageContent`
+    UPDATE messages
+    SET content = ${input.content}
+    WHERE id = ${input.id}
+    RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
+              model, status, tool_calls, timings, created_at
+  `
+
+  return message
+}
+
+// Branching (M7): delete a message and its whole subtree. parent_id is
+// ON DELETE CASCADE, so deleting this one row prunes every descendant; scoped
+// by conversation_id so one conversation can never delete another's node.
+// conversations.curr_node is ON DELETE SET NULL, so a caller repositions the
+// active leaf afterward. Returns the deleted id, or undefined if nothing matched.
+export async function deleteMessageSubtree(input: {
+  id: string
+  conversationId: string
+}) {
+  const [message] = await sql.DeleteMessageSubtree`
+    DELETE FROM messages
+    WHERE id = ${input.id} AND conversation_id = ${input.conversationId}
+    RETURNING id
+  `
+
+  return message
+}
+
 // Importer-only: inserts with the original export timestamp (so sibling
 // ordering by created_at matches the source tree) and always parent_id NULL —
 // the importer wires up parent_id in a second pass once every row in the

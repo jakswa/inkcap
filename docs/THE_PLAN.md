@@ -211,3 +211,27 @@ miss.
 4. No offline, ever, by design.
 5. Rewrites die of parity-chasing — the fork stays runnable so nobody is
    tempted to rush parity; spail only has to win at durability + providers.
+
+## Backlog
+
+Post-v1 items surfaced during final integration (2026-07-06). None block daily use.
+
+- **Milestone commit order is scrambled on master.** Linear history reads
+  M0 → Wave1 → M1 → M2 → M5 → M3 → M4 → M6 → M7 (the M5 importer landed early
+  and bundled the D3 markdown pipeline, an M4 concern). Each milestone is still
+  exactly one commit; reordering would mean rewriting published history — not
+  worth it. Recorded so nobody is confused by the log.
+- **Edit-user "Save (keep responses)" (spec C.1(b)).** M7 implements the
+  branching edit (C.1(a)): save always (re)generates a reply. A second submit
+  button hitting a no-run route would add save-without-regenerate.
+- **Manual assistant edit (spec C.2).** Regenerate-as-new-sibling shipped;
+  hand-editing assistant content with a branch toggle did not.
+- **Sibling switcher is SSR-only.** After a live finalize-swap the "‹ i/n ›"
+  switcher doesn't appear until page reload (siblingNav is computed in the
+  route, not the runner's partial render). Edit/regenerate/delete controls do
+  survive the swap.
+- **Fork edge cases.** Forking while a run streams copies the streaming leaf
+  as-is (status 'streaming') into the fork, where no run drives it; fork also
+  does not copy attachments (out of M7 scope).
+- **Runner stream resume.** "Resume if provider supports it" is the
+  finalize-as-interrupted fallback only, per the plan's allowed fallback.

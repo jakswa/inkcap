@@ -28,4 +28,61 @@
       <% if (m.timingLabel) { %><span><%= m.timingLabel %></span><% } %>
     </footer>
   <% } %>
+
+  <% /* Branching controls (M7). Only on settled messages — a streaming leaf has
+        no actions. Action URLs use m.conversation_id (present on the row) so the
+        same partial works for the SSR transcript and the runner's finalize-swap.
+        The sibling switcher only appears on a full SSR render (siblingNav is
+        computed in the route, not by the runner), degrading to reload. */ %>
+  <% if (m.status !== 'streaming' && m.id) { %>
+    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+      <% if (m.siblingNav && m.siblingNav.total > 1) { %>
+        <span class="inline-flex items-center gap-1" data-sibling-nav>
+          <% if (m.siblingNav.prevId) { %>
+            <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
+              <input type="hidden" name="target" value="<%= m.siblingNav.prevId %>">
+              <button class="cursor-pointer rounded border border-slate-200 px-1.5 font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600" type="submit" aria-label="Previous sibling">‹</button>
+            </form>
+          <% } else { %>
+            <span class="px-1.5 text-slate-300" aria-hidden="true">‹</span>
+          <% } %>
+          <span data-sibling-index><%= m.siblingNav.index %> / <%= m.siblingNav.total %></span>
+          <% if (m.siblingNav.nextId) { %>
+            <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
+              <input type="hidden" name="target" value="<%= m.siblingNav.nextId %>">
+              <button class="cursor-pointer rounded border border-slate-200 px-1.5 font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600" type="submit" aria-label="Next sibling">›</button>
+            </form>
+          <% } else { %>
+            <span class="px-1.5 text-slate-300" aria-hidden="true">›</span>
+          <% } %>
+        </span>
+      <% } %>
+
+      <% if (m.role === 'user') { %>
+        <details class="group/edit" data-edit>
+          <summary class="cursor-pointer select-none font-semibold hover:text-indigo-600">Edit</summary>
+          <form class="mt-2 grid gap-2" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/edit">
+            <textarea class="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" name="content" rows="3"><%= m.content %></textarea>
+            <div class="flex justify-end">
+              <button class="cursor-pointer rounded-lg border-0 bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" type="submit">Save &amp; regenerate</button>
+            </div>
+          </form>
+        </details>
+      <% } %>
+
+      <% if (m.role === 'assistant') { %>
+        <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/regenerate">
+          <button class="cursor-pointer font-semibold hover:text-indigo-600" type="submit">Regenerate</button>
+        </form>
+      <% } %>
+
+      <details data-delete>
+        <summary class="cursor-pointer select-none font-semibold hover:text-red-600">Delete</summary>
+        <form class="mt-2 flex items-center gap-2" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/delete">
+          <span class="text-slate-500">Delete this message and everything below it?</span>
+          <button class="cursor-pointer rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50" type="submit">Confirm delete</button>
+        </form>
+      </details>
+    </div>
+  <% } %>
 </article>
