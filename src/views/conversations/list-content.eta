@@ -1,0 +1,70 @@
+<section class="grid grid-cols-[minmax(0,1fr)_minmax(18rem,25rem)] items-start gap-[clamp(1.5rem,6vw,4rem)] max-[720px]:grid-cols-1">
+  <div class="grid gap-4">
+    <div>
+      <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Chats</p>
+      <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Conversations</h1>
+    </div>
+
+    <% if (it.conversations.length === 0) { %>
+      <p class="text-slate-500">No conversations yet. Start one with the form.</p>
+    <% } else { %>
+      <ul class="grid list-none gap-3 p-0">
+        <% it.conversations.forEach((conversation) => { %>
+          <li>
+            <a class="grid gap-1 rounded-lg border border-slate-300 bg-white p-4 no-underline shadow-sm shadow-slate-900/10 hover:border-indigo-400" href="/conversations/<%= conversation.id %>">
+              <span class="font-bold text-slate-900"><%= conversation.title || 'untitled' %></span>
+              <span class="text-sm text-slate-500">
+                <%= conversation.provider_id && it.providerNames[conversation.provider_id] ? it.providerNames[conversation.provider_id] : 'no provider' %>
+                <% if (conversation.model) { %> · <%= conversation.model %><% } %>
+              </span>
+              <span class="text-xs text-slate-400">Updated <%= conversation.updated_at.toISOString() %></span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+
+  <form class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10" method="post" action="/conversations">
+    <h2 class="text-lg font-bold">New conversation</h2>
+
+    <% if (it.errors.length > 0) { %>
+      <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+        <% it.errors.forEach((error) => { %>
+          <p class="last:mb-0"><%= error %></p>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% if (it.providers.length === 0) { %>
+      <p class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">No enabled providers. Add and enable one before starting a conversation.</p>
+    <% } else { %>
+      <label class="grid gap-1.5">
+        <span>Provider</span>
+        <select class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="providerId" required>
+          <% it.providers.forEach((provider) => { %>
+            <option value="<%= provider.id %>" <%= it.values.providerId === provider.id ? 'selected' : '' %>><%= provider.name %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="grid gap-1.5">
+        <span>Model</span>
+        <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="model" type="text" maxlength="200" value="<%= it.values.model || (it.providers[0] && it.providers[0].default_model) || '' %>">
+        <span class="text-xs text-slate-400">Leave blank to use the provider's default model.</span>
+      </label>
+
+      <label class="grid gap-1.5">
+        <span>Title <span class="text-slate-400">(optional)</span></span>
+        <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="title" type="text" maxlength="200" value="<%= it.values.title || '' %>">
+      </label>
+
+      <label class="grid gap-1.5">
+        <span>System prompt <span class="text-slate-400">(optional)</span></span>
+        <textarea class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="systemPrompt" rows="3"><%= it.values.systemPrompt || '' %></textarea>
+      </label>
+
+      <button class="inline-flex cursor-pointer items-center justify-center rounded-lg border-0 bg-indigo-600 px-4 py-2.5 font-bold text-white hover:bg-indigo-700" type="submit">Start conversation</button>
+    <% } %>
+  </form>
+</section>

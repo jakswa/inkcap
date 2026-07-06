@@ -7,6 +7,7 @@ import { serveAssets } from './assets/serve-assets'
 import { currentUser } from './middleware/current-user'
 import { renderMiddleware } from './middleware/render'
 import { authRoutes } from './routes/auth'
+import { conversationRoutes } from './routes/conversations'
 import { dashboardRoutes } from './routes/dashboard'
 import { homeRoutes } from './routes/home'
 import { providerRoutes } from './routes/providers'
@@ -41,6 +42,7 @@ app.route('/', homeRoutes)
 app.route('/', authRoutes)
 app.route('/', dashboardRoutes)
 app.route('/', providerRoutes)
+app.route('/', conversationRoutes)
 
 app.notFound((c) =>
   renderError(c, 404, 'Page not found', 'The page you requested does not exist.'),

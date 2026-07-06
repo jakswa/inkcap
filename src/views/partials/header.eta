@@ -6,6 +6,8 @@
     </a>
     <nav class="flex flex-wrap items-center justify-end gap-3 max-[720px]:justify-start" aria-label="Primary">
       <% if (it.user) { %>
+        <a class="text-indigo-600 underline-offset-4 hover:underline" href="/conversations">Chats</a>
+        <a class="text-indigo-600 underline-offset-4 hover:underline" href="/providers">Providers</a>
         <a class="text-indigo-600 underline-offset-4 hover:underline" href="/dashboard">Dashboard</a>
         <form method="post" action="/logout">
           <button class="cursor-pointer border-0 bg-transparent p-0 text-indigo-600 hover:underline" type="submit">Logout</button>
