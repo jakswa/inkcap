@@ -8,7 +8,7 @@
   <div class="flex flex-wrap gap-3">
     <% if (it.user) { %>
       <a class="btn btn-primary" href="/conversations">Open your chats</a>
-      <a class="btn btn-ghost" href="/providers">Providers</a>
+      <a class="btn btn-ghost" href="/settings">Settings</a>
     <% } else { %>
       <% if (it.registrationOpen) { %>
         <a class="btn btn-primary" href="/register">Create an account</a>

@@ -13,7 +13,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { assertSafeOutboundUrl } from '../utils/outbound-url'
 
-const CLIENT_INFO = { name: 'spail', version: '1.0.0' }
+const CLIENT_INFO = { name: 'inkcap', version: '1.0.0' }
 const DEFAULT_TIMEOUT_MS = 30_000
 
 // The subset of an mcp_servers row this service needs.

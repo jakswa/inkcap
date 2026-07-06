@@ -16,7 +16,7 @@ Implementation: `src/services/codex-auth.ts` (OAuth + refresh),
 - Issuer: `https://auth.openai.com` (`CODEX_AUTH_ISSUER` overrides for tests)
 - Client id: `app_EMoamEEZ73f0CkXaXp7hrann` (the Codex CLI's public client)
 - Redirect: `http://localhost:1455/auth/callback` — fixed by the client
-  registration. spail binds 127.0.0.1:1455 only while a login is pending
+  registration. inkcap binds 127.0.0.1:1455 only while a login is pending
   (`CODEX_OAUTH_PORT` overrides for tests), so the browser must run on the
   same machine as the server (or tunnel 1455).
 - Scope: `openid profile email offline_access`
@@ -49,7 +49,7 @@ Implementation: `src/services/codex-auth.ts` (OAuth + refresh),
   each turn), **non-empty `instructions`** (else 400 "Instructions are
   required"; we always prefix a Codex-style preamble and append the user's
   system prompt), `include: ["reasoning.encrypted_content"]`. Reasoning knob:
-  `reasoning: { effort, summary: "auto" }` (spail's `max` maps to `high`).
+  `reasoning: { effort, summary: "auto" }` (inkcap's `max` maps to `high`).
 - Tools: Responses flat shape (`{type:'function', name, description,
   parameters}`); history items `function_call` / `function_call_output`.
 - SSE events consumed: `response.output_text.delta` (content),

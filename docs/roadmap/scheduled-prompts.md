@@ -10,7 +10,7 @@ a normal run — same runner, same durability, same approval flow — in a fresh
 conversation tagged with the routine. Enable/disable turns the schedule off
 without deleting the setup.
 
-spail is unusually well-positioned for this: most chat apps bolt scheduling
+inkcap is unusually well-positioned for this: most chat apps bolt scheduling
 onto a client-owned loop, but our runner already executes unattended — a
 routine is just a run nobody clicked "send" for. Prior art worth stealing
 from: Anthropic's Claude Code routines / scheduled agents (pick model + tools,
@@ -88,7 +88,7 @@ provider doesn't generate an error conversation every hour forever.
 ## pg-boss: not yet, and here's the line
 
 pg-boss would give us queues, retries, cron, and `SKIP LOCKED` workers on the
-Postgres we already run — it's the right *standard* if spail grows real
+Postgres we already run — it's the right *standard* if inkcap grows real
 background variety. But routines alone don't clear the bar:
 
 - The **runner is already the durable executor**; routines only need a

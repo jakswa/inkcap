@@ -5,6 +5,6 @@ export const homeRoutes = new Hono()
 homeRoutes.get('/', async (c) => {
   c.header('Cache-Control', 'private, no-cache')
   return c.var.render('home', {
-    title: 'spail',
+    title: 'inkcap',
   })
 })

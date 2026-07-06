@@ -1,4 +1,4 @@
-# spail
+# inkcap
 
 A server-driven LLM chat app: the **server owns the conversation**. A chat "run"
 is a durable server-side job — close the laptop mid-generation, open your phone
@@ -35,7 +35,7 @@ polish backlog), `docs/issues/` (hardening work; resolved ones in
 
 ## Quick Start
 
-Needs local PostgreSQL with `spail` and `spail_test` databases.
+Needs local PostgreSQL with `inkcap` and `inkcap_test` databases.
 
 ```sh
 bun install
@@ -55,7 +55,7 @@ bun src/tasks/import-llama-ui.ts <export.jsonl-or-.zip> --user you@example.com
 
 Chat on your own ChatGPT subscription (Codex): Providers → Add provider →
 "Sign in with ChatGPT". The server runs the Codex CLI's OAuth flow with a
-loopback callback on `localhost:1455` — browse from the machine running spail
+loopback callback on `localhost:1455` — browse from the machine running inkcap
 (or tunnel that port) during sign-in. Tokens stay server-side and
 auto-refresh; protocol details and caveats: `docs/specs/openai-codex.md`.
 
@@ -160,6 +160,6 @@ src/
   restart is always safe — boot recovery finalizes interrupted runs.
 
 ```sh
-docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t spail .
-docker run -p 3000:3000 --env-file .env.production spail
+docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t inkcap .
+docker run -p 3000:3000 --env-file .env.production inkcap
 ```

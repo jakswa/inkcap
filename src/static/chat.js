@@ -82,14 +82,14 @@
       var empty = t.querySelector('[data-empty]');
       if (empty) empty.remove();
       var article = document.createElement('article');
-      article.className = 'group grid gap-2';
+      article.className = 'group grid gap-3.5 py-1';
       article.setAttribute('data-message-id', d.messageId);
       article.setAttribute('data-role', d.role || 'assistant');
       article.setAttribute('data-status', 'streaming');
       // Keep these classes in sync with the streaming branch of message.eta.
       article.innerHTML =
         '<pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning></pre>' +
-        '<pre class="m-0 font-body whitespace-pre-wrap break-words text-ink" data-content></pre>';
+        '<pre class="m-0 rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5" data-content></pre>';
       t.appendChild(article);
       seen[d.messageId] = true; // born empty — nothing to clear on first delta
       if (pinned) scrollToBottom();
@@ -183,12 +183,15 @@
     el.style.height = Math.min(el.scrollHeight, 256) + 'px';
   }
 
-  function syncReasoningControl(select) {
-    if (!select || !select.form) return;
-    var option = select.options[select.selectedIndex];
-    var supported = option && option.getAttribute('data-reasoning') === '1';
-    var control = select.form.querySelector('[data-reasoning-control]');
-    var hidden = select.form.querySelector('[data-reasoning-hidden]');
+  function syncReasoningControl(input) {
+    if (!input || !input.form) return;
+    var supported = input.getAttribute && input.getAttribute('data-reasoning') === '1';
+    if (input.options) {
+      var option = input.options[input.selectedIndex];
+      supported = option && option.getAttribute('data-reasoning') === '1';
+    }
+    var control = input.form.querySelector('[data-reasoning-control]');
+    var hidden = input.form.querySelector('[data-reasoning-hidden]');
     var effort = control ? control.querySelector('select[name="reasoning_effort"]') : null;
     var radios = control ? control.querySelectorAll('[data-reasoning-radio]') : [];
     if (control) control.classList.toggle('hidden', !supported);
@@ -218,11 +221,47 @@
     if (input.matches && input.matches('[data-reasoning-radio]')) control.open = false;
   }
 
+  function syncModelState(input) {
+    var menu = input.closest('[data-model-menu]');
+    if (!menu) return;
+    var label = input.getAttribute('data-label') || input.value;
+    menu.title = 'Model: ' + label;
+    var summary = menu.querySelector('summary');
+    if (summary) summary.setAttribute('aria-label', 'Model: ' + label);
+    var text = menu.querySelector('[data-model-label]');
+    if (text) text.textContent = label;
+    menu.open = false;
+  }
+
+  function addModelRadio(panel, name, reasoning, checked) {
+    var label = document.createElement('label');
+    label.className = 'flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink';
+    var span = document.createElement('span');
+    span.className = 'min-w-0 truncate';
+    span.textContent = name;
+    var radio = document.createElement('input');
+    radio.className = 'size-3.5 shrink-0';
+    radio.type = 'radio';
+    radio.name = 'model';
+    radio.value = name;
+    radio.setAttribute('data-label', name);
+    radio.setAttribute('data-reasoning', reasoning ? '1' : '0');
+    radio.setAttribute('data-model-select', '');
+    radio.setAttribute('data-model-radio', '');
+    radio.checked = !!checked;
+    label.appendChild(span);
+    label.appendChild(radio);
+    panel.appendChild(label);
+    return radio;
+  }
+
   function syncProviderControls(select) {
     if (!select || !select.form) return;
     var option = select.options[select.selectedIndex];
-    var modelSelect = select.form.querySelector('[data-model-select]');
-    if (!option || !modelSelect) return;
+    var modelMenu = select.form.querySelector('[data-model-menu]');
+    if (!option || !modelMenu) return;
+    var panel = modelMenu.querySelector('[data-menu-panel]');
+    if (!panel) return;
     var models = [];
     try {
       models = JSON.parse(option.getAttribute('data-models') || '[]');
@@ -230,16 +269,80 @@
       models = [];
     }
     var selected = option.getAttribute('data-default-model') || '';
-    modelSelect.textContent = '';
+    panel.textContent = '';
+    var checkedRadio = null;
     for (var i = 0; i < models.length; i++) {
       var item = models[i] || {};
       var name = String(item.name || '');
       if (!name) continue;
-      var modelOption = new Option(name, name, false, name === selected || (!selected && i === 0));
-      modelOption.setAttribute('data-reasoning', item.reasoning ? '1' : '0');
-      modelSelect.appendChild(modelOption);
+      var checked = name === selected || (!selected && !checkedRadio);
+      var radio = addModelRadio(panel, name, !!item.reasoning, checked);
+      if (checked) checkedRadio = radio;
     }
-    syncReasoningControl(modelSelect);
+    if (checkedRadio) {
+      syncModelState(checkedRadio);
+      syncReasoningControl(checkedRadio);
+    }
+  }
+
+  function syncStatsToggle(button) {
+    var root = button.closest('[data-stats-toggle]');
+    if (!root) return;
+    var kind = button.getAttribute('data-stats-tab');
+    var tabs = root.querySelectorAll('[data-stats-tab]');
+    var panels = root.querySelectorAll('[data-stats-panel]');
+    for (var i = 0; i < tabs.length; i++) {
+      var active = tabs[i].getAttribute('data-stats-tab') === kind;
+      tabs[i].setAttribute('aria-pressed', active ? 'true' : 'false');
+      tabs[i].classList.toggle('bg-ink/10', active);
+      tabs[i].classList.toggle('text-ink', active);
+      tabs[i].classList.toggle('text-ink-dim', !active);
+      tabs[i].classList.toggle('hover:bg-ink/5', !active);
+      tabs[i].classList.toggle('hover:text-ink', !active);
+    }
+    for (var j = 0; j < panels.length; j++) {
+      var show = panels[j].getAttribute('data-stats-panel') === kind;
+      panels[j].hidden = !show;
+      panels[j].classList.toggle('inline-flex', show);
+    }
+  }
+
+  function positionMenu(details) {
+    if (!details || !details.open) return;
+    var panel = details.querySelector('[data-menu-panel]');
+    if (!panel) return;
+    panel.style.top = '';
+    panel.style.right = '';
+    panel.style.bottom = '';
+    panel.style.left = '';
+    panel.style.marginTop = '';
+    panel.style.marginBottom = '';
+    var rect = details.getBoundingClientRect();
+    var panelHeight = panel.offsetHeight || 0;
+    var spaceAbove = rect.top;
+    var spaceBelow = window.innerHeight - rect.bottom;
+    if (spaceBelow > spaceAbove || spaceAbove < panelHeight + 12) {
+      panel.style.top = '100%';
+      panel.style.bottom = 'auto';
+      panel.style.marginTop = '0.5rem';
+      panel.style.marginBottom = '0';
+    } else {
+      panel.style.top = 'auto';
+      panel.style.bottom = '100%';
+      panel.style.marginTop = '0';
+      panel.style.marginBottom = '0.5rem';
+    }
+
+    var panelRect = panel.getBoundingClientRect();
+    var gutter = 8;
+    var desiredLeft = Math.max(
+      gutter,
+      Math.min(panelRect.left, window.innerWidth - panelRect.width - gutter),
+    );
+    if (Math.abs(desiredLeft - panelRect.left) > 1) {
+      panel.style.left = desiredLeft - rect.left + 'px';
+      panel.style.right = 'auto';
+    }
   }
 
   // Replace #chat with the server's fresh render, then re-attach behavior and
@@ -282,9 +385,22 @@
   document.addEventListener('change', function (e) {
     var el = e.target;
     if (el && el.matches && el.matches('[data-model-select]')) syncReasoningControl(el);
+    if (el && el.matches && el.matches('[data-model-radio]')) {
+      syncModelState(el);
+      syncReasoningControl(el);
+    }
     if (el && el.matches && el.matches('[data-provider-select]')) syncProviderControls(el);
     if (el && el.matches && el.matches('select[name="reasoning_effort"], [data-reasoning-radio]')) syncReasoningState(el);
   });
+
+  document.addEventListener(
+    'toggle',
+    function (e) {
+      var el = e.target;
+      if (el && el.matches && el.matches('details[data-close-on-outside][open]')) positionMenu(el);
+    },
+    true,
+  );
 
   // Theme-styled <details> menus should behave like native popups: clicking
   // elsewhere (or pressing Escape) closes them.
@@ -300,6 +416,11 @@
     if (e.key !== 'Escape') return;
     var menus = document.querySelectorAll('details[data-close-on-outside][open]');
     for (var i = 0; i < menus.length; i++) menus[i].removeAttribute('open');
+  });
+
+  window.addEventListener('resize', function () {
+    var menus = document.querySelectorAll('details[data-close-on-outside][open]');
+    for (var i = 0; i < menus.length; i++) positionMenu(menus[i]);
   });
 
   // Landing hero: creating an empty conversation from a blank composer is
@@ -326,6 +447,12 @@
     },
     true,
   );
+
+  document.addEventListener('click', function (e) {
+    var tab = e.target && e.target.closest ? e.target.closest('[data-stats-tab]') : null;
+    if (!tab) return;
+    syncStatsToggle(tab);
+  });
 
   // Copy a message's raw markdown; flash a check as feedback.
   document.addEventListener('click', function (e) {
@@ -359,7 +486,7 @@
       if (hero) autosize(hero);
       var provider = document.querySelector('[data-provider-select]');
       if (provider) syncProviderControls(provider);
-      var model = document.querySelector('[data-model-select]');
+      var model = document.querySelector('[data-model-select], [data-model-radio]:checked');
       if (model) syncReasoningControl(model);
       return;
     }
@@ -379,7 +506,7 @@
     }
     var input = r.querySelector('[data-composer-input]');
     if (input) autosize(input);
-    var model = r.querySelector('[data-model-select]');
+    var model = r.querySelector('[data-model-select], [data-model-radio]:checked');
     if (model) syncReasoningControl(model);
     openStream();
   }

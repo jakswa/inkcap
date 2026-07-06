@@ -20,7 +20,7 @@ detected from `/props`:
   instances; most requests then need an explicit `model` field and there's a
   `/models/load` `/models/unload` control plane. (This ROUTER stuff is
   llama-ui/llama-server specific — flag but probably out of scope for a
-  first spail pass; noted here so the abstraction doesn't paint itself into
+  first inkcap pass; noted here so the abstraction doesn't paint itself into
   a corner.)
 
 All endpoints are relative (`./v1/chat/completions`, `./props`, etc.) —
@@ -503,7 +503,7 @@ calls were seen, else `undefined`.
 **chat.service.ts never branches on the value** — it's typed but unused in
 the fork's stream parser. (Standard OpenAI values you should expect from
 llama-server: `"stop"`, `"length"`, `"tool_calls"`. Do not assume the fork
-validates or requires any particular one — spail's parser should read it but
+validates or requires any particular one — inkcap's parser should read it but
 shouldn't hard-fail on an unrecognized value.)
 
 Sample streaming chunk sequence:
@@ -716,7 +716,7 @@ Fields the fork actually consumes downstream:
   independent of the `reasoning_format` request field.
 - **`ui_settings` / `webui_settings`** (`webui_settings` deprecated, prefer
   `ui_settings`) → server-pushed default UI config (theme, etc.); outside
-  this doc's scope but note the dual/deprecated-alias pattern if spail wants
+  this doc's scope but note the dual/deprecated-alias pattern if inkcap wants
   to expose analogous server-pushed config.
 
 In ROUTER mode, the bare `/props` response has **no per-model modalities**
@@ -772,12 +772,12 @@ ROUTER-only control endpoints, non-OpenAI:
   models_reload | model_remove | download_progress`, payload
   `{ status, progress？: { stages: string[], current: string, value: number }, exit_code? }`.
   Out of scope detail for a first completions-protocol pass but flagged in
-  case spail's provider abstraction needs a "model lifecycle" hook.
+  case inkcap's provider abstraction needs a "model lifecycle" hook.
 
 ### 5.3 Resumable streaming (llama-server + llama-ui protocol extension — NOT OpenAI-compatible at all)
 
 This is the biggest llama-server-specific extra in the whole file and is
-worth stealing deliberately if spail wants "reload the page mid-stream and
+worth stealing deliberately if inkcap wants "reload the page mid-stream and
 keep watching tokens arrive" behavior. Three endpoints, all under
 `./v1/stream*`:
 
@@ -849,9 +849,9 @@ client force-cancels its own reader to trigger the same resume path (working
 around mobile/OS socket death that doesn't always surface as a read error).
 
 This is a substantial feature to consider whether to port at all for a v1 of
-spail — it implies server-side session buffering keyed by conversation id
+inkcap — it implies server-side session buffering keyed by conversation id
 (+ optional model suffix), a byte-offset replay API, and a lookup-by-conv-id
-endpoint. If spail's server owns the whole pipeline (not proxying to an
+endpoint. If inkcap's server owns the whole pipeline (not proxying to an
 upstream llama-server), you may be able to get equivalent resilience more
 simply (e.g., server holds the full generation in memory/DB and the client
 just re-fetches the message row on reconnect) — call this out explicitly as
@@ -908,7 +908,7 @@ Grep of the whole fork turns up **no code that automatically retries or
 shrinks the request** after a context-overflow error — it's purely
 surfaced to the user via a dialog (`DialogChatError.svelte`) with the two
 numbers so *they* can start a new conversation, trim history, or raise
-`--ctx-size`. If spail wants smarter behavior (auto-summarize/drop oldest
+`--ctx-size`. If inkcap wants smarter behavior (auto-summarize/drop oldest
 messages and retry), that's new ground, not a lift from this fork.
 
 The only "retry" behavior in the whole file is the SSE resume-on-drop
@@ -945,7 +945,7 @@ message) before calling `onError`/rethrowing:
 ## 7. `kind: llama-server` vs generic OpenAI-compatible endpoint — provider-abstraction checklist
 
 Use this as the "if (kind === 'llama-server') { ...extra stuff... }"
-checklist when designing spail's provider interface.
+checklist when designing inkcap's provider interface.
 
 **Present in OpenAI-compatible chat completions generically (works against
 any provider)**:
@@ -1008,7 +1008,7 @@ behind a capability flag, not assume they exist):
   never reads a `timings` field even though the streaming path does — is it
   actually absent on non-streaming responses, or just not consumed here?
   Verify against a live server whether `POST .../completions` with
-  `stream:false` still returns a `timings` object in the body (spail may
+  `stream:false` still returns a `timings` object in the body (inkcap may
   want to capture it even if this fork didn't bother).
 - **`reasoning_control` / `.../completions/control` interaction with
   non-streaming requests**: the control endpoint targets a completion by
@@ -1020,7 +1020,7 @@ behind a capability flag, not assume they exist):
   prefixed `data:`, but the literal wire format of llama-server's
   `sse_ping_interval`-driven keepalive (e.g. `: ping` vs a named event vs
   something else) isn't captured anywhere in this codebase — confirm against
-  a live server if spail's SSE parser needs to explicitly recognize/skip it
+  a live server if inkcap's SSE parser needs to explicitly recognize/skip it
   rather than relying on the generic "ignore non-data lines" behavior.
 - **`prompt_progress.total`/`.cache` semantics at the boundary** (first
   chunk when `cache === total`, i.e. fully cached prompt) — the UI's percent
@@ -1046,7 +1046,7 @@ behind a capability flag, not assume they exist):
   asserted in a comment but the actual byte/time bound (and what a `400`
   "offset below dropped prefix" response body looks like) is not visible in
   this fork — needs checking against the llama-server implementation directly
-  if spail wants to reimplement byte-accurate resume.
+  if inkcap wants to reimplement byte-accurate resume.
 - **ROUTER-mode specifics** (`/models/load`, `/models/unload`, `/models/sse`
   event payloads, multi-instance port allocation) are documented here only
   at the shape level found in the type files — nobody in this fork exercises

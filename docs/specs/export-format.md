@@ -447,7 +447,7 @@ It depends on which call site produced the export:
   which conversation happens to be open in the tab) is a real quirk of the
   fork, not a spec choice — see Gaps.
 
-**Practical implication for spail's importer:** always assume the `messages`
+**Practical implication for inkcap's importer:** always assume the `messages`
 array in a JSONL/zip export may contain the full tree (root message, dead
 branches, multiple assistant siblings under one user message) and reconstruct
 active/inactive branches yourself from `parent`/`children`/`conv.currNode`
@@ -561,13 +561,13 @@ Notes for an importer:
 - Blank lines are skipped.
 - A `message` line before any `session` line is a hard parse error (thrown).
 - Unknown `type` values are silently ignored (forward-compat escape hatch —
-  spail should do the same rather than erroring, to stay compatible with
+  inkcap should do the same rather than erroring, to stay compatible with
   future fields the fork might add).
 - On parse, `toolCalls` is round-tripped back to a JSON **string** to match
   the runtime/IndexedDB `DatabaseMessage.toolCalls: string | undefined` shape
   — i.e. `parseSessionsJsonl`'s output objects have `toolCalls` as a string
   again, matching §1.2, NOT the array shape that appeared on the wire in
-  §3.1. **spail's importer should decide its own canonical in-memory/DB shape
+  §3.1. **inkcap's importer should decide its own canonical in-memory/DB shape
   independently** — the fork round-trips through a string only because
   IndexedDB requires it; a SQL `jsonb` column can just store the array
   directly. What matters for fidelity is: on the wire (in the `.jsonl`
@@ -718,7 +718,7 @@ separate attachments table):**
   length anywhere in the reviewed code, so don't trust it as authoritative;
   recompute from decoded bytes if you need an accurate value.
 
-**Mapping to a normalized attachments table** (for spail): for each
+**Mapping to a normalized attachments table** (for inkcap): for each
 `extra[i]` on a message, decode into `(mime_type, name, size, bytes | text)`:
 
 | `type`            | bytes source                                            | mime_type source                          | text source |
@@ -813,7 +813,7 @@ async parseImportFile(file: File): Promise<ExportedConversation[]> {
 - No validation of the `conv` or `message` object shapes beyond what
   `JSON.parse` itself guarantees (no schema/zod validation in this code
   path) — a malformed but syntactically-valid JSON line will pass through to
-  the DB import step and fail (or corrupt) there instead. spail's importer
+  the DB import step and fail (or corrupt) there instead. inkcap's importer
   should validate shapes explicitly rather than relying on this being safe.
 - No dedup/merge across multiple `.jsonl` files inside one `.zip` beyond
   whatever `DatabaseService.importConversations` does at import time
@@ -959,7 +959,7 @@ manifest file, no shared/root-level metadata.
   assignment call sites), but worth a sanity check against the fork's build
   output if available.
 - **`currNode` typed `string | null` but initialized to `''`.** Confirm
-  spail's importer treats `''` the same as `null`/missing when deciding
+  inkcap's importer treats `''` the same as `null`/missing when deciding
   whether to fall back to "latest message by timestamp."
 - **Export call-site inconsistency (§2.3):** whether the exported `messages`
   array is the full tree (with root) or just the active path (without root)
@@ -968,7 +968,7 @@ manifest file, no shared/root-level metadata.
   an accidental inconsistency in the fork rather than an intentional
   contract. Verify against a live build of llama-ui (export the same
   conversation both while it's the active tab and while it isn't) rather
-  than trusting this derivation from source alone, and decide whether spail
+  than trusting this derivation from source alone, and decide whether inkcap
   should normalize to "always full tree" (recommended, since it's a strict
   superset and importer already must handle full-tree per §2.3).
 - **Sort/leaf-resolution direction mismatch:** `filterByLeafNodeId` walks
@@ -984,16 +984,16 @@ manifest file, no shared/root-level metadata.
   only re-stringifies `toolCalls` when `!== undefined`. A JSONL file
   hand-crafted with `"toolCalls": null` would fail the `typeof !== 'string'`
   check and get passed through as `null` rather than becoming `''` — probably
-  harmless but not explicitly handled; decide how strict spail's parser
+  harmless but not explicitly handled; decide how strict inkcap's parser
   should be about this vs. the fork's leniency.
 - **No schema validation anywhere in the import path** (confirmed by
-  reading, not inferred) — spail's importer is free to be much stricter;
+  reading, not inferred) — inkcap's importer is free to be much stricter;
   there is no compatibility reason to replicate the fork's total absence of
   validation, only its wire *shapes*.
 - **Legacy `.json` format fields** — this spec did not deep-dive the
   `MigrationService` legacy-format migration code (out of scope per the
   task's file list), only the pass-through shape check in `parseImportFile`
-  (`Array.isArray` or `'conv' in parsed && 'messages' in parsed`). If spail
+  (`Array.isArray` or `'conv' in parsed && 'messages' in parsed`). If inkcap
   needs to import very old exports (pre-JSONL), read
   `src/lib/services/migration.service.ts` in the fork separately before
   building that path.
@@ -1002,7 +1002,7 @@ manifest file, no shared/root-level metadata.
   it for storage accounting; recompute from decoded bytes.
 - **UUID fallback shape** (`Math.random().toString(36).substring(2)`) means
   IDs are not *guaranteed* to be RFC-4122 UUIDs in all environments/exports,
-  only "usually." If spail's schema wants to enforce a UUID column type for
+  only "usually." If inkcap's schema wants to enforce a UUID column type for
   imported conversation/message IDs, this fallback path could produce
   non-conforming values — decide whether to coerce/regenerate IDs on import
   instead of trusting the source IDs verbatim (also sidesteps any

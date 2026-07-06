@@ -21,7 +21,7 @@
 //   2. header:        x-mock-mode: drip,tokens=8,interval=5
 //   3. path segment:  POST /drip,tokens=8,interval=5/v1/chat/completions
 //
-// The path-segment form exists because spail's provider base_url can carry a
+// The path-segment form exists because inkcap's provider base_url can carry a
 // path but not a query string — tests point a provider at
 // `http://localhost:<port>/<modeSegment>` and the client appends
 // `/v1/chat/completions`.

@@ -3,7 +3,7 @@
 // This is the Codex CLI's own login flow, reproduced server-side: OAuth 2.0
 // authorization-code + PKCE against auth.openai.com using the CLI's public
 // client id, with the registered loopback redirect http://localhost:1455/
-// auth/callback. spail binds that port only while a login is pending; the
+// auth/callback. inkcap binds that port only while a login is pending; the
 // loopback handler validates state, exchanges the code, and hands the token
 // bundle to a completion callback registered by the initiating route.
 //
@@ -192,7 +192,7 @@ function escapeHtml(value: string) {
 
 function callbackErrorPage(message: string, returnTo: string | null) {
   const back = returnTo
-    ? `<p><a href="${escapeHtml(returnTo)}">Back to spail</a></p>`
+    ? `<p><a href="${escapeHtml(returnTo)}">Back to inkcap</a></p>`
     : ''
   return new Response(
     `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ChatGPT sign-in failed</title></head><body><h1>ChatGPT sign-in failed</h1><p>${escapeHtml(message)}</p>${back}</body></html>`,

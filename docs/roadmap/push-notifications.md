@@ -4,7 +4,7 @@
 
 ## Why this is a natural fit
 
-The whole point of spail is that runs finish while nobody is watching. Today
+The whole point of inkcap is that runs finish while nobody is watching. Today
 the only way to learn a run reached a stopping point is to come back and look.
 Web Push closes that loop server-side — no polling, no open tab — and it's the
 delivery channel [scheduled-prompts](scheduled-prompts.md) needs to be useful ("your morning
@@ -68,7 +68,7 @@ name, icons (192/512 PNG) — required for the iOS path below.
 iOS supports Web Push since 16.4, **but only for Home Screen web apps**.
 Safari-tab browsing gets nothing. The user journey we have to design for:
 
-1. Open spail in Safari → Share → **Add to Home Screen** (no install prompt
+1. Open inkcap in Safari → Share → **Add to Home Screen** (no install prompt
    exists; we have to show instructions, typically a one-time dismissible hint
    for iOS user agents). Manifest with `display: standalone` is mandatory —
    without it, no push even when installed.

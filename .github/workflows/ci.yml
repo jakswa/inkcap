@@ -24,7 +24,7 @@ jobs:
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/honossr_test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/inkcap_test
       SESSION_SECRET: test-session-secret
       ASSET_VERSION: test
       NODE_ENV: test

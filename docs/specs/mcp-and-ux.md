@@ -275,10 +275,10 @@ There are **two independent enabled flags** and it is easy to conflate them:
    `mcpStore.ensureInitialized(perChatOverrides)`, which is what actually filters the
    connect set per A.4.2 above.
 
-5. **Important consequence for spail's design:** the "enabled" checkbox in a
+5. **Important consequence for inkcap's design:** the "enabled" checkbox in a
    per-conversation MCP picker is really the *only* switch that matters at
    request-time. The global settings list is closer to a *catalog* (what servers exist,
-   with connection details) than a live-enablement toggle. Spail's server-side
+   with connection details) than a live-enablement toggle. Inkcap's server-side
    equivalent should probably keep this same two-layer split: a global server catalog
    + a per-conversation (or per-request) allow-list, defaulting to nothing enabled.
 
@@ -664,7 +664,7 @@ has no caller in any component — see Gaps).
 `classifyContinueIntent(activeMessages, idx)` into one of three behaviors (the classify
 function itself lives in a utils module not read in this pass — treat the three
 outcomes below as the contract, verify the exact classification predicates
-empirically if spail needs to replicate them):
+empirically if inkcap needs to replicate them):
 1. **`RERUN_TURN`** → delegates straight to `regenerateMessageWithBranching(messageId)`
    (C.4) — used when the target assistant message has `tool_calls` with **no**
    trailing tool-result messages yet (can't safely resume mid tool-call sequence with a
@@ -679,7 +679,7 @@ empirically if spail needs to replicate them):
 3. **Default / token-level continue** → uses the server's `continue_final_message: true`
    completion flag (vLLM/llama.cpp compat) to literally keep generating from
    the message's exact current byte content, **in place, same message id** (no
-   branching, no new node). Implementation detail worth preserving for spail: it
+   branching, no new node). Implementation detail worth preserving for inkcap: it
    captures `originalContent`/`originalReasoning` before streaming, and every chunk is
    appended and written as `originalContent + appendedContent` — so a stop mid
    continuation still yields a coherent (original + partial-appended) result, persisted
@@ -712,7 +712,7 @@ Key points:
 - It's not just a client-side abort: `ChatService.cancelServerStream(convId,
   modelForStop)` explicitly tells the backend to stop producing tokens server-side —
   otherwise a detached generation would keep running to EOS/`max_tokens` even after the
-  client drops its HTTP connection. **Spail's server-driven design needs an equivalent
+  client drops its HTTP connection. **Inkcap's server-driven design needs an equivalent
   explicit stop RPC**, not just closing the SSE connection, since the model call is
   presumably decoupled from the client connection lifecycle.
 - Mid-agentic-loop stop: `signal.aborted` is checked at multiple points in
@@ -763,7 +763,7 @@ Key points:
   reports `totalCount: 1` (implying "only the system message itself is at risk," i.e.
   the preview assumes the reparent-on-clear behavior). **This preview count does NOT
   match what the generic cascading delete actually does for a system message with
-  descendants** — flagged as a gap below, verify which is authoritative before spail
+  descendants** — flagged as a gap below, verify which is authoritative before inkcap
   copies either.
 - Display: `refreshActiveMessages()` re-derives the active path after the delete and
   any `currNode` change above.
@@ -810,7 +810,7 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    `regenerateMessageWithBranching` respectively, but weren't deleted. Do not treat
    their "delete-and-replace-in-place" behavior as current UX — verify against a live
    build (or git blame) that they're truly unreachable before using them as a spec
-   source; if spail wants a "destructive regenerate that prunes forward history," that
+   source; if inkcap wants a "destructive regenerate that prunes forward history," that
    behavior does still exist in this dead code and could be resurrected deliberately,
    but confirm that's an intentional product decision and not an accidental relic.
 2. **System-message delete: two divergent code paths, unclear which is
@@ -822,7 +822,7 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    (`removeSystemPromptPlaceholder`) does the reparent-preserving behavior. Confirm
    empirically (run the fork's UI) whether the trash-can icon is actually disabled/
    hidden for system messages, or whether this is a live inconsistency, before
-   deciding which behavior spail's delete endpoint should implement for a system
+   deciding which behavior inkcap's delete endpoint should implement for a system
    message.
 3. **`classifyContinueIntent`'s exact predicates were not read in this pass** (the
    function lives outside the files this audit covered). The three-way behavior
@@ -832,7 +832,7 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    should be re-derived from `classifyContinueIntent`'s source directly if M6/M7
    acceptance criteria need to replicate it exactly.
 4. **Tool name collision policy ("last connected server wins") is a real product
-   decision, not an oversight** — but only a `console.warn` marks it. If spail wants
+   decision, not an oversight** — but only a `console.warn` marks it. If inkcap wants
    deterministic multi-server tool routing, decide up front whether to keep
    last-wins, adopt first-wins, or namespace tool names per server (e.g.
    `serverId::toolName`) — the fork does not disambiguate for the model at all, so a
@@ -840,7 +840,7 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    whichever connected last.
 5. **`ALWAYS`/`ALWAYS_SERVER` tool permission persistence is global-per-browser-profile,
    not per-conversation and not server-synced.** Confirm this is the desired model for
-   spail (a server-driven, presumably multi-device app) — a naive port would need a
+   inkcap (a server-driven, presumably multi-device app) — a naive port would need a
    per-user (not per-browser) persisted allow-list instead of `localStorage`.
 6. **Steering-message interruption vs stop/abort produce different tool-result
    placeholders for in-flight/queued tool calls** (steering synthesizes "interrupted by
@@ -848,7 +848,7 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    synthesize anything for calls that hadn't started). Confirm both behaviors are
    wanted, since an LLM resuming after a stop will see a tool_calls array with NO
    matching tool-result rows at all for any calls that didn't get to run — verify how
-   (or whether) spail's runner needs to backfill synthetic tool-result rows in that
+   (or whether) inkcap's runner needs to backfill synthetic tool-result rows in that
    case to keep the message list well-formed for a subsequent completion request (some
    APIs require every `tool_calls[i].id` to have a matching tool message before the
    next turn).
@@ -861,4 +861,4 @@ textarea to empty and saves (`handleSaveEdit` special-cases
    `MCPServerSettingsEntry` appear disconnected** — the stored `iconUrl` field is never
    read in the icon-resolution code path shown; icons come from the live MCP
    `serverInfo.icons` handshake or a favicon.ico/png guess against the root domain.
-   Confirm whether `iconUrl` is legacy/unused before porting it into spail's schema.
+   Confirm whether `iconUrl` is legacy/unused before porting it into inkcap's schema.

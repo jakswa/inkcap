@@ -23,6 +23,7 @@ export const renderMiddleware = createMiddleware<{
       user: c.var.user ?? null,
       assetVersion: env.ASSET_VERSION,
       registrationOpen: env.REGISTRATION === 'open',
+      currentPath: c.req.path,
     })
 
     return c.html(html)

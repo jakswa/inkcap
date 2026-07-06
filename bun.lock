@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "bun-hono-ssr",
+      "name": "inkcap",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
         "eta": "^3.5.0",

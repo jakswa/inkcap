@@ -19,7 +19,7 @@ Wave 4 — Rich view + integration polish (parallel again): the vanilla-JS chat 
 
 Mechanics
 
-- Test DBs: the starter requires the test DB name to end in test, so each worktree agent gets spail_<agent>_test via an uncommitted .env.test tweak, created/dropped by the agent. No shared state.
+- Test DBs: the starter requires the test DB name to end in test, so each worktree agent gets inkcap_<agent>_test via an uncommitted .env.test tweak, created/dropped by the agent. No shared state.
 - queries.gen.d.ts is never hand-merged — I regenerate at each integration point.
 - I stay the integrator: agents finish work in their worktrees; between waves I merge, regen types, run the full suite, and make the milestone commits — so your one-commit-per-milestone history survives a parallel build.
 - Model split, as you suggested: sonnet for CRUD/pure utils, opus for schema and the runner, verify panel mixed.

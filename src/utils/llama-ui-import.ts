@@ -1,5 +1,5 @@
 // Parses the llama-ui fork's conversation export (JSONL or a .zip bundle of
-// JSONL files) into normalized records spail can import. See
+// JSONL files) into normalized records inkcap can import. See
 // docs/specs/export-format.md for the wire format this file implements.
 //
 // This is a lenient parser: malformed lines/messages/attachments are skipped
@@ -48,7 +48,7 @@ export interface ParsedConversation {
   sourceId: string
   // Whether sourceId is RFC-4122-UUID-shaped. The fork falls back to a
   // short Math.random()-based id when crypto.randomUUID is unavailable (see
-  // spec §1.4 / §7) — spail's importer only reuses the source id as our own
+  // spec §1.4 / §7) — inkcap's importer only reuses the source id as our own
   // conversations.id (a uuid column) when this is true.
   sourceIdIsUuid: boolean
   title: string | null
@@ -303,7 +303,7 @@ function normalizeSession(raw: RawSession, warnings: string[]): ParsedRecord | n
 // spec §2.2: '' / null / an id not present in this export all mean "no
 // current node" -> fall back to the message with the max timestamp.
 // Restricted to *importable* messages (root and dropped messages can't be a
-// spail curr_node, since that column FKs into our messages table).
+// inkcap curr_node, since that column FKs into our messages table).
 function resolveCurrNode(
   rawCurrNode: unknown,
   parsedMessages: ParsedMessage[],

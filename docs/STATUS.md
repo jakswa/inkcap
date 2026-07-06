@@ -1,4 +1,4 @@
-# spail — status (2026-07-06)
+# inkcap — status (2026-07-06)
 
 Server-driven chat rewrite of llama-ui. All planned milestones (M0–M7) plus
 two post-plan slices are on master, one commit each — the commit map and M3

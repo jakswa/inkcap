@@ -1,4 +1,4 @@
-// Wire client for the `openai-codex` provider kind: translates spail's
+// Wire client for the `openai-codex` provider kind: translates inkcap's
 // OpenAI-chat-completions-shaped world to the Responses API served at
 // https://chatgpt.com/backend-api/codex (the ChatGPT-subscription backend the
 // Codex CLI talks to — NOT api.openai.com).
@@ -52,7 +52,7 @@ function codexHeaders(access: CodexAccess): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${access.accessToken}`,
     originator: 'codex_cli_rs',
-    'User-Agent': process.env['CODEX_USER_AGENT'] ?? 'codex_cli_rs/0.45.0 (Linux; x86_64) spail',
+    'User-Agent': process.env['CODEX_USER_AGENT'] ?? 'codex_cli_rs/0.45.0 (Linux; x86_64) inkcap',
   }
   if (access.accountId) headers['chatgpt-account-id'] = access.accountId
   return headers

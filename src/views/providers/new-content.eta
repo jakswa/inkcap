@@ -9,7 +9,7 @@
       <p class="mb-0 text-sm text-ink-dim">
         Use your own ChatGPT plan via the Codex CLI's OAuth flow. Your browser
         signs in at auth.openai.com and returns to <code>localhost:1455</code>,
-        so run spail on the machine you're browsing from.
+        so run inkcap on the machine you're browsing from.
       </p>
       <label class="grid gap-1.5">
         <span>Name</span>

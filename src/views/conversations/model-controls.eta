@@ -5,7 +5,7 @@
 
 <% if (selectedProvider) { %>
   <% if (controls.allowProviderSelect && controls.providers.length > 1) { %>
-    <label class="chip max-w-[11rem] cursor-pointer" title="Provider">
+    <label class="chip hidden max-w-[11rem] cursor-pointer sm:inline-flex" title="Provider">
       <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
       <select class="min-w-0 max-w-[8.5rem] cursor-pointer truncate bg-transparent outline-none field-sizing-content" name="providerId" aria-label="Provider" data-provider-select>
         <% controls.providers.forEach((provider) => { %>
@@ -15,25 +15,33 @@
     </label>
   <% } else if (controls.allowProviderSelect) { %>
     <input type="hidden" name="providerId" value="<%= selectedProvider.id %>">
-    <span class="chip max-w-[11rem]" title="Provider: <%= selectedProvider.name %>">
+    <span class="chip hidden max-w-[11rem] sm:inline-flex" title="Provider: <%= selectedProvider.name %>">
       <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
       <span class="truncate"><%= selectedProvider.name %></span>
     </span>
   <% } %>
 
   <% if (modelOptions.length > 0) { %>
-    <label class="chip max-w-[13rem] cursor-pointer sm:max-w-[18rem]" title="Model">
-      <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
-      <select class="min-w-0 max-w-[10.5rem] cursor-pointer truncate bg-transparent outline-none field-sizing-content sm:max-w-[15.5rem]" name="model" aria-label="Model" data-model-select>
+    <% const selectedModelOption = modelOptions.find((model) => model.name === controls.selectedModel) || modelOptions[0] %>
+    <% const selectedModelName = selectedModelOption ? selectedModelOption.name : '' %>
+    <details class="relative w-0 min-w-0 flex-1 sm:w-auto sm:max-w-[18rem] sm:flex-none" title="Model: <%= selectedModelName %>" data-model-menu data-close-on-outside>
+      <summary class="chip w-full min-w-0 cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink" aria-label="Model: <%= selectedModelName %>">
+        <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
+        <span class="min-w-0 flex-1 truncate" data-model-label><%= selectedModelName %></span>
+      </summary>
+      <div class="scroll-thin absolute right-0 bottom-full z-20 mb-1 grid max-h-72 w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-raised p-1.5 text-sm text-ink shadow-xl shadow-black/10 sm:w-[min(22rem,calc(100vw-3rem))]" data-menu-panel>
         <% modelOptions.forEach((model) => { %>
-          <option value="<%= model.name %>" data-reasoning="<%= model.reasoning ? '1' : '0' %>" <%= model.name === controls.selectedModel ? 'selected' : '' %>><%= model.name %></option>
+          <label class="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink">
+            <span class="min-w-0 truncate"><%= model.name %></span>
+            <input class="size-3.5 shrink-0" type="radio" name="model" value="<%= model.name %>" data-label="<%= model.name %>" data-reasoning="<%= model.reasoning ? '1' : '0' %>" data-model-select data-model-radio <%= model.name === selectedModelName ? 'checked' : '' %>>
+          </label>
         <% }) %>
-      </select>
-    </label>
+      </div>
+    </details>
   <% } else { %>
-    <label class="chip max-w-[13rem] sm:max-w-[18rem]" title="Model">
+    <label class="chip min-w-0 flex-1 sm:max-w-[18rem] sm:flex-none" title="Model">
       <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
-      <input class="min-w-0 max-w-[10.5rem] bg-transparent outline-none field-sizing-content sm:max-w-[15.5rem]" name="model" maxlength="200" value="<%= controls.selectedModel || '' %>" placeholder="model" aria-label="Model">
+      <input class="min-w-0 flex-1 bg-transparent outline-none" name="model" maxlength="200" value="<%= controls.selectedModel || '' %>" placeholder="model" aria-label="Model">
     </label>
   <% } %>
 
@@ -47,7 +55,7 @@
       <%~ include('../partials/icon', { name: 'bulbOff', class: 'size-3.5 group-data-[on]/reason:hidden' }) %>
       <span class="sr-only" data-reasoning-label>Reasoning: <%= reasoningLabel %></span>
     </summary>
-    <div class="absolute right-0 bottom-full z-20 mb-1 grid min-w-32 gap-1 rounded-2xl border border-edge bg-raised p-1.5 text-sm text-ink shadow-xl shadow-black/10">
+    <div class="absolute right-0 bottom-full z-20 mb-1 grid min-w-32 gap-1 rounded-2xl border border-edge bg-raised p-1.5 text-sm text-ink shadow-xl shadow-black/10" data-menu-panel>
       <% reasoningLevels.forEach(([value, label]) => { %>
         <label class="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink">
           <span><%= label %></span>

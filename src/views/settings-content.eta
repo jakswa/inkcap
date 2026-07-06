@@ -1,0 +1,68 @@
+<section class="grid gap-8">
+  <div class="max-w-3xl">
+    <p class="eyebrow mb-3">Settings</p>
+    <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">App controls live here now.</h1>
+    <p class="mt-4 text-ink-dim">Providers and MCP are still their own pages, but the top nav now treats them as settings instead of peer destinations with Chats.</p>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <a class="card grid gap-3 no-underline transition-colors hover:border-edge-strong" href="/providers">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-accent/15 text-accent">
+          <%~ include('./partials/icon', { name: 'cube', class: 'size-4' }) %>
+        </span>
+        <h2 class="text-lg font-bold">Providers</h2>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">Models, endpoint URLs, API keys, Codex OAuth, and provider defaults.</p>
+    </a>
+
+    <a class="card grid gap-3 no-underline transition-colors hover:border-edge-strong" href="/mcp-servers">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-accent/15 text-accent">
+          <%~ include('./partials/icon', { name: 'wrench', class: 'size-4' }) %>
+        </span>
+        <h2 class="text-lg font-bold">MCP servers</h2>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">Register tool servers, then enable them per conversation from chat options.</p>
+    </a>
+
+    <div class="card grid gap-3 border-dashed opacity-80">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-ink/5 text-ink-dim">
+          <%~ include('./partials/icon', { name: 'sliders', class: 'size-4' }) %>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold">Prompts & defaults</h2>
+          <p class="mb-0 text-xs font-semibold tracking-wider text-ink-faint uppercase">Coming soon</p>
+        </div>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">System prompt presets, naming behavior, model knobs, and slow/local-LLM-friendly automation.</p>
+    </div>
+
+    <div class="card grid gap-3 border-dashed opacity-80">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-ink/5 text-ink-dim">
+          <%~ include('./partials/icon', { name: 'clock', class: 'size-4' }) %>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold">Spells</h2>
+          <p class="mb-0 text-xs font-semibold tracking-wider text-ink-faint uppercase">Later</p>
+        </div>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">A future home for recurring prompt/tool loops alongside Chats. Name bikeshed intentionally unresolved.</p>
+    </div>
+
+    <div class="card grid gap-3 border-dashed opacity-80 md:col-span-2">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-ink/5 text-ink-dim">
+          <%~ include('./partials/icon', { name: 'shield', class: 'size-4' }) %>
+        </span>
+        <div class="min-w-0">
+          <h2 class="text-lg font-bold">Profile & notifications</h2>
+          <p class="mb-0 text-xs font-semibold tracking-wider text-ink-faint uppercase">Coming soon</p>
+        </div>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">Account details, notification preferences, and session/security controls can land here without crowding chat.</p>
+    </div>
+  </div>
+</section>

@@ -64,16 +64,16 @@
       </form>
       <form class="grid gap-2 rounded-[1.75rem] border border-edge bg-veil p-3 shadow-xl shadow-black/10 backdrop-blur-xl" data-composer method="post" action="/conversations/<%= it.conversation.id %>/messages">
         <textarea class="max-h-64 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-ink-faint" name="content" rows="1" placeholder="Type a message…" data-composer-input data-chat-input><%= it.draft %></textarea>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-nowrap">
           <details class="relative" data-close-on-outside>
             <summary class="chip cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink">
               <%~ include('../partials/icon', { name: 'sliders', class: 'size-3.5' }) %>
-              Options
+              Tools
               <% if (it.enabledMcpServerCount > 0) { %>
                 <span class="rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.6875rem] font-bold text-accent"><%= it.enabledMcpServerCount %></span>
               <% } %>
             </summary>
-            <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10">
+            <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10" data-menu-panel>
               <%~ include('./mcp-picker', { servers: it.mcpServers, formId: 'mcp-tools-form' }) %>
               <div class="flex flex-wrap items-center gap-2 border-t border-edge pt-3">
                 <button class="btn btn-primary" type="submit" form="mcp-tools-form">Save tool choices</button>
@@ -81,7 +81,7 @@
               </div>
             </div>
           </details>
-          <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+          <div class="flex min-w-0 items-center justify-end gap-2 sm:ml-auto">
             <%~ include('./model-controls', { controls: it.modelControls }) %>
           </div>
           <% if (it.activeRun) { %>

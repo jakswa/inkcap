@@ -314,7 +314,7 @@ describe('MCP servers CRUD', () => {
       headers: { Cookie: cookie },
     })
     const chatHtml = await chatPage.text()
-    expect(chatHtml).toContain('Options')
+    expect(chatHtml).toContain('Tools')
     expect(chatHtml).toContain('Save tool choices')
     expect(chatHtml).toContain(name)
 

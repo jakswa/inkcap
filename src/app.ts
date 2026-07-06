@@ -12,6 +12,7 @@ import { dashboardRoutes } from './routes/dashboard'
 import { homeRoutes } from './routes/home'
 import { mcpServerRoutes } from './routes/mcp-servers'
 import { providerRoutes } from './routes/providers'
+import { settingsRoutes } from './routes/settings'
 
 export const app = new Hono()
 
@@ -44,6 +45,7 @@ app.route('/', authRoutes)
 app.route('/', dashboardRoutes)
 app.route('/', providerRoutes)
 app.route('/', mcpServerRoutes)
+app.route('/', settingsRoutes)
 app.route('/', conversationRoutes)
 
 app.notFound((c) =>

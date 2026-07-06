@@ -1,19 +1,23 @@
+<% const currentPath = it.currentPath || '' %>
+<% const inChats = currentPath === '/conversations' || currentPath.startsWith('/conversations/') %>
+<% const inSettings = currentPath === '/settings' || currentPath.startsWith('/providers') || currentPath.startsWith('/mcp-servers') %>
+<% const navClass = (active) => `rounded-lg px-3 py-1.5 text-sm font-medium no-underline transition-colors ${active ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink'}` %>
 <header class="z-10 shrink-0 border-b border-edge bg-veil backdrop-blur-xl">
-  <div class="flex h-14 items-center justify-between gap-4 <%= it.shell === 'chat' ? 'px-4' : 'mx-auto w-full max-w-5xl px-4' %>">
-    <a class="flex items-center gap-2.5 font-extrabold tracking-tight text-ink no-underline" href="/">
-      <img src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="24" height="24">
-      <span>spail</span>
+  <div class="flex h-14 items-center justify-between gap-3 <%= it.shell === 'chat' ? 'px-4' : 'mx-auto w-full max-w-5xl px-4' %>">
+    <a class="flex min-w-0 items-center gap-2.5 font-extrabold tracking-tight text-ink no-underline" href="/">
+      <img class="shrink-0" src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="24" height="24">
+      <span class="truncate">inkcap</span>
     </a>
-    <nav class="flex items-center gap-1" aria-label="Primary">
+    <nav class="flex shrink-0 items-center gap-1" aria-label="Primary">
       <% if (it.user) { %>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/conversations">Chats</a>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/providers">Providers</a>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/mcp-servers">MCP</a>
+        <a class="<%= navClass(inChats) %>" href="/conversations">Chats</a>
+        <span class="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-ink-faint sm:inline-flex" title="Recurring prompt/tool loops — coming later">Spells</span>
+        <a class="<%= navClass(inSettings) %>" href="/settings">Settings</a>
         <form method="post" action="/logout">
-          <button class="cursor-pointer rounded-lg border-0 bg-transparent px-3 py-1.5 text-sm font-medium text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink" type="submit">Logout</button>
+          <button class="cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink sm:px-3" type="submit">Logout</button>
         </form>
       <% } else { %>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/login">Login</a>
+        <a class="<%= navClass(currentPath === '/login') %>" href="/login">Login</a>
         <% if (it.registrationOpen) { %>
           <a class="btn btn-primary px-3 py-1.5" href="/register">Register</a>
         <% } %>

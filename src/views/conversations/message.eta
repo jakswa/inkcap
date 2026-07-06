@@ -48,13 +48,13 @@
     <% } %>
   </article>
 <% } else { %>
-  <article class="group grid gap-2" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
+  <article class="group grid gap-3.5 py-1" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
     <% if (m.status === 'streaming') { %>
       <% /* Live path: the island appends plain-text deltas into these nodes,
             then message-final swaps this whole <article> for the settled
             render. */ %>
       <pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning><%= m.reasoning_content || '' %></pre>
-      <pre class="m-0 font-body whitespace-pre-wrap break-words text-ink" data-content><%= m.content %></pre>
+      <pre class="m-0 rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5" data-content><%= m.content %></pre>
     <% } else { %>
       <% if (m.reasoning_content) { %>
         <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm">
@@ -66,7 +66,7 @@
           <pre class="m-0 mt-2 font-body whitespace-pre-wrap break-words text-ink-dim"><%= m.reasoning_content %></pre>
         </details>
       <% } %>
-      <div class="md [&:empty]:hidden" data-content><%~ m.contentHtml %></div>
+      <div class="rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 shadow-sm shadow-black/5 md [&:empty]:hidden" data-content><%~ m.contentHtml %></div>
     <% } %>
 
     <% if (m.status === 'interrupted') { %>
@@ -74,29 +74,40 @@
     <% } %>
 
     <% if (m.status !== 'streaming' && (m.model || m.stats || m.id)) { %>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
         <% if (m.model || m.stats) { %>
-          <footer class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+          <footer class="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs leading-none text-ink-dim sm:text-[0.8125rem]">
             <% if (m.model) { %>
-              <span class="inline-flex items-center gap-1.5 rounded-md border border-edge px-1.5 py-0.5 font-medium text-ink-dim">
-                <%~ include('../partials/icon', { name: 'cube', class: 'size-3' }) %>
-                <%= m.model %>
+              <span class="inline-flex min-w-0 max-w-[8rem] items-center gap-1.5 rounded-md border border-edge px-1.5 py-1 font-medium text-ink-dim sm:max-w-xs" title="<%= m.model %>">
+                <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
+                <span class="truncate"><%= m.model %></span>
               </span>
             <% } %>
             <% if (m.stats) { %>
-              <% if (m.stats.prompt) { %>
-                <span class="inline-flex items-center gap-1 font-medium text-ink-dim">prompt</span>
-                <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.prompt.tokens %></span>
-                <% if (m.stats.prompt.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.prompt.seconds %></span><% } %>
-                <% if (m.stats.prompt.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.prompt.rate %></span><% } %>
-              <% } %>
-              <% if (m.stats.generation) { %>
-                <% if (m.stats.prompt) { %><span class="text-ink-faint/70">/</span><% } %>
-                <span class="inline-flex items-center gap-1 font-medium text-ink-dim">gen</span>
-                <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.generation.tokens %></span>
-                <% if (m.stats.generation.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.generation.seconds %></span><% } %>
-                <% if (m.stats.generation.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.generation.rate %></span><% } %>
-              <% } %>
+              <% const defaultStatsKind = m.stats.generation ? 'generation' : 'prompt' %>
+              <span class="inline-flex max-w-full shrink-0 items-center gap-0.5 rounded-full border border-edge bg-raised/70 p-0.5 font-medium text-ink-dim shadow-sm shadow-black/5 sm:gap-1" data-stats-toggle title="<%= m.timingLabel || 'timings' %>">
+                <% if (m.stats.prompt) { %>
+                  <button class="rounded-full px-1.5 py-1 text-xs font-bold transition-colors sm:px-2 <%= defaultStatsKind === 'prompt' ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink' %>" type="button" data-stats-tab="prompt" aria-label="Show prompt stats" aria-pressed="<%= defaultStatsKind === 'prompt' ? 'true' : 'false' %>"><span class="sm:hidden">P</span><span class="hidden sm:inline">prompt</span></button>
+                <% } %>
+                <% if (m.stats.generation) { %>
+                  <button class="rounded-full px-1.5 py-1 text-xs font-bold transition-colors sm:px-2 <%= defaultStatsKind === 'generation' ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink' %>" type="button" data-stats-tab="generation" aria-label="Show generation stats" aria-pressed="<%= defaultStatsKind === 'generation' ? 'true' : 'false' %>"><span class="sm:hidden">G</span><span class="hidden sm:inline">gen</span></button>
+                <% } %>
+                <span class="h-4 w-px bg-edge" aria-hidden="true"></span>
+                <% if (m.stats.prompt) { %>
+                  <span class="items-center gap-1.5 whitespace-nowrap px-1 pr-1.5 sm:gap-2 sm:px-1.5 sm:pr-2 <%= defaultStatsKind === 'prompt' ? 'inline-flex' : '' %>" data-stats-panel="prompt" <%= defaultStatsKind === 'prompt' ? '' : 'hidden' %>>
+                    <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.prompt.tokens.replace(/ tokens?$/, '') %></span><span class="hidden sm:inline"><%= m.stats.prompt.tokens %></span></span>
+                    <% if (m.stats.prompt.seconds) { %><span class="hidden items-center gap-1 sm:inline-flex"><%~ include('../partials/icon', { name: 'clock', class: 'size-3.5' }) %><%= m.stats.prompt.seconds %></span><% } %>
+                    <% if (m.stats.prompt.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.prompt.rate.replace(' tok/s', '/s') %></span><span class="hidden sm:inline"><%= m.stats.prompt.rate %></span></span><% } %>
+                  </span>
+                <% } %>
+                <% if (m.stats.generation) { %>
+                  <span class="items-center gap-1.5 whitespace-nowrap px-1 pr-1.5 sm:gap-2 sm:px-1.5 sm:pr-2 <%= defaultStatsKind === 'generation' ? 'inline-flex' : '' %>" data-stats-panel="generation" <%= defaultStatsKind === 'generation' ? '' : 'hidden' %>>
+                    <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.generation.tokens.replace(/ tokens?$/, '') %></span><span class="hidden sm:inline"><%= m.stats.generation.tokens %></span></span>
+                    <% if (m.stats.generation.seconds) { %><span class="hidden items-center gap-1 sm:inline-flex"><%~ include('../partials/icon', { name: 'clock', class: 'size-3.5' }) %><%= m.stats.generation.seconds %></span><% } %>
+                    <% if (m.stats.generation.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.generation.rate.replace(' tok/s', '/s') %></span><span class="hidden sm:inline"><%= m.stats.generation.rate %></span></span><% } %>
+                  </span>
+                <% } %>
+              </span>
             <% } %>
           </footer>
         <% } %>

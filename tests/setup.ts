@@ -2,7 +2,7 @@ import { SQL } from 'bun'
 import { afterAll } from 'bun:test'
 import { migrate } from '../src/db/migrate'
 
-process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@localhost:5432/honossr_test'
+process.env.DATABASE_URL ||= 'postgresql://postgres:postgres@localhost:5432/inkcap_test'
 process.env.SESSION_SECRET ||= 'test-session-secret'
 process.env.ASSET_VERSION ||= 'test'
 process.env.NODE_ENV ||= 'test'

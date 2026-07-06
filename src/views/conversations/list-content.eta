@@ -1,8 +1,12 @@
 <%~ include('./sidebar', it) %>
 
 <section class="scroll-thin flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto">
-  <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center gap-8 px-4 py-10">
-    <div class="grid justify-items-center gap-2 text-center">
+  <div class="mx-auto flex w-full max-w-2xl flex-1 flex-col items-stretch justify-start gap-6 px-4 py-6 lg:items-center lg:justify-center lg:gap-8 lg:py-10">
+    <div class="grid w-full gap-1 lg:hidden">
+      <h1 class="text-[clamp(2rem,5vw,2.75rem)] font-extrabold tracking-tight">Chats</h1>
+    </div>
+
+    <div class="hidden justify-items-center gap-2 text-center lg:grid">
       <h1 class="text-[clamp(2rem,5vw,2.75rem)] font-extrabold tracking-tight">Hello there</h1>
       <% if (it.providers.length === 0) { %>
         <p class="text-ink-dim">Connect a provider and this becomes a chat.</p>
@@ -18,7 +22,7 @@
         <div class="grid gap-1">
           <h2 class="text-lg font-bold">Connect a provider first</h2>
           <p class="mb-0 text-sm text-ink-dim">
-            spail talks to your own endpoints — a local llama-server or any
+            inkcap talks to your own endpoints — a local llama-server or any
             OpenAI-compatible API. Keys stay on the server, never in the browser.
           </p>
         </div>
@@ -30,7 +34,7 @@
         <a class="btn btn-primary justify-self-start" href="/providers/new">Add your first provider</a>
       </div>
     <% } else { %>
-      <form class="grid w-full gap-2 rounded-[1.75rem] border border-edge bg-veil p-3 shadow-xl shadow-black/5 backdrop-blur-xl" method="post" action="/conversations" data-new-chat>
+      <form id="new-chat" class="grid w-full scroll-mt-4 gap-2 rounded-[1.75rem] border border-edge bg-veil p-3 shadow-xl shadow-black/5 backdrop-blur-xl" method="post" action="/conversations" data-new-chat>
         <% if (it.errors.length > 0) { %>
           <div class="alert-danger" role="alert">
             <% it.errors.forEach((error) => { %>
@@ -39,30 +43,20 @@
           </div>
         <% } %>
 
-        <textarea class="max-h-64 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-ink-faint" name="content" rows="2" placeholder="Type a message…" data-chat-input autofocus><%= it.values.content || '' %></textarea>
+        <textarea class="max-h-64 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-ink-faint" name="content" rows="2" placeholder="Type a message…" data-chat-input><%= it.values.content || '' %></textarea>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap">
           <details class="relative" data-close-on-outside>
             <summary class="chip cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink">
               <%~ include('../partials/icon', { name: 'sliders', class: 'size-3.5' }) %>
-              Options
+              Tools
             </summary>
-            <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10">
-              <label class="grid gap-1.5">
-                <span class="label">Title <span class="text-ink-faint">(optional — the first message names the chat)</span></span>
-                <input class="input" name="title" type="text" maxlength="200" value="<%= it.values.title || '' %>">
-              </label>
-              <label class="grid gap-1.5">
-                <span class="label">System prompt <span class="text-ink-faint">(optional)</span></span>
-                <textarea class="input" name="systemPrompt" rows="3"><%= it.values.systemPrompt || '' %></textarea>
-              </label>
-              <div class="border-t border-edge pt-3">
-                <%~ include('./mcp-picker', { servers: it.mcpServers }) %>
-              </div>
+            <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10" data-menu-panel>
+              <%~ include('./mcp-picker', { servers: it.mcpServers }) %>
             </div>
           </details>
 
-          <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+          <div class="flex min-w-0 items-center justify-end gap-2 sm:ml-auto">
             <%~ include('./model-controls', { controls: it.modelControls }) %>
             <button class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-accent text-on-accent transition-colors hover:bg-accent-hover" type="submit" aria-label="Send">
               <%~ include('../partials/icon', { name: 'send', class: 'size-4' }) %>
@@ -70,19 +64,28 @@
           </div>
         </div>
       </form>
+    <% } %>
 
+    <section class="grid w-full gap-2 rounded-2xl border border-edge bg-raised p-2 shadow-sm shadow-black/5 lg:hidden" aria-labelledby="mobile-recent-chats">
+      <div class="flex items-baseline justify-between gap-3 px-2 pt-1">
+        <h2 id="mobile-recent-chats" class="text-xs font-semibold tracking-wider text-ink-faint uppercase">Recent chats</h2>
+        <% if (it.sidebar.length > 0) { %>
+          <span class="text-xs text-ink-faint"><%= it.sidebar.length %></span>
+        <% } %>
+      </div>
       <% if (it.sidebar.length > 0) { %>
-        <div class="grid w-full gap-1 lg:hidden">
-          <p class="mb-1 px-1 text-xs font-semibold tracking-wider text-ink-faint uppercase">Recent</p>
+        <nav class="grid gap-1" aria-label="Recent chats">
           <% it.sidebar.forEach((row) => { %>
-            <a class="flex items-baseline justify-between gap-3 rounded-lg px-3 py-2 text-sm no-underline text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink" href="/conversations/<%= row.id %>">
-              <span class="truncate"><%= row.title || 'New chat' %></span>
+            <a class="flex min-w-0 items-baseline justify-between gap-3 rounded-xl px-3 py-2.5 text-sm no-underline text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink" href="/conversations/<%= row.id %>">
+              <span class="min-w-0 truncate"><%= row.title || 'New chat' %></span>
               <span class="shrink-0 text-xs text-ink-faint"><%= row.updatedLabel %></span>
             </a>
           <% }) %>
-        </div>
+        </nav>
+      <% } else { %>
+        <div class="rounded-xl border border-dashed border-edge p-4 text-sm text-ink-faint">No chats yet.</div>
       <% } %>
-    <% } %>
+    </section>
   </div>
 </section>
 

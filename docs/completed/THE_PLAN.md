@@ -1,4 +1,4 @@
-# THE PLAN — spail
+# THE PLAN — inkcap
 
 > **Completed 2026-07-06.** All milestones (M0–M7) landed, one commit each,
 > plus post-plan work (Codex provider, accounts). Kept as the design record;
@@ -146,9 +146,9 @@ maintained arrays were a local-first workaround).
 
 ## Milestones (each = one commit)
 
-- **M0 — Starter runs as spail.** Create `spail` + `spail_test` databases on
+- **M0 — Starter runs as inkcap.** Create `inkcap` + `inkcap_test` databases on
   the local Postgres, configure `.env.local`/`.env.test`, rename app bits,
-  `db:migrate` + `db:types` + `bun test` green, auth works. Nothing spail-
+  `db:migrate` + `db:types` + `bun test` green, auth works. Nothing inkcap-
   specific yet.
 - **M1 — Providers.** Schema + SSR CRUD + connection test + seed from env.
   Milestone proof: provider list page shows llama-server on :8001 as healthy.
@@ -181,8 +181,8 @@ miss.
 
 - ~~**D1 — pglite wiring.**~~ **Resolved 2026-07-06: no pglite.** A local
   PostgreSQL is already running on :5432 — `Bun.SQL`, bun-sqlgen, migrations,
-  and tests stay exactly as the starter ships them, pointed at `spail` /
-  `spail_test` databases.
+  and tests stay exactly as the starter ships them, pointed at `inkcap` /
+  `inkcap_test` databases.
 - ~~**D2 — SSE token persistence cadence.**~~ **Resolved 2026-07-06 (M3):
   flush pending deltas every 300ms OR every 24 deltas, whichever first
   (`src/services/runner.ts`). 300ms bounds the crash-loss window; 24 tokens
@@ -214,7 +214,7 @@ miss.
    trivia.
 4. No offline, ever, by design.
 5. Rewrites die of parity-chasing — the fork stays runnable so nobody is
-   tempted to rush parity; spail only has to win at durability + providers.
+   tempted to rush parity; inkcap only has to win at durability + providers.
 
 ## Backlog
 
@@ -231,7 +231,7 @@ historical note stays here:
 
 | Milestone | Commit | What |
 |---|---|---|
-| M0 | `222069c` | Starter runs as spail (spail / spail_test databases, renamed) |
+| M0 | `222069c` | Starter runs as inkcap (inkcap / inkcap_test databases, renamed) |
 | Wave 1 | `18477a0` | v1 schema (messages.parent_id tree + conversations.curr_node from day one) + harvested specs from the llama-ui organ donor |
 | M1 | `906d8a0` | Providers registry: SSR CRUD, connection test, keys never leave the server |
 | M2 | `3bc4cf0` | Walking-skeleton chat: conversations/messages, plain-form send |

@@ -1,7 +1,7 @@
 // CLI: bun src/tasks/import-llama-ui.ts <file> --user <email>
 //
 // Imports a llama-ui fork export (.jsonl or .zip, see docs/specs/export-format.md)
-// into spail's conversations/messages/attachments tables for the named user.
+// into inkcap's conversations/messages/attachments tables for the named user.
 
 import { sql } from '../db/client'
 import { getUserByEmailNormalized } from '../db/queries/users'
