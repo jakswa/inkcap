@@ -1,5 +1,9 @@
 # THE PLAN — spail
 
+> **Completed 2026-07-06.** All milestones (M0–M7) landed, one commit each,
+> plus post-plan work (Codex provider, accounts). Kept as the design record;
+> live state is `docs/STATUS.md`, future work is `docs/roadmap/`.
+
 A server-driven LLM chat app. Boring SSR everywhere it can be boring; JavaScript
 spent only where the chat actually streams; the **server owns the conversation**
 — close the laptop mid-generation, open your phone 30 minutes later, and the
@@ -214,24 +218,38 @@ miss.
 
 ## Backlog
 
-Post-v1 items surfaced during final integration (2026-07-06). None block daily use.
+Post-v1 items surfaced during final integration live in `docs/roadmap/`. One
+historical note stays here:
 
 - **Milestone commit order is scrambled on master.** Linear history reads
   M0 → Wave1 → M1 → M2 → M5 → M3 → M4 → M6 → M7 (the M5 importer landed early
   and bundled the D3 markdown pipeline, an M4 concern). Each milestone is still
   exactly one commit; reordering would mean rewriting published history — not
   worth it. Recorded so nobody is confused by the log.
-- **Edit-user "Save (keep responses)" (spec C.1(b)).** M7 implements the
-  branching edit (C.1(a)): save always (re)generates a reply. A second submit
-  button hitting a no-run route would add save-without-regenerate.
-- **Manual assistant edit (spec C.2).** Regenerate-as-new-sibling shipped;
-  hand-editing assistant content with a branch toggle did not.
-- **Sibling switcher is SSR-only.** After a live finalize-swap the "‹ i/n ›"
-  switcher doesn't appear until page reload (siblingNav is computed in the
-  route, not the runner's partial render). Edit/regenerate/delete controls do
-  survive the swap.
-- **Fork edge cases.** Forking while a run streams copies the streaming leaf
-  as-is (status 'streaming') into the fork, where no run drives it; fork also
-  does not copy attachments (out of M7 scope).
-- **Runner stream resume.** "Resume if provider supports it" is the
-  finalize-as-interrupted fallback only, per the plan's allowed fallback.
+
+## Appendix: what landed (commit map)
+
+| Milestone | Commit | What |
+|---|---|---|
+| M0 | `222069c` | Starter runs as spail (spail / spail_test databases, renamed) |
+| Wave 1 | `18477a0` | v1 schema (messages.parent_id tree + conversations.curr_node from day one) + harvested specs from the llama-ui organ donor |
+| M1 | `906d8a0` | Providers registry: SSR CRUD, connection test, keys never leave the server |
+| M2 | `3bc4cf0` | Walking-skeleton chat: conversations/messages, plain-form send |
+| M5 | `15c88a5` | llama-ui importer (JSONL/zip, attachments, branch trees, idempotent) + server-side markdown pipeline |
+| M3 | `4e5aa04` | The durable runner: detached streaming, debounced persistence (300ms/24 deltas), run_events replay w/ Last-Event-ID, boot recovery, cancel, stall watchdog |
+| M4 | `de59d80` | Chat view: server-rendered markdown + highlight, finalize-swap, composer island, mobile layout |
+| M6 | `9780c06` | MCP tools: registry, tool loop, approval flow (waiting_approval park + SSR approve/deny + resume) |
+| M7 | `9a58453` | Branching UI: edit-user + regenerate, ‹ i/n › sibling switcher, subtree delete, fork active path — all plain HTML forms, JS optional |
+| Post-M7 | `e2cd1d6` | openai-codex provider: ChatGPT-subscription OAuth (PKCE + loopback :1455), token refresh, Responses-API translation |
+| Post-M8 | `ef24020` | Accounts + ownership scoping + registration gate (issue 02) |
+
+## Appendix: M3 reveal-test evidence (against a real llama-server)
+
+- 600-word-story prompt: POST returned 302 in 12ms; the client made **zero**
+  requests afterward. T+32s: DB held 2,310 bytes mid-stream; T+47s: reply
+  complete at 4,143 bytes (722 words) with no client ever connected.
+- Fresh reconnect: page SSR 200 with the full story; fresh SSE replayed the
+  whole run from seq 1 (126 events, done).
+- `kill -9` mid-generation froze 1,860 persisted bytes; restart logged
+  "recovered 1 interrupted run(s)", appended "[interrupted by restart]",
+  parked the run as error — zero bytes lost.

@@ -15,7 +15,7 @@ rather than what existed at park time:
   (`src/services/mcp-client.ts:197-217`, `executeToolBatch` at `runner.ts:446-465`)
 
 Nothing binds the approved call to the server/URL that existed when the user clicked
-approve. Combined with the globally-writable catalog ([02](02-global-unowned-catalog.md),
+approve. Combined with the globally-writable catalog ([02](resolved/02-global-unowned-catalog.md),
 [04](04-approval-bypass-auto-approve.md)), an attacker can change a server's `url`/
 `headers` between park and approve, so the victim's approved arguments are sent to an
 attacker-controlled endpoint the victim never reviewed.
@@ -32,5 +32,5 @@ Even single-tenant: `gatherTools` resolves tool-name collisions as "last server 
 
 ## Related
 
-- [02 — Global unowned catalog](02-global-unowned-catalog.md)
+- [02 — Global unowned catalog](resolved/02-global-unowned-catalog.md)
 - [04 — Approval bypass via auto_approve](04-approval-bypass-auto-approve.md)

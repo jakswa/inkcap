@@ -1,18 +1,10 @@
 # Security & correctness issues
 
 Findings from five adversarial reviews (injection, auth/sessions, runner/concurrency,
-MCP/approval, general security) run against the repo on 2026-07-06. Multiple independent
-reviewers converged on the top items.
-
-## Main Remaining Root Causes
-
-1. **The durable runner still has recovery/transactional gaps** even though the
-   non-terminal-run uniqueness invariant is now enforced in Postgres.
-
-~~Providers and MCP servers are a global, unowned catalog~~ — resolved 2026-07-06 by
-`012_accounts.sql` (accounts + memberships, ownership-scoped queries, registration
-gate). The cross-tenant halves of 03/04/05 died with it; their single-tenant residue
-is noted in each file.
+MCP/approval, general security) run against the repo on 2026-07-06. Resolved issues
+move to `resolved/`. Remaining root cause: **the durable runner still has
+recovery/transactional gaps**, even though the non-terminal-run uniqueness invariant
+is now enforced in Postgres.
 
 ## Priority order
 
@@ -24,7 +16,7 @@ Fix in this sequence:
 ## Index
 
 ### Resolved
-- [02 — Global unowned provider/MCP catalog (broken access control)](02-global-unowned-catalog.md) — accounts + ownership scoping + registration gate
+- [02 — Global unowned provider/MCP catalog (broken access control)](resolved/02-global-unowned-catalog.md) — accounts + ownership scoping + registration gate (2026-07-06); the cross-tenant halves of 03/04/05 died with it
 
 ### High
 - [03 — Provider/MCP credential exfiltration via base_url swap](03-credential-exfiltration.md) — cross-tenant vector closed by 02; base_url-change credential invalidation still open

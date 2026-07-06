@@ -1,7 +1,7 @@
 # 03 — Provider/MCP credential exfiltration via base_url swap
 
 **Severity:** High
-**Reachable by:** any authenticated user (chains off [02](02-global-unowned-catalog.md))
+**Reachable by:** any authenticated user (chains off [02](resolved/02-global-unowned-catalog.md))
 
 ## Problem
 
@@ -12,7 +12,7 @@ api_key = values.clearApiKey ? null : values.apiKey ? values.apiKey : provider.a
 ```
 (`src/routes/providers.ts:172`)
 
-Combined with the global unowned catalog ([02](02-global-unowned-catalog.md)) — any user
+Combined with the global unowned catalog ([02](resolved/02-global-unowned-catalog.md)) — any user
 can edit any provider — an attacker can edit a victim's provider, leave the key field
 blank (retaining the victim's real key), and change `base_url` to an attacker-controlled
 host.
@@ -28,12 +28,12 @@ host.
 The masked-key UI (`maskApiKey`) is irrelevant — the plaintext key leaves the server
 over the wire, not through the page. Every future run also leaks it passively.
 
-For MCP servers the secrets are even more exposed — see [02](02-global-unowned-catalog.md):
+For MCP servers the secrets are even more exposed — see [02](resolved/02-global-unowned-catalog.md):
 stored headers are rendered straight back in the edit form.
 
 ## Fix
 
-- Ownership scoping ([02](02-global-unowned-catalog.md)) closes cross-tenant theft.
+- Ownership scoping ([02](resolved/02-global-unowned-catalog.md)) closes cross-tenant theft.
 - Additionally: treat a `base_url` change as a credential-invalidating event — require
   re-entry of the key, and never send a stored credential to a newly-changed host.
 - Keep production outbound URL guards in place so the target host cannot be an

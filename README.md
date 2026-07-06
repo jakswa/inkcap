@@ -7,9 +7,10 @@ llama.cpp's web UI (the fork at `~/sandbox/llama-ui` is the living spec), built
 on the bun-hono-ssr starter: Hono routes, Eta SSR templates, HTML forms,
 PostgreSQL, raw SQL migrations, encrypted cookie sessions, Tailwind.
 
-Read `docs/THE_PLAN.md` for the full design and milestone story (M0–M7, all
-landed), `docs/STATUS.md` for current state and known gaps, `docs/specs/` for
-harvested provider/export/MCP specs, `docs/issues/` for tracked hardening work.
+Docs: `docs/STATUS.md` (current state), `docs/roadmap/` (future features +
+polish backlog), `docs/issues/` (hardening work; resolved ones in
+`resolved/`), `docs/specs/` (harvested provider/export/MCP specs),
+`docs/completed/` (finished plans — THE_PLAN.md is the design record).
 
 ## Shape
 
@@ -54,10 +55,9 @@ bun src/tasks/import-llama-ui.ts <export.jsonl-or-.zip> --user you@example.com
 
 Chat on your own ChatGPT subscription (Codex): Providers → Add provider →
 "Sign in with ChatGPT". The server runs the Codex CLI's OAuth flow with a
-loopback callback on `localhost:1455`, so browse from the machine running
-spail (or tunnel that port) and keep it free during sign-in. Tokens stay
-server-side and auto-refresh; see `docs/specs/openai-codex.md` for the
-protocol details and caveats (undocumented backend, personal use only).
+loopback callback on `localhost:1455` — browse from the machine running spail
+(or tunnel that port) during sign-in. Tokens stay server-side and
+auto-refresh; protocol details and caveats: `docs/specs/openai-codex.md`.
 
 ## Env
 

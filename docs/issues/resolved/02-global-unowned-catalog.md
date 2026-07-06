@@ -46,9 +46,9 @@ server in the deployment — including rows another user created.
   conversation that uses that provider.
 - **Catalog poisoning:** create or edit an MCP server the whole app can enable.
 - **Root cause / amplifier for:**
-  - [03 — Credential exfiltration](03-credential-exfiltration.md)
-  - [04 — Approval bypass via auto_approve](04-approval-bypass-auto-approve.md)
-  - [05 — Approval TOCTOU](05-approval-toctou.md)
+  - [03 — Credential exfiltration](../03-credential-exfiltration.md)
+  - [04 — Approval bypass via auto_approve](../04-approval-bypass-auto-approve.md)
+  - [05 — Approval TOCTOU](../05-approval-toctou.md)
 
 Note the inconsistency: `GET /mcp-servers/:id/edit` renders stored auth **headers**
 (e.g. `{"Authorization":"Bearer sk-…"}`) as plaintext into a `<textarea>`
