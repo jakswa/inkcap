@@ -24,6 +24,7 @@
   --ok: #79740e;
   --warn: #af3a03;
   --danger: #9d0006;
+  --mushroom-gill: #ebdbb2;
   --glow-a: rgba(143, 63, 113, 0.1);
   --glow-b: rgba(121, 116, 14, 0.1);
 }
@@ -45,6 +46,7 @@
     --ok: #b8bb26;
     --warn: #fabd2f;
     --danger: #fb4934;
+    --mushroom-gill: #fabd2f;
     --glow-a: rgba(211, 134, 155, 0.1);
     --glow-b: rgba(184, 187, 38, 0.08);
   }

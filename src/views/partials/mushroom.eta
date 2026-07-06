@@ -1,0 +1,16 @@
+<svg class="w-[min(88vw,38rem)] drop-shadow-[0_2.5rem_4rem_rgba(0,0,0,0.16)]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" role="img" aria-label="inkcap mushroom">
+  <ellipse cx="360" cy="282" rx="252" ry="214" fill="var(--accent)" opacity=".12"/>
+  <g fill="var(--ok)" opacity=".38">
+    <circle cx="120" cy="142" r="7"/>
+    <circle cx="176" cy="86" r="4"/>
+    <circle cx="566" cy="124" r="6"/>
+    <circle cx="612" cy="226" r="4"/>
+    <circle cx="118" cy="318" r="4"/>
+    <circle cx="548" cy="376" r="5"/>
+    <circle cx="222" cy="420" r="5"/>
+    <circle cx="486" cy="72" r="3.5"/>
+  </g>
+  <path d="M146 298c23-121 103-196 222-190 118 6 190 89 205 190-95-35-330-35-427 0Z" fill="var(--accent)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M160 310c82 86 315 86 398 0-91-28-306-28-398 0Z" fill="var(--mushroom-gill)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+  <path d="M302 348c-6 55-30 97-73 135 61 36 201 36 262 0-43-38-67-80-73-135-35 13-81 13-116 0Z" fill="var(--surface-raised)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+</svg>

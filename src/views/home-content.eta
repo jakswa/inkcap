@@ -1,36 +1,45 @@
-<section class="grid gap-5 pb-[clamp(2rem,7vw,5rem)]">
-  <div class="eyebrow mb-3">inkcap · server-driven LLM chat</div>
-  <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Chats that keep growing when you close the tab.</h1>
-  <p class="max-w-2xl text-xl leading-relaxed text-ink-dim">
-    The server owns the conversation: close your laptop mid-generation, open your
-    phone later, and the thread has reached a sensible stopping point without you.
-  </p>
-  <div class="flex flex-wrap gap-3">
-    <% if (it.user) { %>
-      <a class="btn btn-primary" href="/conversations">Open your chats</a>
-      <a class="btn btn-ghost" href="/settings">Settings</a>
-    <% } else { %>
-      <% if (it.registrationOpen) { %>
-        <a class="btn btn-primary" href="/register">Create an account</a>
-        <a class="btn btn-ghost" href="/login">Log in</a>
+<section class="relative isolate grid min-h-[calc(100svh-9rem)] place-items-center overflow-hidden pb-[clamp(3rem,8vw,7rem)] text-center">
+  <div class="pointer-events-none absolute inset-x-1/2 top-[8%] -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-accent/10 blur-3xl" aria-hidden="true"></div>
+  <div class="grid justify-items-center gap-5">
+    <%~ include('./partials/mushroom') %>
+    <div class="grid justify-items-center gap-2">
+      <h1 class="text-[clamp(3rem,10vw,7.5rem)] font-black leading-none tracking-[-0.07em] text-ink">inkcap</h1>
+      <p class="max-w-[30rem] text-balance text-[clamp(1rem,2vw,1.35rem)] font-medium text-ink-dim">a small LLM chat web UI</p>
+    </div>
+    <div class="mt-2 flex flex-wrap justify-center gap-3">
+      <% if (it.user) { %>
+        <a class="btn btn-primary" href="/conversations">Open chats</a>
+        <a class="btn btn-ghost" href="/settings">Settings</a>
       <% } else { %>
-        <a class="btn btn-primary" href="/login">Log in</a>
+        <% if (it.registrationOpen) { %>
+          <a class="btn btn-primary" href="/register">Start chatting</a>
+          <a class="btn btn-ghost" href="/login">Log in</a>
+        <% } else { %>
+          <a class="btn btn-primary" href="/login">Log in</a>
+        <% } %>
       <% } %>
-    <% } %>
+    </div>
   </div>
 </section>
 
-<section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Principles">
-  <article class="card">
-    <h2 class="mb-2 text-lg font-bold">Background growth</h2>
-    <p class="mb-0">Completions are server-side jobs. Browsers attach, detach, and reattach as spectators.</p>
-  </article>
-  <article class="card">
-    <h2 class="mb-2 text-lg font-bold">Your providers</h2>
-    <p class="mb-0">llama-server, OpenAI-compatible endpoints — registered once, picked per conversation, keys never in the browser.</p>
-  </article>
-  <article class="card">
-    <h2 class="mb-2 text-lg font-bold">Boring on purpose</h2>
-    <p class="mb-0">SSR templates and HTML forms everywhere; JavaScript spent only where the chat streams.</p>
-  </article>
+<section class="grid gap-5 py-[clamp(2rem,7vw,5rem)]" aria-label="What inkcap does">
+  <div class="grid gap-2">
+    <p class="eyebrow mb-0">what it does</p>
+    <h2 class="max-w-2xl text-[clamp(1.75rem,4vw,3rem)] font-extrabold leading-tight tracking-tight">Quiet infrastructure for conversations that keep going.</h2>
+  </div>
+
+  <div class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1">
+    <article class="card">
+      <h3 class="mb-2 text-lg font-bold">Server-owned runs</h3>
+      <p class="mb-0">Completions are durable jobs. Browsers attach, detach, and reattach as spectators.</p>
+    </article>
+    <article class="card">
+      <h3 class="mb-2 text-lg font-bold">Bring your own providers</h3>
+      <p class="mb-0">llama-server, OpenAI-compatible endpoints, and ChatGPT Codex live server-side with keys kept out of the browser.</p>
+    </article>
+    <article class="card">
+      <h3 class="mb-2 text-lg font-bold">Small surface area</h3>
+      <p class="mb-0">SSR templates and HTML forms everywhere; JavaScript is saved for the chat stream.</p>
+    </article>
+  </div>
 </section>
