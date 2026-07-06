@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Bun Hono SSR">
-  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
-  <path d="M16 42h32M20 32h24M24 22h16" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="inkcap">
+  <style>
+    :root { --bg:#fbf1c7; --line:#3c3836; --cap:#8f3f71; --gill:#ebdbb2; --stem:#f9f5d7; --drop:#1d2021; }
+    @media (prefers-color-scheme: dark) { :root { --bg:#282828; --line:#ebdbb2; --cap:#d3869b; --gill:#fabd2f; --stem:#fbf1c7; --drop:#1d2021; } }
+  </style>
+  <rect width="64" height="64" rx="14" fill="var(--bg)"/>
+  <path d="M14 35c2-12 10-20 21-20s17 8 15 20c-8-3-28-3-36 0Z" fill="var(--cap)" stroke="var(--line)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M17 36c7 7 25 7 32 0-8-2-24-2-32 0Z" fill="var(--gill)" stroke="var(--line)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M29 39c-.4 6-2.4 11-6 16 5.5 3 13.5 3 19 0-3.6-5-5.6-10-6-16-2.3.6-4.7.6-7 0Z" fill="var(--stem)" stroke="var(--line)" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M49 42c0 3.5-3 5-3 7a3 3 0 1 0 6 0c0-2-3-3.5-3-7Z" fill="var(--drop)"/>
 </svg>

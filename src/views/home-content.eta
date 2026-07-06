@@ -1,9 +1,9 @@
 <section class="grid gap-5 pb-[clamp(2rem,7vw,5rem)]">
-  <div class="eyebrow mb-3">server-driven LLM chat</div>
-  <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Chats that keep going when you close the tab.</h1>
+  <div class="eyebrow mb-3">inkcap · server-driven LLM chat</div>
+  <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Chats that keep growing when you close the tab.</h1>
   <p class="max-w-2xl text-xl leading-relaxed text-ink-dim">
     The server owns the conversation: close your laptop mid-generation, open your
-    phone later, and the chat reached a sensible stopping point without you.
+    phone later, and the thread has reached a sensible stopping point without you.
   </p>
   <div class="flex flex-wrap gap-3">
     <% if (it.user) { %>
@@ -22,7 +22,7 @@
 
 <section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Principles">
   <article class="card">
-    <h2 class="mb-2 text-lg font-bold">Durable runs</h2>
+    <h2 class="mb-2 text-lg font-bold">Background growth</h2>
     <p class="mb-0">Completions are server-side jobs. Browsers attach, detach, and reattach as spectators.</p>
   </article>
   <article class="card">

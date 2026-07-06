@@ -3,50 +3,50 @@
 @source "../views/**/*.eta";
 
 /* ------------------------------------------------------------------ theme --
-   Semantic design tokens. Light is the default; dark is a Tokyo Night-
-   flavored palette that flips via prefers-color-scheme. Templates only use
-   the semantic utilities these generate (bg-page, bg-raised, bg-veil,
-   border-edge, text-ink, text-ink-dim, bg-accent, …), so adding another
-   color scheme later means swapping this variable block, not templates. */
+   Semantic design tokens. Light is the default; dark flips via
+   prefers-color-scheme. The palette is Gruvbox-ish: warm paper/soil surfaces,
+   fungal purple accents, and a little green mycelium glow. Templates only use
+   semantic utilities (bg-page, bg-raised, border-edge, text-ink, bg-accent,
+   …), so future palette swaps stay isolated here. */
 :root {
-  --surface-page: #f5f6fa;
-  --surface-raised: #ffffff;
-  --surface-veil: rgba(255, 255, 255, 0.72);
-  --surface-code: #0f172a;
-  --edge: #e4e6f0;
-  --edge-strong: #cdd2e1;
-  --ink: #1d2130;
-  --ink-dim: #5c6478;
-  --ink-faint: #979eb4;
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
-  --on-accent: #ffffff;
-  --ok: #059669;
-  --warn: #b45309;
-  --danger: #dc2626;
-  --glow-a: rgba(79, 70, 229, 0.08);
-  --glow-b: rgba(14, 165, 233, 0.06);
+  --surface-page: #fbf1c7;
+  --surface-raised: #f9f5d7;
+  --surface-veil: rgba(251, 241, 199, 0.74);
+  --surface-code: #282828;
+  --edge: #d5c4a1;
+  --edge-strong: #bdae93;
+  --ink: #3c3836;
+  --ink-dim: #665c54;
+  --ink-faint: #928374;
+  --accent: #8f3f71;
+  --accent-hover: #7b3464;
+  --on-accent: #fbf1c7;
+  --ok: #79740e;
+  --warn: #af3a03;
+  --danger: #9d0006;
+  --glow-a: rgba(143, 63, 113, 0.1);
+  --glow-b: rgba(121, 116, 14, 0.1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface-page: #16161e;
-    --surface-raised: #1b1d2b;
-    --surface-veil: rgba(24, 25, 35, 0.6);
-    --surface-code: #131320;
-    --edge: #272b41;
-    --edge-strong: #3b4261;
-    --ink: #c0caf5;
-    --ink-dim: #8189ab;
-    --ink-faint: #565f89;
-    --accent: #7aa2f7;
-    --accent-hover: #94b5f9;
-    --on-accent: #131320;
-    --ok: #9ece6a;
-    --warn: #e0af68;
-    --danger: #f7768e;
-    --glow-a: rgba(122, 162, 247, 0.1);
-    --glow-b: rgba(187, 154, 247, 0.09);
+    --surface-page: #282828;
+    --surface-raised: #32302f;
+    --surface-veil: rgba(40, 40, 40, 0.7);
+    --surface-code: #1d2021;
+    --edge: #504945;
+    --edge-strong: #665c54;
+    --ink: #ebdbb2;
+    --ink-dim: #bdae93;
+    --ink-faint: #928374;
+    --accent: #d3869b;
+    --accent-hover: #e3a1b2;
+    --on-accent: #282828;
+    --ok: #b8bb26;
+    --warn: #fabd2f;
+    --danger: #fb4934;
+    --glow-a: rgba(211, 134, 155, 0.1);
+    --glow-b: rgba(184, 187, 38, 0.08);
   }
 }
 
