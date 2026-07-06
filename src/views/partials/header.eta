@@ -2,7 +2,7 @@
   <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 max-[720px]:grid">
     <a class="flex items-center gap-3 font-extrabold text-slate-900 no-underline" href="/">
       <img src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="28" height="28">
-      <span>Bun Hono SSR</span>
+      <span>spail</span>
     </a>
     <nav class="flex flex-wrap items-center justify-end gap-3 max-[720px]:justify-start" aria-label="Primary">
       <% if (it.user) { %>

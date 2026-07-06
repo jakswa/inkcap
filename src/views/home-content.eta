@@ -1,9 +1,9 @@
 <section class="grid gap-5 pb-[clamp(2rem,7vw,5rem)]">
-  <div class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">AI-first SSR starter</div>
-  <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Simple server-rendered apps that are easy to change.</h1>
+  <div class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">server-driven LLM chat</div>
+  <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Chats that keep going when you close the tab.</h1>
   <p class="max-w-2xl text-xl leading-relaxed text-slate-500">
-    A Bun-first template with Hono routes, Eta templates, HTML forms, PostgreSQL,
-    migrations, encrypted cookie sessions, and generated Tailwind CSS.
+    The server owns the conversation: close your laptop mid-generation, open your
+    phone later, and the chat reached a sensible stopping point without you.
   </p>
   <div class="flex flex-wrap gap-3">
     <% if (it.user) { %>
@@ -15,17 +15,17 @@
   </div>
 </section>
 
-<section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Template principles">
+<section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Principles">
   <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
-    <h2 class="mb-2 text-lg font-bold">One obvious path</h2>
-    <p class="mb-0">Hono, Eta, Tailwind, raw SQL, and HTML forms without a JWT fork in the road.</p>
+    <h2 class="mb-2 text-lg font-bold">Durable runs</h2>
+    <p class="mb-0">Completions are server-side jobs. Browsers attach, detach, and reattach as spectators.</p>
   </article>
   <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
-    <h2 class="mb-2 text-lg font-bold">SSR and forms</h2>
-    <p class="mb-0">Pages render on the server and form posts return redirects or HTML.</p>
+    <h2 class="mb-2 text-lg font-bold">Your providers</h2>
+    <p class="mb-0">llama-server, OpenAI-compatible endpoints — registered once, picked per conversation, keys never in the browser.</p>
   </article>
   <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
-    <h2 class="mb-2 text-lg font-bold">Generated assets</h2>
-    <p class="mb-0">Tailwind CSS and public assets share a versioned cache-busting URL.</p>
+    <h2 class="mb-2 text-lg font-bold">Boring on purpose</h2>
+    <p class="mb-0">SSR templates and HTML forms everywhere; JavaScript spent only where the chat streams.</p>
   </article>
 </section>
