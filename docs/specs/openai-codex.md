@@ -58,6 +58,10 @@ Implementation: `src/services/codex-auth.ts` (OAuth + refresh),
   `response.function_call_arguments.delta` (tool calls),
   `response.created` (model), `response.completed` (finish),
   `response.failed` / `error` (throw).
+- Metrics: not normalized into message `timings` yet. The backend may include
+  usage token counts on terminal response objects, but it does not currently
+  provide llama-server-style prompt/generation durations; avoid inventing
+  custom wall-clock tok/s until there is a stable upstream timing signal.
 - Known stream pitfalls handled: status events echo the full instructions and
   can arrive as truncated JSON (parse tolerantly, skip), and the terminal
   `response.output` array can be empty — the message is always reconstructed

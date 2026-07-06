@@ -7,9 +7,9 @@
 //     deltas in a <pre> and only swaps in server-rendered HTML at
 //     message-final (THE_PLAN: "finalize-swap"), so we never render markdown
 //     over a half-arrived message.
-//   - stats: structured footer figures (token count, generation seconds,
-//     tokens/second) derived from the provider's `timings` payload, or NULL
-//     when there's nothing to show. Structured (not a prebuilt string) so the
+//   - stats: structured footer figures (prompt/generation token count, seconds,
+//     tokens/second) derived from the provider's `timings` payload, or NULL when
+//     there's nothing to show. Structured (not a prebuilt string) so the
 //     template can give each figure its own icon chip.
 //
 // Both the SSR transcript (routes/conversations) and the runner's
@@ -27,6 +27,11 @@ interface MessageFields {
 }
 
 export interface MessageStats {
+  prompt: TimingStats | null
+  generation: TimingStats | null
+}
+
+export interface TimingStats {
   tokens: string
   seconds: string | null
   rate: string | null
@@ -42,26 +47,53 @@ export interface RenderableExtras {
 // llama.cpp / OpenAI-compatible timings block (see mock-provider finishChunk):
 // { prompt_n, prompt_ms, predicted_n, predicted_ms }. All optional/defensive —
 // a provider may send a subset or nothing.
+function timingStatsFor(count: unknown, ms: unknown): TimingStats | null {
+  if (typeof count !== 'number' || count <= 0) return null
+  let seconds: string | null = null
+  let rate: string | null = null
+  if (typeof ms === 'number' && ms > 0) {
+    seconds = `${(ms / 1000).toFixed(1)}s`
+    const perSecond = count / (ms / 1000)
+    if (Number.isFinite(perSecond)) rate = `${perSecond.toFixed(1)} tok/s`
+  }
+  return {
+    tokens: `${count} tokens`,
+    seconds,
+    rate,
+  }
+}
+
 function statsFor(timings: unknown): MessageStats | null {
   if (!timings || typeof timings !== 'object') return null
   const t = timings as Record<string, unknown>
-  const predictedN = typeof t['predicted_n'] === 'number' ? t['predicted_n'] : null
-  const predictedMs = typeof t['predicted_ms'] === 'number' ? t['predicted_ms'] : null
-  if (predictedN == null || predictedN <= 0) return null
-
-  let seconds: string | null = null
-  let rate: string | null = null
-  if (predictedMs != null && predictedMs > 0) {
-    seconds = `${(predictedMs / 1000).toFixed(1)}s`
-    const perSecond = predictedN / (predictedMs / 1000)
-    if (Number.isFinite(perSecond)) rate = `${perSecond.toFixed(1)} tok/s`
-  }
-  return { tokens: `${predictedN} tokens`, seconds, rate }
+  const prompt = timingStatsFor(t['prompt_n'], t['prompt_ms'])
+  const generation = timingStatsFor(t['predicted_n'], t['predicted_ms'])
+  if (!prompt && !generation) return null
+  return { prompt, generation }
 }
 
 function timingLabelFor(stats: MessageStats | null) {
   if (!stats) return null
-  return [stats.tokens, stats.seconds, stats.rate].filter(Boolean).join(' · ')
+  const parts: string[] = []
+  if (stats.prompt) {
+    parts.push(
+      `prompt ${[stats.prompt.tokens, stats.prompt.seconds, stats.prompt.rate]
+        .filter(Boolean)
+        .join(' · ')}`,
+    )
+  }
+  if (stats.generation) {
+    parts.push(
+      `generation ${[
+        stats.generation.tokens,
+        stats.generation.seconds,
+        stats.generation.rate,
+      ]
+        .filter(Boolean)
+        .join(' · ')}`,
+    )
+  }
+  return parts.join(' · ')
 }
 
 function clipContentFor(content: string | null | undefined) {

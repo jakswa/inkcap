@@ -84,9 +84,19 @@
               </span>
             <% } %>
             <% if (m.stats) { %>
-              <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.tokens %></span>
-              <% if (m.stats.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.seconds %></span><% } %>
-              <% if (m.stats.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.rate %></span><% } %>
+              <% if (m.stats.prompt) { %>
+                <span class="inline-flex items-center gap-1 font-medium text-ink-dim">prompt</span>
+                <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.prompt.tokens %></span>
+                <% if (m.stats.prompt.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.prompt.seconds %></span><% } %>
+                <% if (m.stats.prompt.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.prompt.rate %></span><% } %>
+              <% } %>
+              <% if (m.stats.generation) { %>
+                <% if (m.stats.prompt) { %><span class="text-ink-faint/70">/</span><% } %>
+                <span class="inline-flex items-center gap-1 font-medium text-ink-dim">gen</span>
+                <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.generation.tokens %></span>
+                <% if (m.stats.generation.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.generation.seconds %></span><% } %>
+                <% if (m.stats.generation.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.generation.rate %></span><% } %>
+              <% } %>
             <% } %>
           </footer>
         <% } %>
