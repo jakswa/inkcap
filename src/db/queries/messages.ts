@@ -26,8 +26,8 @@ export async function createMessage(input: {
       ${input.reasoningContent ?? null},
       ${input.model ?? null},
       ${input.status ?? 'complete'},
-      ${input.toolCalls == null ? null : JSON.stringify(input.toolCalls)},
-      ${input.timings == null ? null : JSON.stringify(input.timings)}
+      ${input.toolCalls ?? null},
+      ${input.timings ?? null}
     )
     RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
               model, status, tool_calls, timings, created_at
@@ -42,6 +42,52 @@ export async function getMessageById(id: string) {
            model, status, tool_calls, timings, created_at
     FROM messages
     WHERE id = ${id}
+  `
+
+  return message
+}
+
+// Runner: append flushed stream deltas to a streaming message. Empty strings
+// are no-ops per column, so a content-only flush leaves reasoning_content NULL
+// (the column stays NULL until the first reasoning token actually arrives).
+export async function appendMessageDeltas(input: {
+  id: string
+  content: string
+  reasoning: string
+}) {
+  const [message] = await sql.AppendMessageDeltas`
+    UPDATE messages
+    SET content = content || ${input.content},
+        reasoning_content = CASE
+          WHEN ${input.reasoning} = '' THEN reasoning_content
+          ELSE coalesce(reasoning_content, '') || ${input.reasoning}
+        END
+    WHERE id = ${input.id}
+    RETURNING id, content, reasoning_content
+  `
+
+  return message
+}
+
+// Runner: seal a streaming message at a stopping point. NULL model/timings/
+// tool_calls leave the existing value untouched (COALESCE), so finalizing an
+// interrupted message never erases what was already persisted.
+export async function finalizeMessage(input: {
+  id: string
+  status: 'complete' | 'interrupted'
+  model?: string | null
+  timings?: unknown
+  toolCalls?: unknown
+}) {
+  const [message] = await sql.FinalizeMessage`
+    UPDATE messages
+    SET status = ${input.status},
+        model = coalesce(${input.model ?? null}, model),
+        timings = coalesce(${input.timings ?? null}, timings),
+        tool_calls = coalesce(${input.toolCalls ?? null}, tool_calls)
+    WHERE id = ${input.id}
+    RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
+              model, status, tool_calls, timings, created_at
   `
 
   return message
@@ -85,8 +131,8 @@ export async function createImportedMessage(input: {
       ${input.content},
       ${input.reasoningContent ?? null},
       ${input.model ?? null},
-      ${input.toolCalls == null ? null : JSON.stringify(input.toolCalls)},
-      ${input.timings == null ? null : JSON.stringify(input.timings)},
+      ${input.toolCalls ?? null},
+      ${input.timings ?? null},
       ${input.createdAt}
     )
     RETURNING id, conversation_id, parent_id, role, content, reasoning_content,

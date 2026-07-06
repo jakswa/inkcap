@@ -16,7 +16,7 @@ export async function createRun(input: {
       ${input.status ?? 'running'},
       ${input.leafMessageId ?? null},
       ${input.turnCount ?? 0},
-      ${input.budget == null ? null : JSON.stringify(input.budget)}
+      ${input.budget ?? null}
     )
     RETURNING id, conversation_id, status, leaf_message_id, turn_count, budget,
               error, seq, created_at, updated_at
@@ -59,6 +59,48 @@ export async function incrementRunSeq(id: string) {
     SET seq = seq + 1, updated_at = now()
     WHERE id = ${id}
     RETURNING id, seq
+  `
+
+  return run
+}
+
+// The in-flight run for a conversation, if any (hits the partial index).
+export async function getRunningRunForConversation(conversationId: string) {
+  const [run] = await sql.GetRunningRunForConversation`
+    SELECT id, conversation_id, status, leaf_message_id, turn_count, budget,
+           error, seq, created_at, updated_at
+    FROM runs
+    WHERE conversation_id = ${conversationId} AND status = 'running'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `
+
+  return run
+}
+
+// The most recent run for a conversation regardless of status; the SSE
+// endpoint attaches to this when no run is currently in flight.
+export async function getLatestRunForConversation(conversationId: string) {
+  const [run] = await sql.GetLatestRunForConversation`
+    SELECT id, conversation_id, status, leaf_message_id, turn_count, budget,
+           error, seq, created_at, updated_at
+    FROM runs
+    WHERE conversation_id = ${conversationId}
+    ORDER BY created_at DESC
+    LIMIT 1
+  `
+
+  return run
+}
+
+// One completed provider turn. Kept separate from setRunStatus so the M6 tool
+// loop can bump it once per turn without touching status.
+export async function incrementRunTurnCount(id: string) {
+  const [run] = await sql.IncrementRunTurnCount`
+    UPDATE runs
+    SET turn_count = turn_count + 1, updated_at = now()
+    WHERE id = ${id}
+    RETURNING id, turn_count
   `
 
   return run

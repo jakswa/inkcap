@@ -12,21 +12,25 @@
     </p>
   </div>
 
-  <div class="grid gap-3">
+  <div class="grid gap-3" data-chat data-events="/conversations/<%= it.conversation.id %>/events" <% if (it.activeRun) { %>data-active="1"<% } %>>
     <% if (it.messages.length === 0) { %>
       <p class="text-slate-500">No messages yet. Say something below.</p>
     <% } else { %>
-      <% it.messages.forEach((message) => { %>
-        <article class="grid gap-1 rounded-lg border border-slate-300 bg-white p-4 shadow-sm shadow-slate-900/10">
-          <p class="text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600"><%= message.role %></p>
-          <% if (message.reasoning_content) { %>
-            <pre class="m-0 whitespace-pre-wrap break-words font-body text-sm text-slate-500"><%= message.reasoning_content %></pre>
-          <% } %>
-          <pre class="m-0 whitespace-pre-wrap break-words font-body text-slate-900"><%= message.content %></pre>
-        </article>
-      <% }) %>
+      <% for (const message of it.messages) { %>
+        <%~ await includeAsync('./message', { message: message }) %>
+      <% } %>
     <% } %>
   </div>
+
+  <% if (it.activeRun) { %>
+    <% /* No-JS fallback: re-render the page every 3s while the run streams;
+          the script below upgrades to the SSE live tail when JS is on. */ %>
+    <noscript><meta http-equiv="refresh" content="3"></noscript>
+    <form class="grid justify-items-start gap-2" method="post" action="/conversations/<%= it.conversation.id %>/cancel">
+      <button class="inline-flex cursor-pointer items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-bold text-slate-700 hover:border-red-400 hover:text-red-700" type="submit">Stop generating</button>
+    </form>
+    <script src="/assets/<%= it.assetVersion %>/chat.js" defer></script>
+  <% } %>
 
   <form class="grid gap-3 rounded-lg border border-slate-300 bg-white p-4 shadow-sm shadow-slate-900/10" method="post" action="/conversations/<%= it.conversation.id %>/messages">
     <% if (it.error) { %>

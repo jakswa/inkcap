@@ -46,7 +46,8 @@ function sessionFor(user: { id: string; name: string; email: string; created_at:
   return `session=${cookie}`
 }
 
-// A minimal OpenAI-compatible stub that returns one fixed non-streaming reply.
+// A minimal OpenAI-compatible stub that streams one fixed reply (M3 rewired
+// send to the durable runner, which always requests `stream: true`).
 const stubReply = 'Hello from the stub assistant.'
 let lastRequestBody: unknown = null
 const stub = Bun.serve({
@@ -55,10 +56,12 @@ const stub = Bun.serve({
     const path = new URL(req.url).pathname
     if (path === '/v1/chat/completions') {
       lastRequestBody = await req.json()
-      return Response.json({
-        model: 'stub-model',
-        choices: [{ message: { content: stubReply }, finish_reason: 'stop' }],
-      })
+      const body = [
+        `data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: stubReply } }] })}\n\n`,
+        `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
+        'data: [DONE]\n\n',
+      ].join('')
+      return new Response(body, { headers: { 'Content-Type': 'text/event-stream' } })
     }
     return new Response('not found', { status: 404 })
   },
@@ -68,6 +71,29 @@ const stubBaseUrl = `http://localhost:${stub.port}`
 afterAll(() => {
   stub.stop(true)
 })
+
+async function waitFor<T>(
+  probe: () => Promise<T | null | undefined | false>,
+  timeoutMs = 10_000,
+): Promise<T> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const value = await probe()
+    if (value) return value
+    if (Date.now() > deadline) throw new Error('waitFor timed out')
+    await Bun.sleep(25)
+  }
+}
+
+// Sends redirect immediately; the reply streams server-side. Wait for the
+// conversation's run to reach a terminal state before asserting.
+async function waitForRunSettled(conversationId: string) {
+  const { getLatestRunForConversation } = await import('../../src/db/queries/runs')
+  return waitFor(async () => {
+    const run = await getLatestRunForConversation(conversationId)
+    return run && run.status !== 'running' ? run : null
+  })
+}
 
 async function createConversationViaForm(
   cookie: string,
@@ -109,6 +135,9 @@ describe('conversations chat loop', () => {
     expect(send.status).toBe(302)
     expect(send.headers.get('location')).toBe(`/conversations/${conversationId}`)
 
+    const run = await waitForRunSettled(conversationId)
+    expect(run.status).toBe('done')
+
     const conversation = await getConversationById(conversationId)
     expect(conversation?.curr_node).not.toBeNull()
 
@@ -118,11 +147,12 @@ describe('conversations chat loop', () => {
     expect(path[1]?.content).toBe('What is up?')
     expect(path[2]?.content).toBe(stubReply)
     expect(path[2]?.model).toBe('stub-model')
+    expect(path[2]?.status).toBe('complete')
     // curr_node points at the assistant reply (the leaf).
     expect(conversation?.curr_node).toBe(path[2]?.id ?? null)
 
     // Request the stub received carried the mapped active-path messages.
-    expect((lastRequestBody as { stream?: boolean }).stream).toBe(false)
+    expect((lastRequestBody as { stream?: boolean }).stream).toBe(true)
     expect((lastRequestBody as { messages?: Array<{ role: string }> }).messages?.map((m) => m.role)).toEqual([
       'system',
       'user',
@@ -170,10 +200,10 @@ describe('conversations chat loop', () => {
     expect(conversation?.curr_node).toBeNull()
   })
 
-  test('provider HTTP failure saves the user message and surfaces the error', async () => {
+  test('provider HTTP failure keeps the user message and parks the run as error', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
-    // Point at a dead port so the fetch fails.
+    // Point at a dead port so the provider fetch fails inside the run.
     const provider = await createProvider({
       name: `dead-${randomUUIDv7()}`,
       kind: 'openai-compat',
@@ -184,21 +214,25 @@ describe('conversations chat loop', () => {
 
     const conversationId = await createConversationViaForm(cookie, provider.id)
 
+    // The send itself succeeds — the failure happens in the detached run.
     const send = await app.request(url(`/conversations/${conversationId}/messages`), {
       method: 'POST',
       headers: { Cookie: cookie, Origin: origin },
       body: form({ content: 'are you there?' }),
     })
-    expect(send.status).toBe(200)
-    const html = await send.text()
-    expect(html).toContain('Reply failed')
-    // The user message was saved and is on the active path.
-    expect(html).toContain('are you there?')
+    expect(send.status).toBe(302)
 
+    const run = await waitForRunSettled(conversationId)
+    expect(run.status).toBe('error')
+    expect(run.error).toContain('Unable to reach the provider')
+
+    // The user message was saved; the empty reply is marked interrupted.
     const conversation = await getConversationById(conversationId)
     expect(conversation?.curr_node).not.toBeNull()
     const path = await getActivePath(conversation!.curr_node!)
-    expect(path.map((m) => m.role)).toEqual(['user'])
+    expect(path.map((m) => m.role)).toEqual(['user', 'assistant'])
+    expect(path[0]?.content).toBe('are you there?')
+    expect(path[1]?.status).toBe('interrupted')
   })
 
   test('another user cannot view or post into the conversation', async () => {

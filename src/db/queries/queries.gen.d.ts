@@ -136,6 +136,28 @@ export interface IGetMessageByIdResult {
     created_at: Date;
 }
 
+/** Result of query `AppendMessageDeltas`. */
+export interface IAppendMessageDeltasResult {
+    id: string;
+    content: string;
+    reasoning_content: string | null;
+}
+
+/** Result of query `FinalizeMessage`. */
+export interface IFinalizeMessageResult {
+    id: string;
+    conversation_id: string;
+    parent_id: string | null;
+    role: string;
+    content: string;
+    reasoning_content: string | null;
+    model: string | null;
+    status: string;
+    tool_calls: unknown | null;
+    timings: unknown | null;
+    created_at: Date;
+}
+
 /** Result of query `ListMessageChildren`. */
 export interface IListMessageChildrenResult {
     id: string;
@@ -278,6 +300,30 @@ export interface IUpdateProviderResult {
 export interface IDeleteProviderResult {
 }
 
+/** Result of query `InsertRunEvent`. */
+export interface IInsertRunEventResult {
+    run_id: string;
+    seq: string;
+    type: string;
+    payload: unknown;
+    created_at: Date;
+}
+
+/** Result of query `ListRunEventsAfter`. */
+export interface IListRunEventsAfterResult {
+    run_id: string;
+    seq: string;
+    type: string;
+    payload: unknown;
+    created_at: Date;
+}
+
+/** Result of query `DeleteExpiredRunEvents`. */
+export interface IDeleteExpiredRunEventsResult {
+    run_id: string;
+    seq: string;
+}
+
 /** Result of query `CreateRun`. */
 export interface ICreateRunResult {
     id: string;
@@ -324,6 +370,40 @@ export interface ISetRunStatusResult {
 export interface IIncrementRunSeqResult {
     id: string;
     seq: string;
+}
+
+/** Result of query `GetRunningRunForConversation`. */
+export interface IGetRunningRunForConversationResult {
+    id: string;
+    conversation_id: string;
+    status: string;
+    leaf_message_id: string | null;
+    turn_count: number;
+    budget: unknown | null;
+    error: string | null;
+    seq: string;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `GetLatestRunForConversation`. */
+export interface IGetLatestRunForConversationResult {
+    id: string;
+    conversation_id: string;
+    status: string;
+    leaf_message_id: string | null;
+    turn_count: number;
+    budget: unknown | null;
+    error: string | null;
+    seq: string;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `IncrementRunTurnCount`. */
+export interface IIncrementRunTurnCountResult {
+    id: string;
+    turn_count: number;
 }
 
 /** Result of query `ListRunningRuns`. */
@@ -377,6 +457,8 @@ export interface Queries {
     FindConversationMatch: IFindConversationMatchResult;
     CreateMessage: ICreateMessageResult;
     GetMessageById: IGetMessageByIdResult;
+    AppendMessageDeltas: IAppendMessageDeltasResult;
+    FinalizeMessage: IFinalizeMessageResult;
     ListMessageChildren: IListMessageChildrenResult;
     CreateImportedMessage: ICreateImportedMessageResult;
     SetMessageParentId: ISetMessageParentIdResult;
@@ -388,10 +470,16 @@ export interface Queries {
     GetProviderByName: IGetProviderByNameResult;
     UpdateProvider: IUpdateProviderResult;
     DeleteProvider: IDeleteProviderResult;
+    InsertRunEvent: IInsertRunEventResult;
+    ListRunEventsAfter: IListRunEventsAfterResult;
+    DeleteExpiredRunEvents: IDeleteExpiredRunEventsResult;
     CreateRun: ICreateRunResult;
     GetRunById: IGetRunByIdResult;
     SetRunStatus: ISetRunStatusResult;
     IncrementRunSeq: IIncrementRunSeqResult;
+    GetRunningRunForConversation: IGetRunningRunForConversationResult;
+    GetLatestRunForConversation: IGetLatestRunForConversationResult;
+    IncrementRunTurnCount: IIncrementRunTurnCountResult;
     ListRunningRuns: IListRunningRunsResult;
     GetUserById: IGetUserByIdResult;
     GetUserByEmailNormalized: IGetUserByEmailNormalizedResult;

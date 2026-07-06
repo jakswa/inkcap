@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import {
   createConversation,
   getConversationById,
@@ -8,7 +9,19 @@ import {
 } from '../db/queries/conversations'
 import { getProviderById, listProviders } from '../db/queries/providers'
 import { createMessage, getActivePath } from '../db/queries/messages'
-import { completeOnce, type ChatMessage, type ChatRole } from '../services/provider-client'
+import {
+  getLatestRunForConversation,
+  getRunningRunForConversation,
+} from '../db/queries/runs'
+import {
+  cancelRun,
+  getActiveRunHandle,
+  isTerminalRunStatus,
+  replayRunEvents,
+  startRun,
+  subscribeToRun,
+  type RunEventRecord,
+} from '../services/runner'
 import { readString } from '../utils/validation'
 
 export const conversationRoutes = new Hono()
@@ -17,35 +30,19 @@ const maxTitleLength = 200
 const maxModelLength = 200
 
 // Rows returned by getActivePath are typed all-nullable (recursive CTE), so we
-// narrow to the shape the transcript and request builder need.
+// narrow to the shape the transcript needs.
 type PathMessage = {
   id: string | null
   role: string | null
   content: string | null
   reasoning_content: string | null
   model: string | null
+  status: string | null
   created_at: Date | null
 }
 
 function requireUser(c: Context) {
   return c.var.user
-}
-
-// Map the active path (root-first) to OpenAI chat messages: drop empty system
-// messages (spec §1.2) and forward reasoning_content on assistant turns.
-function toChatMessages(path: PathMessage[]): ChatMessage[] {
-  const messages: ChatMessage[] = []
-  for (const row of path) {
-    const role = (row.role ?? '') as ChatRole
-    const content = row.content ?? ''
-    if (role === 'system' && content.trim().length === 0) continue
-    const message: ChatMessage = { role, content }
-    if (role === 'assistant' && row.reasoning_content) {
-      message.reasoning_content = row.reasoning_content
-    }
-    messages.push(message)
-  }
-  return messages
 }
 
 // Load a conversation the current user owns, or null. Ownership is enforced so
@@ -61,9 +58,12 @@ async function renderShow(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const provider = conversation.provider_id
-    ? await getProviderById(conversation.provider_id)
-    : null
+  const [provider, activeRun] = await Promise.all([
+    conversation.provider_id
+      ? getProviderById(conversation.provider_id)
+      : Promise.resolve(null),
+    getRunningRunForConversation(conversation.id),
+  ])
 
   const path = conversation.curr_node
     ? ((await getActivePath(conversation.curr_node)) as PathMessage[])
@@ -75,6 +75,7 @@ async function renderShow(
     conversation,
     provider,
     messages: path,
+    activeRun: activeRun ?? null,
     error: options.error ?? null,
     draft: options.draft ?? '',
   })
@@ -171,7 +172,9 @@ conversationRoutes.get('/conversations/:id', async (c) => {
   return renderShow(c, conversation)
 })
 
-// POST /conversations/:id/messages — send a user turn, get one reply.
+// POST /conversations/:id/messages — save the user turn, start a durable run,
+// and redirect immediately. The runner streams the reply server-side; the
+// conversation page shows whatever the DB holds (plus SSE live tail).
 conversationRoutes.post('/conversations/:id/messages', async (c) => {
   const user = requireUser(c)
   if (!user) return c.redirect('/login')
@@ -184,6 +187,14 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
 
   if (content.length === 0) {
     return renderShow(c, conversation, { error: 'Type a message before sending.' })
+  }
+
+  // One run at a time per conversation; nothing is saved while one streams.
+  if (getActiveRunHandle(conversation.id)) {
+    return renderShow(c, conversation, {
+      draft: content,
+      error: 'A reply is already streaming. Wait for it to finish or stop it first.',
+    })
   }
 
   // Pre-flight: the provider must exist and be enabled. provider_id is ON
@@ -215,37 +226,110 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
   })
   await setConversationCurrNode({ id: conversation.id, currNode: userMessage.id })
 
-  const path = (await getActivePath(userMessage.id)) as PathMessage[]
-
-  let completion
   try {
-    completion = await completeOnce(
-      { base_url: provider.base_url, api_key: provider.api_key },
-      conversation.model,
-      toChatMessages(path),
-    )
+    await startRun(conversation.id)
   } catch (error) {
-    // Message is saved and on the active path; the reply failed. Surface the
-    // error above the composer so the user can retry by posting again.
+    // The user message is saved and on the active path; only the reply
+    // failed to start. Surface the error so the user can retry.
     const refreshed = await getConversationById(conversation.id)
     return renderShow(c, refreshed ?? conversation, {
       error: `Reply failed: ${error instanceof Error ? error.message : String(error)}`,
     })
   }
 
-  const assistantMessage = await createMessage({
-    conversationId: conversation.id,
-    parentId: userMessage.id,
-    role: 'assistant',
-    content: completion.content,
-    reasoningContent: completion.reasoningContent,
-    model: completion.model ?? conversation.model,
-    timings: completion.timings,
-  })
-  await setConversationCurrNode({
-    id: conversation.id,
-    currNode: assistantMessage.id,
-  })
-
   return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// POST /conversations/:id/cancel — stop the active run, keep the partial.
+conversationRoutes.post('/conversations/:id/cancel', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  await cancelRun(conversation.id)
+  return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// GET /conversations/:id/events — SSE: replay the run's events after
+// Last-Event-ID (or all of them), then live-tail until the run is terminal.
+// The subscription starts before the replay query so no event can slip
+// between them; `send` dedupes by seq. `id:` is the per-run seq, so a
+// reconnecting EventSource resumes exactly where it left off.
+conversationRoutes.get('/conversations/:id/events', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.text('Unauthorized', 401)
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  const active = getActiveRunHandle(conversation.id)
+  const run = active
+    ? { id: active.runId, status: 'running' }
+    : await getLatestRunForConversation(conversation.id)
+  if (!run) return c.notFound()
+  const runId = run.id
+
+  const rawCursor = c.req.header('Last-Event-ID') ?? c.req.query('after') ?? ''
+  const parsedCursor = Number.parseInt(rawCursor, 10)
+  const cursor = Number.isFinite(parsedCursor) && parsedCursor > 0 ? parsedCursor : 0
+
+  return streamSSE(c, async (stream) => {
+    let lastSentSeq = cursor
+    let writeChain: Promise<unknown> = Promise.resolve()
+    let finish: () => void = () => {}
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+
+    const isTerminalEvent = (event: RunEventRecord) =>
+      event.type === 'run-status' &&
+      isTerminalRunStatus(String((event.payload as { status?: string })?.status ?? ''))
+
+    const send = (event: RunEventRecord) => {
+      if (event.seq <= lastSentSeq) return
+      lastSentSeq = event.seq
+      writeChain = writeChain
+        .then(() =>
+          stream.writeSSE({
+            id: String(event.seq),
+            event: event.type,
+            data: JSON.stringify(event.payload),
+          }),
+        )
+        .then(() => {
+          if (isTerminalEvent(event)) finish()
+        })
+        .catch(() => finish())
+    }
+
+    let replaying = true
+    const buffered: RunEventRecord[] = []
+    const unsubscribe = subscribeToRun(runId, (event) => {
+      if (replaying) buffered.push(event)
+      else send(event)
+    })
+    stream.onAbort(() => finish())
+
+    try {
+      for (const event of await replayRunEvents(runId, cursor)) send(event)
+      for (const event of buffered) send(event)
+      replaying = false
+
+      // Terminal already? The replay ended with the terminal run-status (or
+      // the cursor was past it) — close instead of tailing forever.
+      if (!getActiveRunHandle(conversation.id)) {
+        const current = await getLatestRunForConversation(conversation.id)
+        if (!current || current.id !== runId || isTerminalRunStatus(current.status)) {
+          finish()
+        }
+      }
+
+      await finished
+      await writeChain
+    } finally {
+      unsubscribe()
+    }
+  })
 })

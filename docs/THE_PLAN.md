@@ -179,8 +179,11 @@ miss.
   PostgreSQL is already running on :5432 — `Bun.SQL`, bun-sqlgen, migrations,
   and tests stay exactly as the starter ships them, pointed at `spail` /
   `spail_test` databases.
-- **D2 — SSE token persistence cadence.** Debounce interval vs. tokens-per-
-  flush; measure in M3.
+- ~~**D2 — SSE token persistence cadence.**~~ **Resolved 2026-07-06 (M3):
+  flush pending deltas every 300ms OR every 24 deltas, whichever first
+  (`src/services/runner.ts`). 300ms bounds the crash-loss window; 24 tokens
+  caps write amplification on fast providers. Observed against the mock
+  provider: a `kill -9` mid-stream lost only the final ~300ms of tokens.**
 - ~~**D3 — Markdown pipeline.**~~ **Resolved 2026-07-06: `marked` (GFM out of the box) + `highlight.js` (sync API) + `sanitize-html` (runs last, allowlist), behind `renderMarkdown()` in `src/utils/markdown.ts`.**
 - ~~**D4 — Attachment storage.**~~ **Resolved 2026-07-06: bytea in Postgres — the importer decodes attachments straight into the existing `attachments` table; no new migration.**
 

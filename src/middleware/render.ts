@@ -4,7 +4,9 @@ import type { CurrentUser, Renderer } from '../app-types'
 import { env } from '../utils/env'
 import { paths } from '../utils/paths'
 
-const eta = new Eta({
+// Exported so out-of-request code (the chat runner's message-final events)
+// renders the same templates with the same configuration.
+export const eta = new Eta({
   views: paths.views,
   cache: env.NODE_ENV === 'production',
 })
