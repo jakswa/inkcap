@@ -1,0 +1,1 @@
+<%~ include('./layouts/main', { ...it, body: await includeAsync('./home-content', it) }) %>

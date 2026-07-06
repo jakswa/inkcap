@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@source "../views/**/*.eta";
+
+@theme {
+  --font-body: system-ui, sans-serif;
+  --font-display: system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}

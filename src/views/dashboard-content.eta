@@ -1,0 +1,16 @@
+<section class="grid gap-4">
+  <div>
+    <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Private page</p>
+    <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Dashboard</h1>
+    <p class="mt-4 text-slate-500">Signed in as <strong><%= it.user.name %></strong> (<%= it.user.email %>).</p>
+  </div>
+
+  <div class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+    <h2 class="text-lg font-bold">What to build next</h2>
+    <p class="mb-0">
+      Add your application tables in <code class="rounded bg-indigo-50 px-1 py-0.5">src/db/migrations</code>, put named SQL
+      queries in <code class="rounded bg-indigo-50 px-1 py-0.5">src/db/queries</code>, then render new pages from
+      <code class="rounded bg-indigo-50 px-1 py-0.5">src/routes</code>.
+    </p>
+  </div>
+</section>

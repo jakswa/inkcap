@@ -1,0 +1,5 @@
+<footer class="py-8 text-slate-500">
+  <div class="mx-auto max-w-5xl px-4">
+    <p class="mb-0">Built for Bun, Hono, Eta, raw SQL, Tailwind, and small safe edits.</p>
+  </div>
+</footer>

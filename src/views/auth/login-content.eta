@@ -1,0 +1,30 @@
+<section class="grid grid-cols-[minmax(0,1fr)_minmax(18rem,25rem)] items-start gap-[clamp(1.5rem,6vw,4rem)] max-[720px]:grid-cols-1">
+  <div>
+    <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Welcome back</p>
+    <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Log in</h1>
+    <p class="mt-4 text-slate-500">Use your account to reach the protected dashboard.</p>
+  </div>
+
+  <form class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10" method="post" action="/login">
+    <% if (it.errors.length > 0) { %>
+      <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+        <% it.errors.forEach((error) => { %>
+          <p class="last:mb-0"><%= error %></p>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <label class="grid gap-1.5">
+      <span>Email</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="email" type="email" autocomplete="email" maxlength="320" value="<%= it.values.email || '' %>" required>
+    </label>
+
+    <label class="grid gap-1.5">
+      <span>Password</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="password" type="password" autocomplete="current-password" required>
+    </label>
+
+    <button class="inline-flex cursor-pointer items-center justify-center rounded-lg border-0 bg-indigo-600 px-4 py-2.5 font-bold text-white hover:bg-indigo-700" type="submit">Log in</button>
+    <p class="mb-0 text-slate-500">Need an account? <a class="text-indigo-600 underline-offset-4 hover:underline" href="/register">Register</a>.</p>
+  </form>
+</section>

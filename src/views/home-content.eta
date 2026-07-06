@@ -1,0 +1,31 @@
+<section class="grid gap-5 pb-[clamp(2rem,7vw,5rem)]">
+  <div class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">AI-first SSR starter</div>
+  <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Simple server-rendered apps that are easy to change.</h1>
+  <p class="max-w-2xl text-xl leading-relaxed text-slate-500">
+    A Bun-first template with Hono routes, Eta templates, HTML forms, PostgreSQL,
+    migrations, encrypted cookie sessions, and generated Tailwind CSS.
+  </p>
+  <div class="flex flex-wrap gap-3">
+    <% if (it.user) { %>
+      <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white no-underline hover:bg-indigo-700" href="/dashboard">Open dashboard</a>
+    <% } else { %>
+      <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white no-underline hover:bg-indigo-700" href="/register">Create an account</a>
+      <a class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-bold text-slate-900 no-underline hover:bg-indigo-50" href="/login">Log in</a>
+    <% } %>
+  </div>
+</section>
+
+<section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Template principles">
+  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+    <h2 class="mb-2 text-lg font-bold">One obvious path</h2>
+    <p class="mb-0">Hono, Eta, Tailwind, raw SQL, and HTML forms without a JWT fork in the road.</p>
+  </article>
+  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+    <h2 class="mb-2 text-lg font-bold">SSR and forms</h2>
+    <p class="mb-0">Pages render on the server and form posts return redirects or HTML.</p>
+  </article>
+  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+    <h2 class="mb-2 text-lg font-bold">Generated assets</h2>
+    <p class="mb-0">Tailwind CSS and public assets share a versioned cache-busting URL.</p>
+  </article>
+</section>

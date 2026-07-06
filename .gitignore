@@ -1,0 +1,8 @@
+node_modules/
+build/
+src/static/app.css
+.env
+.env.*
+!.env.example
+!.env.test
+*.log
