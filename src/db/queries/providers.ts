@@ -54,3 +54,42 @@ export async function setProviderEnabled(input: { id: string; enabled: boolean }
 
   return provider
 }
+
+export async function getProviderByName(name: string) {
+  const [provider] = await sql.GetProviderByName`
+    SELECT id, name, kind, base_url, api_key, default_model, enabled, created_at, updated_at
+    FROM providers
+    WHERE name = ${name}
+  `
+
+  return provider
+}
+
+export async function updateProvider(input: {
+  id: string
+  name: string
+  kind: 'openai-compat' | 'llama-server'
+  baseUrl: string
+  apiKey?: string | null
+  defaultModel?: string | null
+}) {
+  const [provider] = await sql.UpdateProvider`
+    UPDATE providers
+    SET name = ${input.name},
+        kind = ${input.kind},
+        base_url = ${input.baseUrl},
+        api_key = ${input.apiKey ?? null},
+        default_model = ${input.defaultModel ?? null},
+        updated_at = now()
+    WHERE id = ${input.id}
+    RETURNING id, name, kind, base_url, api_key, default_model, enabled, created_at, updated_at
+  `
+
+  return provider
+}
+
+export async function deleteProvider(id: string) {
+  await sql.DeleteProvider`
+    DELETE FROM providers WHERE id = ${id}
+  `
+}

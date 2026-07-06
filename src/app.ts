@@ -9,6 +9,7 @@ import { renderMiddleware } from './middleware/render'
 import { authRoutes } from './routes/auth'
 import { dashboardRoutes } from './routes/dashboard'
 import { homeRoutes } from './routes/home'
+import { providerRoutes } from './routes/providers'
 
 export const app = new Hono()
 
@@ -39,6 +40,7 @@ app.use(renderMiddleware)
 app.route('/', homeRoutes)
 app.route('/', authRoutes)
 app.route('/', dashboardRoutes)
+app.route('/', providerRoutes)
 
 app.notFound((c) =>
   renderError(c, 404, 'Page not found', 'The page you requested does not exist.'),

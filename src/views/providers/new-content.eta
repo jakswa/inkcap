@@ -1,0 +1,48 @@
+<section class="grid grid-cols-[minmax(0,1fr)_minmax(18rem,25rem)] items-start gap-[clamp(1.5rem,6vw,4rem)] max-[720px]:grid-cols-1">
+  <div>
+    <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Registry</p>
+    <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Add provider</h1>
+    <p class="mt-4 text-slate-500">Register a llama-server or OpenAI-compatible endpoint.</p>
+  </div>
+
+  <form class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10" method="post" action="/providers">
+    <% if (it.errors.length > 0) { %>
+      <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+        <% it.errors.forEach((error) => { %>
+          <p class="last:mb-0"><%= error %></p>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <label class="grid gap-1.5">
+      <span>Name</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="name" maxlength="200" value="<%= it.values.name || '' %>" required>
+    </label>
+
+    <label class="grid gap-1.5">
+      <span>Kind</span>
+      <select class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="kind" required>
+        <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>llama-server</option>
+        <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>openai-compat</option>
+      </select>
+    </label>
+
+    <label class="grid gap-1.5">
+      <span>Base URL</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="base_url" placeholder="http://localhost:8001" maxlength="2048" value="<%= it.values.baseUrl || '' %>" required>
+    </label>
+
+    <label class="grid gap-1.5">
+      <span>API key</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="api_key" type="password" autocomplete="off" value="<%= it.values.apiKey || '' %>">
+    </label>
+
+    <label class="grid gap-1.5">
+      <span>Default model</span>
+      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="default_model" value="<%= it.values.defaultModel || '' %>">
+    </label>
+
+    <button class="inline-flex cursor-pointer items-center justify-center rounded-lg border-0 bg-indigo-600 px-4 py-2.5 font-bold text-white hover:bg-indigo-700" type="submit">Add provider</button>
+    <p class="mb-0 text-slate-500"><a class="text-indigo-600 underline-offset-4 hover:underline" href="/providers">Back to providers</a></p>
+  </form>
+</section>

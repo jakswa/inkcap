@@ -169,6 +169,36 @@ export interface ISetProviderEnabledResult {
     updated_at: Date;
 }
 
+/** Result of query `GetProviderByName`. */
+export interface IGetProviderByNameResult {
+    id: string;
+    name: string;
+    kind: string;
+    base_url: string;
+    api_key: string | null;
+    default_model: string | null;
+    enabled: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `UpdateProvider`. */
+export interface IUpdateProviderResult {
+    id: string;
+    name: string;
+    kind: string;
+    base_url: string;
+    api_key: string | null;
+    default_model: string | null;
+    enabled: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `DeleteProvider`. */
+export interface IDeleteProviderResult {
+}
+
 /** Result of query `CreateRun`. */
 export interface ICreateRunResult {
     id: string;
@@ -270,6 +300,9 @@ export interface Queries {
     GetProviderById: IGetProviderByIdResult;
     ListProviders: IListProvidersResult;
     SetProviderEnabled: ISetProviderEnabledResult;
+    GetProviderByName: IGetProviderByNameResult;
+    UpdateProvider: IUpdateProviderResult;
+    DeleteProvider: IDeleteProviderResult;
     CreateRun: ICreateRunResult;
     GetRunById: IGetRunByIdResult;
     SetRunStatus: ISetRunStatusResult;
