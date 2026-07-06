@@ -6,3 +6,4 @@ src/static/app.css
 !.env.example
 !.env.test
 *.log
+.claude/
