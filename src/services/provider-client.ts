@@ -18,6 +18,11 @@ export interface ChatMessage {
   content: string
   // Assistant messages may carry prior thinking; forwarded verbatim when set.
   reasoning_content?: string
+  // Assistant messages that requested tools carry them (OpenAI shape); the
+  // matching tool results come back as role:'tool' messages keyed by
+  // tool_call_id (spec §1.2).
+  tool_calls?: unknown[]
+  tool_call_id?: string
 }
 
 // The subset of a providers row this client needs. Callers pass the row from
@@ -70,7 +75,7 @@ export function buildChatRequest(
   provider: ProviderConfig,
   model: string | null,
   messages: ChatMessage[],
-  options: { stream?: boolean } = {},
+  options: { stream?: boolean; tools?: unknown[] } = {},
 ): ChatRequest {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -85,6 +90,10 @@ export function buildChatRequest(
   }
   if (model && model.length > 0) {
     body.model = model
+  }
+  // Only sent when non-empty, never as `[]` (spec §1.4).
+  if (options.tools && options.tools.length > 0) {
+    body.tools = options.tools
   }
 
   return { url: completionsUrl(provider.base_url), headers, body }
@@ -288,8 +297,9 @@ export async function* streamChat(
   messages: ChatMessage[],
   signal?: AbortSignal,
   stallTimeoutMs: number = DEFAULT_STALL_TIMEOUT_MS,
+  tools?: unknown[],
 ): AsyncGenerator<StreamDelta, void, undefined> {
-  const request = buildChatRequest(provider, model, messages, { stream: true })
+  const request = buildChatRequest(provider, model, messages, { stream: true, tools })
 
   // The watchdog aborts through its own controller, merged with the caller's
   // cancel signal, so a stall tears down the socket without the caller's

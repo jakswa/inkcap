@@ -16,7 +16,10 @@
 
   <div id="chat" class="flex min-h-[70vh] flex-col gap-4" data-chat data-conversation="<%= it.conversation.id %>" data-events="/conversations/<%= it.conversation.id %>/events"<% if (it.activeRun) { %> data-active="1"<% } %>>
     <header class="grid gap-1">
-      <a class="text-sm text-indigo-600 underline-offset-4 hover:underline lg:hidden" href="/conversations">← All conversations</a>
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <a class="text-sm text-indigo-600 underline-offset-4 hover:underline lg:hidden" href="/conversations">← All conversations</a>
+        <a class="ml-auto text-sm text-indigo-600 underline-offset-4 hover:underline" href="/conversations/<%= it.conversation.id %>/tools">Tools</a>
+      </div>
       <h1 class="text-[clamp(1.5rem,4vw,2.25rem)] font-extrabold leading-tight tracking-[-0.03em]"><%= it.conversation.title || 'untitled' %></h1>
       <p class="text-sm text-slate-500">
         <% if (it.provider) { %>
@@ -43,6 +46,12 @@
           by taking over the SSE live tail when JS is on. */ %>
     <% if (it.activeRun) { %>
       <noscript><meta http-equiv="refresh" content="3"></noscript>
+    <% } %>
+
+    <% if (it.pendingApproval) { %>
+      <div class="mx-auto w-full max-w-2xl">
+        <%~ await includeAsync('./pending-approval', it) %>
+      </div>
     <% } %>
 
     <div class="mx-auto w-full max-w-2xl" data-controls>

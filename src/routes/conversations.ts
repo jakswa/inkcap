@@ -15,10 +15,16 @@ import {
   getRunningRunForConversation,
 } from '../db/queries/runs'
 import {
+  listMcpServersWithOverride,
+  setConversationMcpOverride,
+} from '../db/queries/mcp-servers'
+import { listPendingApprovalsForRun } from '../db/queries/tool-approvals'
+import {
   cancelRun,
   getActiveRunHandle,
   isTerminalRunStatus,
   replayRunEvents,
+  resumeParkedRun,
   startRun,
   subscribeToRun,
   type RunEventRecord,
@@ -56,22 +62,52 @@ async function loadOwnedConversation(userId: string, id: string) {
   return conversation
 }
 
+// Pretty-print a tool call's JSON arguments for the approval card; fall back to
+// the raw string if it isn't valid JSON.
+function prettyArguments(raw: string): string {
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
 async function renderShow(
   c: Context,
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const [provider, activeRun, sidebar] = await Promise.all([
+  const [provider, activeRun, sidebar, latestRun] = await Promise.all([
     conversation.provider_id
       ? getProviderById(conversation.provider_id)
       : Promise.resolve(null),
     getRunningRunForConversation(conversation.id),
     listConversationsForUser(conversation.user_id),
+    getLatestRunForConversation(conversation.id),
   ])
 
   const path = conversation.curr_node
     ? ((await getActivePath(conversation.curr_node)) as PathMessage[])
     : []
+
+  // Pending tool approvals: the latest run is parked in waiting_approval and
+  // has pending rows. Rendered as approve/deny forms (boring CRUD).
+  let pendingApproval: {
+    runId: string
+    calls: { toolName: string; arguments: string }[]
+  } | null = null
+  if (latestRun && latestRun.status === 'waiting_approval') {
+    const pending = await listPendingApprovalsForRun(latestRun.id)
+    if (pending.length > 0) {
+      pendingApproval = {
+        runId: latestRun.id,
+        calls: pending.map((p) => ({
+          toolName: p.tool_name,
+          arguments: prettyArguments(p.arguments),
+        })),
+      }
+    }
+  }
 
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/show', {
@@ -88,6 +124,7 @@ async function renderShow(
       current: row.id === conversation.id,
     })),
     activeRun: activeRun ?? null,
+    pendingApproval,
     error: options.error ?? null,
     draft: options.draft ?? '',
   })
@@ -278,6 +315,75 @@ conversationRoutes.post('/conversations/:id/cancel', async (c) => {
 
   await cancelRun(conversation.id)
   return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// POST /conversations/:id/approvals — approve or deny the pending tool call(s)
+// on a run parked in waiting_approval, resuming the runner loop. Boring CRUD:
+// two buttons post `decision=approve|deny`.
+conversationRoutes.post('/conversations/:id/approvals', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  const form = await c.req.formData()
+  const decision = readString(form, 'decision').trim()
+  if (decision !== 'approve' && decision !== 'deny') {
+    return renderShow(c, conversation, { error: 'Choose approve or deny.' })
+  }
+
+  try {
+    await resumeParkedRun(conversation.id, decision)
+  } catch (error) {
+    return renderShow(c, conversation, {
+      error: `Could not resume: ${error instanceof Error ? error.message : String(error)}`,
+    })
+  }
+
+  return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// GET /conversations/:id/tools — per-conversation MCP server picker. Each
+// enabled server exposes its tools to the model for THIS conversation only.
+conversationRoutes.get('/conversations/:id/tools', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  const servers = await listMcpServersWithOverride(conversation.id)
+
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('conversations/tools', {
+    title: 'Tools',
+    conversation,
+    servers,
+  })
+})
+
+// POST /conversations/:id/tools — toggle one server's override for this
+// conversation. `enabled=on` turns it on; absent turns it off.
+conversationRoutes.post('/conversations/:id/tools', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
+  if (!conversation) return c.notFound()
+
+  const form = await c.req.formData()
+  const serverId = readString(form, 'mcp_server_id').trim()
+  const enabled = readString(form, 'enabled') === 'on'
+  if (serverId) {
+    await setConversationMcpOverride({
+      conversationId: conversation.id,
+      mcpServerId: serverId,
+      enabled,
+    })
+  }
+
+  return c.redirect(`/conversations/${conversation.id}/tools`)
 })
 
 // GET /conversations/:id/events — SSE: replay the run's events after

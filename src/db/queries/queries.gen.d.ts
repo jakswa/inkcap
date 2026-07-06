@@ -111,6 +111,110 @@ export interface IFindConversationMatchResult {
     updated_at: Date;
 }
 
+/** Result of query `CreateMcpServer`. */
+export interface ICreateMcpServerResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `GetMcpServerById`. */
+export interface IGetMcpServerByIdResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `ListMcpServers`. */
+export interface IListMcpServersResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `UpdateMcpServer`. */
+export interface IUpdateMcpServerResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `SetMcpServerEnabled`. */
+export interface ISetMcpServerEnabledResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `DeleteMcpServer`. */
+export interface IDeleteMcpServerResult {
+}
+
+/** Result of query `SetConversationMcpOverride`. */
+export interface ISetConversationMcpOverrideResult {
+    conversation_id: string;
+    mcp_server_id: string;
+    enabled: boolean;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `ListMcpServersWithOverride`. */
+export interface IListMcpServersWithOverrideResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+    override_enabled: boolean | null;
+}
+
+/** Result of query `ListEnabledMcpServersForConversation`. */
+export interface IListEnabledMcpServersForConversationResult {
+    id: string;
+    name: string;
+    url: string;
+    enabled: boolean;
+    auto_approve: boolean;
+    headers: unknown | null;
+    request_timeout_ms: number;
+    created_at: Date;
+    updated_at: Date;
+}
+
 /** Result of query `CreateMessage`. */
 export interface ICreateMessageResult {
     id: string;
@@ -122,6 +226,7 @@ export interface ICreateMessageResult {
     model: string | null;
     status: string;
     tool_calls: unknown | null;
+    tool_call_id: string | null;
     timings: unknown | null;
     created_at: Date;
 }
@@ -137,6 +242,7 @@ export interface IGetMessageByIdResult {
     model: string | null;
     status: string;
     tool_calls: unknown | null;
+    tool_call_id: string | null;
     timings: unknown | null;
     created_at: Date;
 }
@@ -219,6 +325,7 @@ export interface IGetActivePathResult {
     model: string | null;
     status: string | null;
     tool_calls: unknown | null;
+    tool_call_id: string | null;
     timings: unknown | null;
     created_at: Date | null;
 }
@@ -405,6 +512,12 @@ export interface IGetLatestRunForConversationResult {
     updated_at: Date;
 }
 
+/** Result of query `SetRunLeafMessage`. */
+export interface ISetRunLeafMessageResult {
+    id: string;
+    leaf_message_id: string | null;
+}
+
 /** Result of query `IncrementRunTurnCount`. */
 export interface IIncrementRunTurnCountResult {
     id: string;
@@ -423,6 +536,58 @@ export interface IListRunningRunsResult {
     seq: string;
     created_at: Date;
     updated_at: Date;
+}
+
+/** Result of query `CreateToolApproval`. */
+export interface ICreateToolApprovalResult {
+    id: string;
+    run_id: string;
+    message_id: string;
+    tool_call_id: string;
+    tool_name: string;
+    arguments: string;
+    decision: string;
+    created_at: Date;
+    decided_at: Date | null;
+}
+
+/** Result of query `ListPendingApprovalsForRun`. */
+export interface IListPendingApprovalsForRunResult {
+    id: string;
+    run_id: string;
+    message_id: string;
+    tool_call_id: string;
+    tool_name: string;
+    arguments: string;
+    decision: string;
+    created_at: Date;
+    decided_at: Date | null;
+}
+
+/** Result of query `ListApprovalsForRun`. */
+export interface IListApprovalsForRunResult {
+    id: string;
+    run_id: string;
+    message_id: string;
+    tool_call_id: string;
+    tool_name: string;
+    arguments: string;
+    decision: string;
+    created_at: Date;
+    decided_at: Date | null;
+}
+
+/** Result of query `DecideRunApprovals`. */
+export interface IDecideRunApprovalsResult {
+    id: string;
+    run_id: string;
+    message_id: string;
+    tool_call_id: string;
+    tool_name: string;
+    arguments: string;
+    decision: string;
+    created_at: Date;
+    decided_at: Date | null;
 }
 
 /** Result of query `GetUserById`. */
@@ -461,6 +626,15 @@ export interface Queries {
     DeleteConversation: IDeleteConversationResult;
     CreateImportedConversation: ICreateImportedConversationResult;
     FindConversationMatch: IFindConversationMatchResult;
+    CreateMcpServer: ICreateMcpServerResult;
+    GetMcpServerById: IGetMcpServerByIdResult;
+    ListMcpServers: IListMcpServersResult;
+    UpdateMcpServer: IUpdateMcpServerResult;
+    SetMcpServerEnabled: ISetMcpServerEnabledResult;
+    DeleteMcpServer: IDeleteMcpServerResult;
+    SetConversationMcpOverride: ISetConversationMcpOverrideResult;
+    ListMcpServersWithOverride: IListMcpServersWithOverrideResult;
+    ListEnabledMcpServersForConversation: IListEnabledMcpServersForConversationResult;
     CreateMessage: ICreateMessageResult;
     GetMessageById: IGetMessageByIdResult;
     AppendMessageDeltas: IAppendMessageDeltasResult;
@@ -485,8 +659,13 @@ export interface Queries {
     IncrementRunSeq: IIncrementRunSeqResult;
     GetRunningRunForConversation: IGetRunningRunForConversationResult;
     GetLatestRunForConversation: IGetLatestRunForConversationResult;
+    SetRunLeafMessage: ISetRunLeafMessageResult;
     IncrementRunTurnCount: IIncrementRunTurnCountResult;
     ListRunningRuns: IListRunningRunsResult;
+    CreateToolApproval: ICreateToolApprovalResult;
+    ListPendingApprovalsForRun: IListPendingApprovalsForRunResult;
+    ListApprovalsForRun: IListApprovalsForRunResult;
+    DecideRunApprovals: IDecideRunApprovalsResult;
     GetUserById: IGetUserByIdResult;
     GetUserByEmailNormalized: IGetUserByEmailNormalizedResult;
     CreateUser: ICreateUserResult;

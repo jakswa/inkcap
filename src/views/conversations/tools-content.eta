@@ -1,0 +1,45 @@
+<section class="grid gap-6">
+  <div class="grid gap-2">
+    <a class="text-sm text-indigo-600 underline-offset-4 hover:underline" href="/conversations/<%= it.conversation.id %>">← Back to conversation</a>
+    <h1 class="text-[clamp(1.75rem,5vw,3rem)] font-extrabold leading-tight tracking-[-0.04em]">Tools for this conversation</h1>
+    <p class="text-sm text-slate-500">Turn on an MCP server to expose its tools to the model in this conversation. Off by default.</p>
+  </div>
+
+  <% if (it.servers.length === 0) { %>
+    <div class="rounded-lg border border-slate-300 bg-white p-6 text-slate-500 shadow-sm shadow-slate-900/10">
+      No MCP servers registered. <a class="text-indigo-600 underline-offset-4 hover:underline" href="/mcp-servers/new">Add one</a> first.
+    </div>
+  <% } %>
+
+  <div class="grid gap-3">
+    <% it.servers.forEach((server) => { %>
+      <article class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-300 bg-white p-4 shadow-sm shadow-slate-900/10">
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h2 class="text-base font-bold"><%= server.name %></h2>
+            <% if (!server.enabled) { %>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">Globally disabled</span>
+            <% } %>
+            <% if (server.auto_approve) { %>
+              <span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-amber-700">Auto-approve</span>
+            <% } %>
+          </div>
+          <p class="mb-0 mt-1 text-sm text-slate-500"><%= server.url %></p>
+        </div>
+
+        <% if (server.override_enabled) { %>
+          <form method="post" action="/conversations/<%= it.conversation.id %>/tools">
+            <input type="hidden" name="mcp_server_id" value="<%= server.id %>">
+            <button class="cursor-pointer rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700 hover:bg-emerald-100" type="submit">On — turn off</button>
+          </form>
+        <% } else { %>
+          <form method="post" action="/conversations/<%= it.conversation.id %>/tools">
+            <input type="hidden" name="mcp_server_id" value="<%= server.id %>">
+            <input type="hidden" name="enabled" value="on">
+            <button class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 hover:bg-indigo-50" type="submit">Off — turn on</button>
+          </form>
+        <% } %>
+      </article>
+    <% }) %>
+  </div>
+</section>

@@ -4,12 +4,19 @@
 // deltas persist to the message row on a debounce, ordered events persist to
 // run_events for replay, and zero SSE subscribers changes nothing.
 //
-// Stopping points (M3): completion finished (message complete, run done),
-// provider terminal error (partial kept, message interrupted, run error),
-// provider stall — no bytes for the watchdog window (treated as a terminal
-// provider error), cancel (partial kept, run cancelled), turn budget
-// exhausted (single-turn for now — the M6 SEAM in driveRun is where tool
-// turns will extend the loop).
+// Stopping points: completion finished with no tool calls (message complete,
+// run done), a tool call requires approval (run parks in waiting_approval), the
+// tool-turn budget is exhausted (run error with a budget marker), provider
+// terminal error (partial kept, message interrupted, run error), provider stall
+// — no bytes for the watchdog window (treated as a terminal provider error), or
+// cancel (partial kept, run cancelled).
+//
+// M6 tool loop: an assistant turn that ends with tool_calls seals that message
+// (complete, tool_calls kept) and then either executes the tools immediately
+// (every owning server is auto_approve) or parks the run in waiting_approval
+// for a human approve/deny decision from the conversation page. Executing a
+// tool inserts a role='tool' message keyed by tool_call_id, appends it to the
+// running context, opens the next streaming assistant message, and loops.
 
 import { eta } from '../middleware/render'
 import { toRenderable } from '../utils/message-view'
@@ -27,9 +34,11 @@ import {
 } from '../db/queries/messages'
 import {
   createRun,
+  getLatestRunForConversation,
   getRunningRunForConversation,
   incrementRunTurnCount,
   listRunningRuns,
+  setRunLeafMessage,
   setRunStatus,
 } from '../db/queries/runs'
 import {
@@ -37,6 +46,18 @@ import {
   insertRunEvent,
   listRunEventsAfter,
 } from '../db/queries/run-events'
+import { listEnabledMcpServersForConversation } from '../db/queries/mcp-servers'
+import {
+  createToolApproval,
+  decideRunApprovals,
+  listApprovalsForRun,
+} from '../db/queries/tool-approvals'
+import {
+  callTool,
+  gatherTools,
+  type McpServerConfig,
+  type OpenAiTool,
+} from './mcp-client'
 import {
   DEFAULT_STALL_TIMEOUT_MS,
   streamChat,
@@ -55,7 +76,14 @@ import {
 const FLUSH_MS = 300
 const FLUSH_TOKENS = 24
 
-const DEFAULT_MAX_TURNS = 1
+// Default tool-turn budget: how many assistant turns may end with tool_calls
+// (and drive another completion) before the run parks. A turn that ends WITHOUT
+// tool calls is the normal end and never consumes budget.
+const DEFAULT_MAX_TURNS = 10
+
+// Synthetic tool-result content for a denied call (spec §A.5): fed back to the
+// model as if it were the tool's output so the loop keeps moving.
+const DENIAL_RESULT = 'Tool execution was denied by the user.'
 
 // Stall watchdog for provider streams: a run may never wait on a silent
 // provider longer than this — the stream is torn down and the run parks as
@@ -159,10 +187,14 @@ type PathRow = {
   role: string | null
   content: string | null
   reasoning_content: string | null
+  tool_calls: unknown
+  tool_call_id: string | null
 }
 
 // Map the active path (root-first) to OpenAI chat messages: drop empty system
-// messages (spec §1.2) and forward reasoning_content on assistant turns.
+// messages (spec §1.2), forward reasoning_content on assistant turns, carry an
+// assistant turn's tool_calls, and key tool messages by tool_call_id so the
+// list stays OpenAI-well-formed for the next completion turn.
 function toChatMessages(path: PathRow[]): ChatMessage[] {
   const messages: ChatMessage[] = []
   for (const row of path) {
@@ -170,12 +202,39 @@ function toChatMessages(path: PathRow[]): ChatMessage[] {
     const content = row.content ?? ''
     if (role === 'system' && content.trim().length === 0) continue
     const message: ChatMessage = { role, content }
-    if (role === 'assistant' && row.reasoning_content) {
-      message.reasoning_content = row.reasoning_content
+    if (role === 'assistant') {
+      if (row.reasoning_content) message.reasoning_content = row.reasoning_content
+      if (Array.isArray(row.tool_calls) && row.tool_calls.length > 0) {
+        message.tool_calls = row.tool_calls
+      }
+    }
+    if (role === 'tool' && row.tool_call_id) {
+      message.tool_call_id = row.tool_call_id
     }
     messages.push(message)
   }
   return messages
+}
+
+// Normalized OpenAI tool call: guaranteed id/type/function.name/arguments so we
+// can persist it, key approvals/tool messages by id, and re-send it verbatim.
+interface NormalizedToolCall {
+  id: string
+  type: 'function'
+  function: { name: string; arguments: string }
+}
+
+// Ensure every streamed tool call has an id (synth `tool_${i}`), a type, and a
+// function name/arguments (spec §B.3 normalize step).
+function normalizeToolCalls(calls: ToolCall[]): NormalizedToolCall[] {
+  return calls.map((call, index) => ({
+    id: call.id && call.id.length > 0 ? call.id : `tool_${index}`,
+    type: 'function',
+    function: {
+      name: call.function?.name ?? '',
+      arguments: call.function?.arguments ?? '{}',
+    },
+  }))
 }
 
 // Debounced persistence of stream deltas (see D2 above). add() buffers;
@@ -251,6 +310,7 @@ async function streamTurn(
   model: string | null,
   history: ChatMessage[],
   stallTimeoutMs: number,
+  tools: unknown[],
 ): Promise<TurnResult> {
   const result: TurnResult = {
     toolCalls: [],
@@ -266,6 +326,7 @@ async function streamTurn(
       history,
       handle.abort.signal,
       stallTimeoutMs,
+      tools,
     )) {
       switch (delta.kind) {
         case 'content':
@@ -324,35 +385,247 @@ async function finishRun(
   })
 }
 
+// Everything the tool loop needs beyond the handle. Bundled so the loop, the
+// inline auto-approve path, and the resume-after-park path all share one shape.
+interface RunContext {
+  provider: ProviderConfig
+  model: string | null
+  history: ChatMessage[]
+  maxTurns: number
+  stallTimeoutMs: number
+  tools: OpenAiTool[]
+  servers: McpServerConfig[]
+  toolIndex: Map<string, string>
+}
+
+// One tool call to run during a batch: its identity, args, and the human (or
+// auto) decision. `denied` short-circuits to the synthetic denial result.
+interface ToolExecution {
+  toolCallId: string
+  toolName: string
+  arguments: string
+  decision: 'approved' | 'denied'
+}
+
+function isAutoApproved(name: string, ctx: RunContext): boolean {
+  const serverId = ctx.toolIndex.get(name)
+  const server = serverId ? ctx.servers.find((s) => s.id === serverId) : undefined
+  return server?.auto_approve === true
+}
+
+// Seal the assistant turn that asked for tools: persist its content + the
+// normalized tool_calls, emit message-final so a live island swaps in the
+// rendered node, and append it to the running context.
+async function sealToolCallTurn(
+  handle: RunHandle,
+  turn: TurnResult,
+  calls: NormalizedToolCall[],
+) {
+  await finalizeMessage({
+    id: handle.messageId,
+    status: 'complete',
+    model: turn.model ?? null,
+    timings: turn.timings ?? null,
+    toolCalls: calls,
+  })
+  const message = await getMessageById(handle.messageId)
+  await emitEvent(handle.runId, 'message-final', {
+    messageId: handle.messageId,
+    status: 'complete',
+    html: await renderMessageHtml(message),
+  })
+  return message
+}
+
+// Execute a batch of tool calls in issue order, then open the next streaming
+// assistant message. Each result becomes a role='tool' message (keyed by
+// tool_call_id) on the active path and in `ctx.history`; a failed/denied call
+// still yields a tool message so the model can react and the loop continues.
+// Mutates handle.messageId to the fresh assistant message and advances the
+// run's leaf pointer + conversation curr_node.
+async function executeToolBatch(
+  handle: RunHandle,
+  ctx: RunContext,
+  batch: ToolExecution[],
+) {
+  let parentId = handle.messageId
+  for (const item of batch) {
+    let resultText: string
+    if (item.decision === 'denied') {
+      resultText = DENIAL_RESULT
+    } else {
+      let args: Record<string, unknown> = {}
+      try {
+        const parsed = JSON.parse(item.arguments || '{}')
+        if (parsed && typeof parsed === 'object') args = parsed as Record<string, unknown>
+      } catch {
+        // Malformed arguments — call with an empty object, let the tool complain.
+      }
+      try {
+        const result = await callTool(ctx.servers, ctx.toolIndex, item.toolName, args)
+        resultText = result.content
+      } catch (error) {
+        resultText = `Tool execution failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      }
+    }
+
+    const toolMessage = await createMessage({
+      conversationId: handle.conversationId,
+      parentId,
+      role: 'tool',
+      content: resultText,
+      toolCallId: item.toolCallId,
+    })
+    await setConversationCurrNode({
+      id: handle.conversationId,
+      currNode: toolMessage!.id,
+    })
+    parentId = toolMessage!.id
+    ctx.history.push({
+      role: 'tool',
+      tool_call_id: item.toolCallId,
+      content: resultText,
+    })
+
+    // Mirror the assistant lifecycle so a live island can append the tool
+    // result and replay stays complete.
+    await emitEvent(handle.runId, 'message-start', {
+      messageId: toolMessage!.id,
+      role: 'tool',
+    })
+    await emitEvent(handle.runId, 'message-final', {
+      messageId: toolMessage!.id,
+      status: 'complete',
+      html: await renderMessageHtml(toolMessage),
+    })
+  }
+
+  // Open the next streaming assistant message the loop will generate into.
+  const assistant = await createMessage({
+    conversationId: handle.conversationId,
+    parentId,
+    role: 'assistant',
+    content: '',
+    status: 'streaming',
+    model: ctx.model,
+  })
+  handle.messageId = assistant!.id
+  await setConversationCurrNode({
+    id: handle.conversationId,
+    currNode: assistant!.id,
+  })
+  await setRunLeafMessage({ id: handle.runId, leafMessageId: assistant!.id })
+  await emitEvent(handle.runId, 'message-start', {
+    messageId: assistant!.id,
+    role: 'assistant',
+  })
+}
+
+// Park the run pending a human decision: record one tool_approvals row per
+// call, flip the run to waiting_approval, and emit the run-status event so the
+// M4 island shows "waiting for approval" live. The assistant message is already
+// sealed (complete, tool_calls kept) by the caller.
+async function parkForApproval(
+  handle: RunHandle,
+  calls: NormalizedToolCall[],
+) {
+  for (const call of calls) {
+    await createToolApproval({
+      runId: handle.runId,
+      messageId: handle.messageId,
+      toolCallId: call.id,
+      toolName: call.function.name,
+      arguments: call.function.arguments,
+    })
+  }
+  await setRunStatus({ id: handle.runId, status: 'waiting_approval', error: null })
+  await emitEvent(handle.runId, 'run-status', {
+    status: 'waiting_approval',
+    error: null,
+  })
+}
+
 // The detached completion loop. Never throws (a runner crash must not take
-// the process down); all stopping points funnel through finishRun.
+// the process down); all stopping points funnel through finishRun / a park.
+// `startTurns` seeds the tool-turn counter so a resumed run keeps counting
+// toward the same budget across a park/restart.
 async function driveRun(
   handle: RunHandle,
-  provider: ProviderConfig,
-  model: string | null,
-  history: ChatMessage[],
-  maxTurns: number,
-  stallTimeoutMs: number,
+  ctx: RunContext,
+  options: { startTurns?: number; resume?: ToolExecution[] } = {},
 ) {
   try {
-    let turns = 0
-    let turn: TurnResult
+    let turns = options.startTurns ?? 0
+
+    // Resume-after-park: run the approved/denied batch, then fall into the loop
+    // streaming the freshly opened assistant message.
+    if (options.resume) {
+      await executeToolBatch(handle, ctx, options.resume)
+    }
+
     for (;;) {
-      turn = await streamTurn(handle, provider, model, history, stallTimeoutMs)
-      turns += 1
+      const turn = await streamTurn(
+        handle,
+        ctx.provider,
+        ctx.model,
+        ctx.history,
+        ctx.stallTimeoutMs,
+        ctx.tools,
+      )
       await incrementRunTurnCount(handle.runId)
 
-      if (turn.toolCalls.length > 0 && turns < maxTurns) {
-        // M6 SEAM: execute the tool calls here, append the tool-result
-        // messages to `history` and the message tree, create the next
-        // status=streaming assistant message (updating handle.messageId and
-        // runs.leaf_message_id), then `continue` the loop. With the M3
-        // single-turn budget this branch is unreachable.
-        continue
+      if (turn.toolCalls.length === 0) {
+        // Normal end: a turn with no tool calls is the final answer.
+        await finishRun(handle, 'done', null, turn)
+        return
       }
-      break
+
+      // Tool-calling turn: seal it and decide how to proceed.
+      const calls = normalizeToolCalls(turn.toolCalls)
+      const sealed = await sealToolCallTurn(handle, turn, calls)
+      ctx.history.push({
+        role: 'assistant',
+        content: (sealed?.content as string | undefined) ?? '',
+        tool_calls: calls,
+      })
+      turns += 1
+
+      if (turns >= ctx.maxTurns) {
+        // Budget exhausted: park the run with a budget marker in `error`. The
+        // sealed assistant message (with its unanswered tool_calls) stays on
+        // the path as the durable record; the user can start a fresh turn.
+        await setRunStatus({
+          id: handle.runId,
+          status: 'error',
+          error: `Tool turn budget exhausted (${ctx.maxTurns} turns).`,
+        })
+        await emitEvent(handle.runId, 'run-status', {
+          status: 'error',
+          error: `Tool turn budget exhausted (${ctx.maxTurns} turns).`,
+        })
+        return
+      }
+
+      const needsApproval = calls.some((call) => !isAutoApproved(call.function.name, ctx))
+      if (needsApproval) {
+        await parkForApproval(handle, calls)
+        return
+      }
+
+      // Every owning server is auto_approve: run the batch inline and loop.
+      await executeToolBatch(
+        handle,
+        ctx,
+        calls.map((call) => ({
+          toolCallId: call.id,
+          toolName: call.function.name,
+          arguments: call.function.arguments,
+          decision: 'approved' as const,
+        })),
+      )
     }
-    await finishRun(handle, 'done', null, turn)
   } catch (error) {
     const aborted =
       handle.cancelled ||
@@ -381,7 +654,7 @@ async function driveRun(
 // for tests); production callers rely on the env-backed default.
 export async function startRun(
   conversationId: string,
-  options: { stallTimeoutMs?: number } = {},
+  options: { stallTimeoutMs?: number; maxTurns?: number } = {},
 ) {
   if (activeRuns.has(conversationId)) {
     throw new Error('A reply is already streaming for this conversation.')
@@ -440,16 +713,139 @@ export async function startRun(
       role: 'assistant',
     })
 
-    void driveRun(
-      handle,
-      { base_url: provider.base_url, api_key: provider.api_key },
-      conversation.model,
+    // Gather the tools exposed to the model for this conversation (connecting to
+    // each enabled MCP server, best-effort). Empty when no server is enabled —
+    // the request then carries no `tools` and the run behaves exactly as M3.
+    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
+
+    const ctx: RunContext = {
+      provider: { base_url: provider.base_url, api_key: provider.api_key },
+      model: conversation.model,
       history,
-      DEFAULT_MAX_TURNS,
-      options.stallTimeoutMs ?? defaultStallTimeoutMs(),
-    )
+      maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+      stallTimeoutMs: options.stallTimeoutMs ?? defaultStallTimeoutMs(),
+      tools,
+      servers,
+      toolIndex,
+    }
+    void driveRun(handle, ctx)
 
     return { runId: run!.id, messageId: assistantMessage!.id }
+  } catch (error) {
+    activeRuns.delete(conversationId)
+    throw error
+  }
+}
+
+// Connect to the conversation's enabled MCP servers and collect the OpenAI
+// tool definitions + a name→server routing index. Best-effort (one dead server
+// never blocks the others); returns empty when nothing is enabled.
+async function buildToolContext(conversationId: string): Promise<{
+  servers: McpServerConfig[]
+  tools: OpenAiTool[]
+  toolIndex: Map<string, string>
+}> {
+  const rows = await listEnabledMcpServersForConversation(conversationId)
+  const servers: McpServerConfig[] = rows.map((row) => ({
+    id: row.id!,
+    name: row.name!,
+    url: row.url!,
+    headers: row.headers,
+    request_timeout_ms: row.request_timeout_ms,
+    auto_approve: row.auto_approve,
+  }))
+  if (servers.length === 0) {
+    return { servers, tools: [], toolIndex: new Map() }
+  }
+  const { tools, toolIndex } = await gatherTools(servers)
+  return { servers, tools, toolIndex }
+}
+
+// Resume a run parked in waiting_approval after the user approves or denies the
+// pending tool call(s). Records the decision on every pending approval row,
+// then re-launches the detached loop: the batch runs (approved calls execute,
+// denied calls yield the synthetic denial result), a fresh assistant turn
+// streams, and the loop continues. Throws (before writing) when there is no
+// pending approval, the conversation is already running, or the provider is
+// gone/disabled — the caller surfaces the message.
+export async function resumeParkedRun(
+  conversationId: string,
+  decision: 'approve' | 'deny',
+  options: { stallTimeoutMs?: number; maxTurns?: number } = {},
+) {
+  if (activeRuns.has(conversationId)) {
+    throw new Error('A reply is already streaming for this conversation.')
+  }
+  const handle: RunHandle = {
+    runId: '',
+    conversationId,
+    messageId: '',
+    abort: new AbortController(),
+    cancelled: false,
+  }
+  activeRuns.set(conversationId, handle)
+
+  try {
+    const run = await getLatestRunForConversation(conversationId)
+    if (!run || run.status !== 'waiting_approval' || !run.leaf_message_id) {
+      throw new Error('There is no pending tool approval to act on.')
+    }
+
+    const conversation = await getConversationById(conversationId)
+    if (!conversation) throw new Error('Conversation not found.')
+
+    const provider = conversation.provider_id
+      ? await getProviderById(conversation.provider_id)
+      : null
+    if (!provider) {
+      throw new Error('This conversation has no provider. Assign one before sending.')
+    }
+    if (!provider.enabled) {
+      throw new Error(`Provider "${provider.name}" is disabled. Enable it before sending.`)
+    }
+
+    handle.runId = run.id
+    handle.messageId = run.leaf_message_id
+
+    // Record the decision, then read every approval row back in issue order.
+    await decideRunApprovals({
+      runId: run.id,
+      decision: decision === 'approve' ? 'approved' : 'denied',
+    })
+    const approvals = await listApprovalsForRun(run.id)
+    const batch: ToolExecution[] = approvals.map((row) => ({
+      toolCallId: row.tool_call_id!,
+      toolName: row.tool_name!,
+      arguments: row.arguments ?? '',
+      decision: (row.decision as 'approved' | 'denied') ?? 'denied',
+    }))
+
+    // Rebuild the running context from the tree (up to and including the sealed
+    // assistant message that holds the tool_calls) so a resume works even in a
+    // fresh process after a restart.
+    const path = await getActivePath(run.leaf_message_id)
+    const history = toChatMessages(path as PathRow[])
+    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
+
+    await setRunStatus({ id: run.id, status: 'running', error: null })
+    await emitEvent(run.id, 'run-status', { status: 'running', error: null })
+
+    const ctx: RunContext = {
+      provider: { base_url: provider.base_url, api_key: provider.api_key },
+      model: conversation.model,
+      history,
+      maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
+      stallTimeoutMs: options.stallTimeoutMs ?? defaultStallTimeoutMs(),
+      tools,
+      servers,
+      toolIndex,
+    }
+    void driveRun(handle, ctx, {
+      startTurns: Number(run.turn_count ?? 0),
+      resume: batch,
+    })
+
+    return { runId: run.id }
   } catch (error) {
     activeRuns.delete(conversationId)
     throw error

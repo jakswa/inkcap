@@ -71,6 +71,36 @@
     seen = {};
     es = new EventSource(r.getAttribute('data-events'));
 
+    // Mid-run message creation (M6 tool loop): tool results and follow-up
+    // assistant turns are born while we watch. Drop a streaming placeholder
+    // so deltas have a home; message-final swaps in the settled render.
+    es.addEventListener('message-start', function (e) {
+      var d = JSON.parse(e.data);
+      if (find(d.messageId)) return;
+      var r = root();
+      var t = r && r.querySelector('[data-transcript]');
+      if (!t) return;
+      var empty = t.querySelector('[data-empty]');
+      if (empty) empty.remove();
+      var article = document.createElement('article');
+      article.className =
+        'group grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5 lg:mr-10';
+      article.setAttribute('data-message-id', d.messageId);
+      article.setAttribute('data-role', d.role || 'assistant');
+      article.setAttribute('data-status', 'streaming');
+      article.innerHTML =
+        '<p class="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">' +
+        '<span data-role-label></span>' +
+        '<span class="font-semibold normal-case tracking-normal text-slate-400" data-streaming-marker>streaming…</span>' +
+        '</p>' +
+        '<pre class="m-0 hidden whitespace-pre-wrap break-words font-body text-sm text-slate-500 [&:not(:empty)]:block" data-reasoning></pre>' +
+        '<pre class="m-0 whitespace-pre-wrap break-words font-body text-slate-900" data-content></pre>';
+      article.querySelector('[data-role-label]').textContent = d.role || 'assistant';
+      t.appendChild(article);
+      seen[d.messageId] = true; // born empty — nothing to clear on first delta
+      if (pinned) scrollToBottom();
+    });
+
     es.addEventListener('delta', function (e) {
       var d = JSON.parse(e.data);
       var node = find(d.messageId);
@@ -94,13 +124,32 @@
       var node = find(d.messageId);
       if (node) {
         node.outerHTML = d.html;
-        if (pinned) scrollToBottom();
+      } else {
+        // A message we never saw start (replay gap): append the settled render.
+        var r = root();
+        var t = r && r.querySelector('[data-transcript]');
+        if (t) t.insertAdjacentHTML('beforeend', d.html);
       }
+      if (pinned) scrollToBottom();
     });
 
     es.addEventListener('run-status', function (e) {
       var d = JSON.parse(e.data);
       if (d.status === 'running') return;
+      if (d.status === 'waiting_approval') {
+        // Tool calls parked for a human decision: pull the server's fresh
+        // render so the approval card (boring SSR CRUD) shows up live.
+        closeStream();
+        fetch(location.href)
+          .then(function (res) {
+            return res.text();
+          })
+          .then(swap)
+          .catch(function () {
+            location.reload();
+          });
+        return;
+      }
       closeStream();
       var r = root();
       if (r) r.removeAttribute('data-active');

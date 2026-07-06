@@ -93,6 +93,19 @@ export async function getLatestRunForConversation(conversationId: string) {
   return run
 }
 
+// Advance the run's leaf pointer as the tool loop creates each next assistant
+// message. Recovery/replay use leaf_message_id to find the message to seal.
+export async function setRunLeafMessage(input: { id: string; leafMessageId: string }) {
+  const [run] = await sql.SetRunLeafMessage`
+    UPDATE runs
+    SET leaf_message_id = ${input.leafMessageId}, updated_at = now()
+    WHERE id = ${input.id}
+    RETURNING id, leaf_message_id
+  `
+
+  return run
+}
+
 // One completed provider turn. Kept separate from setRunStatus so the M6 tool
 // loop can bump it once per turn without touching status.
 export async function incrementRunTurnCount(id: string) {

@@ -9,6 +9,12 @@
 //   fail                — emit `after` tokens, then close the stream WITHOUT
 //                         the [DONE] sentinel (a mid-stream provider failure).
 //   error500            — immediate HTTP 500 with a JSON error body.
+//   tools               — emit ONE tool call (`tool` name, args {"text":"hi"})
+//                         until a role:'tool' result appears in the request,
+//                         then emit a final content answer. Drives the M6 tool
+//                         loop (approve/deny single cycle).
+//   toolloop            — ALWAYS emit a tool call, every turn, regardless of
+//                         tool results. Drives the turn-budget stop.
 //
 // Mode selection, in priority order:
 //   1. query params:  POST /v1/chat/completions?mode=drip&tokens=8&interval=5
@@ -24,11 +30,12 @@
 // src/tasks/mock-provider.ts [port]` runs it standalone.
 
 export interface MockMode {
-  mode: 'instant' | 'drip' | 'hang' | 'fail' | 'error500'
+  mode: 'instant' | 'drip' | 'hang' | 'fail' | 'error500' | 'tools' | 'toolloop'
   tokens: number
   interval: number
   after: number
   reasoning: number
+  tool: string
 }
 
 const DEFAULTS: MockMode = {
@@ -37,6 +44,7 @@ const DEFAULTS: MockMode = {
   interval: 5,
   after: 3,
   reasoning: 0,
+  tool: 'echo',
 }
 
 export function mockToken(index: number) {
@@ -63,7 +71,15 @@ function parseSegment(segment: string): Partial<MockMode> {
 function normalize(raw: Record<string, string | null | undefined>): Partial<MockMode> {
   const out: Partial<MockMode> = {}
   const mode = raw['mode']
-  if (mode === 'instant' || mode === 'drip' || mode === 'hang' || mode === 'fail' || mode === 'error500') {
+  if (
+    mode === 'instant' ||
+    mode === 'drip' ||
+    mode === 'hang' ||
+    mode === 'fail' ||
+    mode === 'error500' ||
+    mode === 'tools' ||
+    mode === 'toolloop'
+  ) {
     out.mode = mode
   }
   for (const key of ['tokens', 'interval', 'after', 'reasoning'] as const) {
@@ -72,6 +88,7 @@ function normalize(raw: Record<string, string | null | undefined>): Partial<Mock
     const value = Number(rawValue)
     if (Number.isFinite(value) && value >= 0) out[key] = value
   }
+  if (raw['tool']) out.tool = raw['tool']
   return out
 }
 
@@ -102,6 +119,25 @@ function reasoningChunk(text: string) {
   return sseLine({ choices: [{ delta: { reasoning_content: text } }] })
 }
 
+function toolCallChunk(name: string) {
+  return sseLine({
+    choices: [
+      {
+        delta: {
+          tool_calls: [
+            {
+              index: 0,
+              id: 'call_mock_1',
+              type: 'function',
+              function: { name, arguments: '{"text":"hi"}' },
+            },
+          ],
+        },
+      },
+    ],
+  })
+}
+
 function finishChunk(predicted: number) {
   return sseLine({
     choices: [{ delta: {}, finish_reason: 'stop' }],
@@ -122,6 +158,20 @@ export function startMockProvider(port = 0) {
 
       const mode = resolveMode(url, req.headers, match[1])
 
+      // Tool modes decide based on whether the running message list already
+      // carries a tool result (i.e. this is a follow-up turn).
+      let hasToolResult = false
+      if (mode.mode === 'tools' || mode.mode === 'toolloop') {
+        try {
+          const reqBody = (await req.json()) as { messages?: Array<{ role?: string }> }
+          hasToolResult =
+            Array.isArray(reqBody.messages) &&
+            reqBody.messages.some((m) => m?.role === 'tool')
+        } catch {
+          // Non-JSON body — treat as first turn.
+        }
+      }
+
       if (mode.mode === 'error500') {
         return Response.json(
           { error: { code: 500, message: 'mock provider exploded', type: 'server_error' } },
@@ -137,6 +187,23 @@ export function startMockProvider(port = 0) {
           try {
             // First chunk carries id + model (spec §2.2 sample sequence).
             send(sseLine({ id: 'mock-cmpl-1', model: 'mock-model', choices: [{ delta: { content: '' } }] }))
+
+            // Tool call turn: emit one tool call and finish with tool_calls.
+            if (mode.mode === 'toolloop' || (mode.mode === 'tools' && !hasToolResult)) {
+              send(toolCallChunk(mode.tool))
+              send(sseLine({ choices: [{ delta: {}, finish_reason: 'tool_calls' }] }))
+              send('data: [DONE]\n\n')
+              controller.close()
+              return
+            }
+            // Follow-up turn after tool results: emit the final answer.
+            if (mode.mode === 'tools') {
+              send(contentChunk(mockContent(mode.tokens)))
+              send(finishChunk(mode.tokens))
+              send('data: [DONE]\n\n')
+              controller.close()
+              return
+            }
 
             if (mode.mode === 'instant') {
               send(contentChunk(mockContent(mode.tokens)))

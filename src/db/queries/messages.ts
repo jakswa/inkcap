@@ -10,12 +10,13 @@ export async function createMessage(input: {
   model?: string | null
   status?: 'complete' | 'streaming' | 'interrupted'
   toolCalls?: unknown
+  toolCallId?: string | null
   timings?: unknown
 }) {
   const [message] = await sql.CreateMessage`
     INSERT INTO messages (
       id, conversation_id, parent_id, role, content, reasoning_content,
-      model, status, tool_calls, timings
+      model, status, tool_calls, tool_call_id, timings
     )
     VALUES (
       ${randomUUIDv7()},
@@ -27,10 +28,11 @@ export async function createMessage(input: {
       ${input.model ?? null},
       ${input.status ?? 'complete'},
       ${input.toolCalls ?? null},
+      ${input.toolCallId ?? null},
       ${input.timings ?? null}
     )
     RETURNING id, conversation_id, parent_id, role, content, reasoning_content,
-              model, status, tool_calls, timings, created_at
+              model, status, tool_calls, tool_call_id, timings, created_at
   `
 
   return message
@@ -39,7 +41,7 @@ export async function createMessage(input: {
 export async function getMessageById(id: string) {
   const [message] = await sql.GetMessageById`
     SELECT id, conversation_id, parent_id, role, content, reasoning_content,
-           model, status, tool_calls, timings, created_at
+           model, status, tool_calls, tool_call_id, timings, created_at
     FROM messages
     WHERE id = ${id}
   `
@@ -168,7 +170,7 @@ export async function getActivePath(leafId: string) {
       JOIN active_path ap ON m.id = ap.parent_id
     )
     SELECT id, conversation_id, parent_id, role, content, reasoning_content,
-           model, status, tool_calls, timings, created_at
+           model, status, tool_calls, tool_call_id, timings, created_at
     FROM active_path
     ORDER BY depth DESC
   `
