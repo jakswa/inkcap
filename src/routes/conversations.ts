@@ -7,6 +7,7 @@ import {
   getConversationById,
   listConversationsForUser,
   setConversationCurrNode,
+  updateConversationModelSettings,
 } from '../db/queries/conversations'
 import { getProviderById, listProviders } from '../db/queries/providers'
 import {
@@ -23,6 +24,7 @@ import {
   getRunningRunForConversation,
 } from '../db/queries/runs'
 import {
+  listMcpServers,
   listMcpServersWithOverride,
   setConversationMcpOverride,
 } from '../db/queries/mcp-servers'
@@ -38,6 +40,7 @@ import {
   type RunEventRecord,
 } from '../services/runner'
 import { readString } from '../utils/validation'
+import { uniqueModels } from '../utils/providers'
 import { toRenderable } from '../utils/message-view'
 import { relativeTime } from '../utils/relative-time'
 import {
@@ -50,6 +53,9 @@ export const conversationRoutes = new Hono()
 
 const maxTitleLength = 200
 const maxModelLength = 200
+const maxSystemPromptLength = 100_000
+const maxMessageLength = 100_000
+const validReasoningEfforts = new Set(['off', 'low', 'medium', 'high', 'max'])
 
 // Rows returned by getActivePath are typed all-nullable (recursive CTE), so we
 // narrow to the shape the transcript needs.
@@ -66,6 +72,97 @@ type PathMessage = {
 
 function requireUser(c: Context) {
   return c.var.user
+}
+
+function normalizeReasoningEffort(value: string): string {
+  return validReasoningEfforts.has(value) ? value : 'medium'
+}
+
+function readStringList(form: FormData, name: string): string[] {
+  return form
+    .getAll(name)
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+}
+
+function modelSupportsReasoning(
+  provider: { default_model: string | null; model_metadata?: unknown } | null,
+  model: string | null,
+): boolean {
+  const metadata = provider?.model_metadata
+  if (!metadata || typeof metadata !== 'object') return false
+  const selected = model || provider?.default_model
+  if (!selected) return false
+  const info = (metadata as Record<string, { reasoning?: unknown }>)[selected]
+  return info?.reasoning === true
+}
+
+function currentReasoningEffort(
+  provider: { default_model: string | null; model_metadata?: unknown } | null,
+  model: string | null,
+  value: string | null | undefined,
+) {
+  if (!modelSupportsReasoning(provider, model)) return 'off'
+  return normalizeReasoningEffort(value ?? 'medium')
+}
+
+function providerModelCapabilities(provider: { model_metadata?: unknown } | null) {
+  const metadata = provider?.model_metadata
+  if (!metadata || typeof metadata !== 'object') return {}
+  return metadata as Record<
+    string,
+    { capabilities?: string[]; reasoning?: boolean; contextSize?: number | null }
+  >
+}
+
+function modelControlData(input: {
+  providers: Array<{
+    id: string
+    name: string
+    default_model: string | null
+    models: string[] | null
+    model_metadata?: unknown
+  }>
+  selectedProviderId?: string | null
+  selectedModel?: string | null
+  selectedReasoning?: string | null
+  allowProviderSelect: boolean
+}) {
+  const selectedProvider =
+    input.providers.find((provider) => provider.id === input.selectedProviderId) ??
+    input.providers[0] ??
+    null
+  const selectedModel =
+    input.selectedModel || selectedProvider?.default_model || selectedProvider?.models?.[0] || null
+
+  return {
+    allowProviderSelect: input.allowProviderSelect,
+    selectedProviderId: selectedProvider?.id ?? null,
+    selectedModel,
+    selectedReasoning: currentReasoningEffort(
+      selectedProvider,
+      selectedModel,
+      input.selectedReasoning,
+    ),
+    modelSupportsReasoning: modelSupportsReasoning(selectedProvider, selectedModel),
+    providers: input.providers.map((provider) => {
+      const models = uniqueModels([
+        ...(provider.id === selectedProvider?.id && selectedModel ? [selectedModel] : []),
+        ...(provider.default_model ? [provider.default_model] : []),
+        ...(provider.models ?? []),
+      ])
+      const capabilities = providerModelCapabilities(provider)
+      return {
+        id: provider.id,
+        name: provider.name,
+        defaultModel: provider.default_model,
+        models: models.map((model) => ({
+          name: model,
+          reasoning: capabilities[model]?.reasoning === true,
+        })),
+      }
+    }),
+  }
 }
 
 // Load a conversation the current user owns, or null. Ownership is enforced so
@@ -91,13 +188,14 @@ async function renderShow(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const [provider, activeRun, sidebar, latestRun] = await Promise.all([
+  const [provider, activeRun, sidebar, latestRun, mcpServers] = await Promise.all([
     conversation.provider_id
       ? getProviderById(conversation.provider_id)
       : Promise.resolve(null),
     getRunningRunForConversation(conversation.id),
     listConversationsForUser(conversation.user_id),
     getLatestRunForConversation(conversation.id),
+    listMcpServersWithOverride(conversation.id),
   ])
 
   const path = conversation.curr_node
@@ -141,10 +239,20 @@ async function renderShow(
   )
 
   c.header('Cache-Control', 'private, no-store')
+  const selectedModel = conversation.model || provider?.default_model || null
   return c.var.render('conversations/show', {
-    title: conversation.title || 'untitled',
+    title: conversation.title || 'New chat',
+    shell: 'chat',
     conversation,
     provider,
+    modelControls: modelControlData({
+      providers: provider ? [provider] : [],
+      selectedProviderId: provider?.id,
+      selectedModel,
+      selectedReasoning: conversation.reasoning_effort,
+      allowProviderSelect: false,
+    }),
+    selectedModel,
     // Settled messages carry rendered-markdown HTML; the streaming leaf keeps
     // plain text for the island's live tail (contentHtml === null).
     messages,
@@ -156,38 +264,79 @@ async function renderShow(
     })),
     activeRun: activeRun ?? null,
     pendingApproval,
+    mcpServers,
+    enabledMcpServerCount: mcpServers.filter(
+      (server) => server.enabled && server.override_enabled,
+    ).length,
     error: options.error ?? null,
     draft: options.draft ?? '',
   })
 }
 
-// GET /conversations — list + new-conversation form.
+// Landing page render: the "Hello there" hero composer plus the chats
+// sidebar. Shared by GET and the POST validation-error path.
+async function renderLanding(
+  c: Context,
+  userId: string,
+  options: {
+    errors?: string[]
+    values?: Record<string, string>
+    selectedMcpServerIds?: string[]
+  } = {},
+) {
+  const [conversations, providers, mcpServers] = await Promise.all([
+    listConversationsForUser(userId),
+    listProviders(),
+    listMcpServers(),
+  ])
+  const selectedMcpServerIds = new Set(options.selectedMcpServerIds ?? [])
+
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('conversations/list', {
+    title: 'Chats',
+    shell: 'chat',
+    sidebar: conversations.map((row) => ({
+      id: row.id,
+      title: row.title,
+      updatedLabel: relativeTime(row.updated_at),
+      current: false,
+    })),
+    providers: providers.filter((p) => p.enabled),
+    mcpServers: mcpServers.map((server) => ({
+      ...server,
+      override_enabled: selectedMcpServerIds.has(server.id),
+    })),
+    modelControls: modelControlData({
+      providers: providers.filter((p) => p.enabled),
+      selectedProviderId: options.values?.providerId,
+      selectedModel: options.values?.model,
+      selectedReasoning: options.values?.reasoningEffort,
+      allowProviderSelect: true,
+    }),
+    errors: options.errors ?? [],
+    values: options.values ?? {},
+  })
+}
+
+// Derive a conversation title from the first message when none was given —
+// what llama-server's UI does, so a chat never shows up as "untitled".
+function titleFromContent(content: string): string | null {
+  const collapsed = content.replace(/\s+/g, ' ').trim()
+  if (!collapsed) return null
+  return collapsed.length > 64 ? `${collapsed.slice(0, 63).trimEnd()}…` : collapsed
+}
+
+// GET /conversations — the landing: hero composer + chats sidebar.
 conversationRoutes.get('/conversations', async (c) => {
   const user = requireUser(c)
   if (!user) return c.redirect('/login')
 
-  const [conversations, providers] = await Promise.all([
-    listConversationsForUser(user.id),
-    listProviders(),
-  ])
-  const enabledProviders = providers.filter((p) => p.enabled)
-  const providerNames = Object.fromEntries(providers.map((p) => [p.id, p.name]))
-
-  c.header('Cache-Control', 'private, no-store')
-  return c.var.render('conversations/list', {
-    title: 'Conversations',
-    conversations: conversations.map((row) => ({
-      ...row,
-      updatedLabel: relativeTime(row.updated_at),
-    })),
-    providerNames,
-    providers: enabledProviders,
-    errors: [],
-    values: {},
-  })
+  return renderLanding(c, user.id)
 })
 
-// POST /conversations — create a conversation and redirect to it.
+// POST /conversations — create a conversation and redirect to it. When the
+// hero composer carried a first message, save it and start the reply run too,
+// so "type and hit send" is the whole flow.
 conversationRoutes.post('/conversations', async (c) => {
   const user = requireUser(c)
   if (!user) return c.redirect('/login')
@@ -196,7 +345,10 @@ conversationRoutes.post('/conversations', async (c) => {
   const providerId = readString(form, 'providerId').trim()
   const title = readString(form, 'title').trim()
   const model = readString(form, 'model').trim()
+  const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
   const systemPrompt = readString(form, 'systemPrompt')
+  const content = readString(form, 'content').trim()
+  const selectedMcpServerIds = readStringList(form, 'enabled_mcp_server_id')
 
   const providers = await listProviders()
   const enabledProviders = providers.filter((p) => p.enabled)
@@ -210,38 +362,78 @@ conversationRoutes.post('/conversations', async (c) => {
   if (model.length > maxModelLength) {
     errors.push(`Model must be ${maxModelLength} characters or fewer`)
   }
+  if (systemPrompt.length > maxSystemPromptLength) {
+    errors.push(`System prompt must be ${maxSystemPromptLength} characters or fewer`)
+  }
+  if (content.length > maxMessageLength) {
+    errors.push(`Message must be ${maxMessageLength} characters or fewer`)
+  }
 
   if (errors.length > 0 || !provider) {
-    c.header('Cache-Control', 'private, no-store')
-    return c.var.render('conversations/list', {
-      title: 'Conversations',
-      conversations: (await listConversationsForUser(user.id)).map((row) => ({
-        ...row,
-        updatedLabel: relativeTime(row.updated_at),
-      })),
-      providerNames: Object.fromEntries(providers.map((p) => [p.id, p.name])),
-      providers: enabledProviders,
+    return renderLanding(c, user.id, {
       errors,
-      values: { title, model, systemPrompt, providerId },
+      values: { title, model, reasoningEffort, systemPrompt, providerId, content },
+      selectedMcpServerIds,
     })
   }
 
+  const selectedModel = model || provider.default_model || null
+
   const conversation = await createConversation({
     userId: user.id,
-    title: title || null,
+    title: title || titleFromContent(content),
     providerId: provider.id,
-    model: model || provider.default_model || null,
+    model: selectedModel,
+    reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,
   })
+
+  if (selectedMcpServerIds.length > 0) {
+    const validIds = new Set((await listMcpServers()).map((server) => server.id))
+    await Promise.all(
+      selectedMcpServerIds
+        .filter((id) => validIds.has(id))
+        .map((mcpServerId) =>
+          setConversationMcpOverride({
+            conversationId: conversation.id,
+            mcpServerId,
+            enabled: true,
+          }),
+        ),
+    )
+  }
 
   // A configured system prompt lives in the tree as the root message and
   // becomes curr_node, so the first user turn hangs off it (spec §1.2).
+  let parentId: string | null = null
   if (systemPrompt.trim().length > 0) {
     const systemMessage = await createMessage({
       conversationId: conversation.id,
       role: 'system',
       content: systemPrompt,
     })
+    parentId = systemMessage.id
     await setConversationCurrNode({ id: conversation.id, currNode: systemMessage.id })
+  }
+
+  // First message straight from the hero composer: durable user turn, then
+  // kick the run. A run that fails to start surfaces on the conversation page
+  // via ?error= — the message itself is already saved.
+  if (content.length > 0) {
+    const userMessage = await createMessage({
+      conversationId: conversation.id,
+      parentId,
+      role: 'user',
+      content,
+    })
+    await setConversationCurrNode({ id: conversation.id, currNode: userMessage.id })
+    try {
+      await startRun(conversation.id)
+    } catch (error) {
+      const reason = `Reply failed: ${error instanceof Error ? error.message : String(error)}`
+      return c.redirect(
+        `/conversations/${conversation.id}?error=${encodeURIComponent(reason)}`,
+      )
+    }
   }
 
   return c.redirect(`/conversations/${conversation.id}`)
@@ -265,7 +457,10 @@ conversationRoutes.get('/conversations/:id', async (c) => {
   const conversation = await loadOwnedConversation(user.id, c.req.param('id'))
   if (!conversation) return c.notFound()
 
-  return renderShow(c, conversation)
+  // ?error= carries a one-shot notice across the create-and-send redirect
+  // (e.g. the first run failed to start). Escaped by the template like any
+  // other error string.
+  return renderShow(c, conversation, { error: c.req.query('error') || undefined })
 })
 
 // POST /conversations/:id/messages — save the user turn, start a durable run,
@@ -280,9 +475,23 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
 
   const form = await c.req.formData()
   const content = readString(form, 'content').trim()
+  const model = readString(form, 'model').trim()
+  const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
 
   if (content.length === 0) {
     return renderShow(c, conversation, { error: 'Type a message before sending.' })
+  }
+  if (content.length > maxMessageLength) {
+    return renderShow(c, conversation, {
+      draft: content.slice(0, maxMessageLength),
+      error: `Message must be ${maxMessageLength} characters or fewer.`,
+    })
+  }
+  if (model.length > maxModelLength) {
+    return renderShow(c, conversation, {
+      draft: content,
+      error: `Model must be ${maxModelLength} characters or fewer.`,
+    })
   }
 
   // One run at a time per conversation; nothing is saved while one streams.
@@ -290,6 +499,13 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
     return renderShow(c, conversation, {
       draft: content,
       error: 'A reply is already streaming. Wait for it to finish or stop it first.',
+    })
+  }
+  const latestRun = await getLatestRunForConversation(conversation.id)
+  if (latestRun?.status === 'waiting_approval') {
+    return renderShow(c, conversation, {
+      draft: content,
+      error: 'A reply is waiting for tool approval. Approve, deny, or stop it first.',
     })
   }
 
@@ -312,11 +528,18 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
     })
   }
 
+  const selectedModel = model || provider.default_model || null
+  const updatedConversation = await updateConversationModelSettings({
+    id: conversation.id,
+    model: selectedModel,
+    reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,
+  })
+
   // Save the user message and advance curr_node so the turn is durable even if
   // the reply fails. parent is the current leaf (system/root message or null).
   const userMessage = await createMessage({
     conversationId: conversation.id,
-    parentId: conversation.curr_node,
+    parentId: updatedConversation.curr_node,
     role: 'user',
     content,
   })
@@ -396,6 +619,11 @@ conversationRoutes.post('/conversations/:id/messages/:messageId/edit', async (c)
   const content = readString(form, 'content').trim()
   if (content.length === 0) {
     return renderShow(c, conversation, { error: 'Type a message before saving.' })
+  }
+  if (content.length > maxMessageLength) {
+    return renderShow(c, conversation, {
+      error: `Message must be ${maxMessageLength} characters or fewer.`,
+    })
   }
 
   const preflight = await runPreflightError(conversation)
@@ -628,16 +856,33 @@ conversationRoutes.post('/conversations/:id/tools', async (c) => {
   if (!conversation) return c.notFound()
 
   const form = await c.req.formData()
-  const serverId = readString(form, 'mcp_server_id').trim()
-  const enabled = readString(form, 'enabled') === 'on'
-  if (serverId) {
-    await setConversationMcpOverride({
-      conversationId: conversation.id,
-      mcpServerId: serverId,
-      enabled,
-    })
+  const serverIds = readStringList(form, 'mcp_server_id')
+  if (serverIds.length > 1 || form.has('enabled_mcp_server_id')) {
+    const enabledIds = new Set(readStringList(form, 'enabled_mcp_server_id'))
+    await Promise.all(
+      serverIds.map((mcpServerId) =>
+        setConversationMcpOverride({
+          conversationId: conversation.id,
+          mcpServerId,
+          enabled: enabledIds.has(mcpServerId),
+        }),
+      ),
+    )
+  } else {
+    const serverId = serverIds[0] ?? ''
+    const enabled = readString(form, 'enabled') === 'on'
+    if (serverId) {
+      await setConversationMcpOverride({
+        conversationId: conversation.id,
+        mcpServerId: serverId,
+        enabled,
+      })
+    }
   }
 
+  if (readString(form, 'redirect_to') === 'conversation') {
+    return c.redirect(`/conversations/${conversation.id}`)
+  }
   return c.redirect(`/conversations/${conversation.id}/tools`)
 })
 

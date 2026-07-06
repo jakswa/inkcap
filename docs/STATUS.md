@@ -22,6 +22,21 @@ production bundle.
 Yes, M5 landed before M3/M4 in the log — each milestone is still exactly one
 commit, the order is just scrambled (noted in THE_PLAN backlog).
 
+### Post-M7: openai-codex provider (ChatGPT subscription OAuth)
+
+New provider kind speaking the Codex CLI's protocol: PKCE OAuth against
+auth.openai.com with a loopback callback the server binds on `localhost:1455`
+only during sign-in, tokens in `providers.oauth_credentials` (migration 011)
+with mutex-serialized rotation-safe refresh, and a Responses-API translation
+layer (`src/services/codex-auth.ts` + `codex-client.ts`, dispatched from
+`provider-client.ts` by kind). Spec + caveats: `docs/specs/openai-codex.md`.
+Covered by `tests/integration/codex.test.ts` (stub issuer/backend, no real
+OpenAI traffic). Known gaps: the `OpenAI-Beta` header is deliberately not
+sent (HTTP-path value unverified), usage-window (`/wham/usage`) surfacing is
+not built, 429s surface as run errors with the upstream message, and the
+loopback flow needs the browser on the server's machine (or an SSH tunnel of
+1455) — no device-code fallback yet.
+
 ## How to run it
 
 ```sh

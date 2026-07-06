@@ -15,8 +15,14 @@ export const authRoutes = new Hono()
 
 const maxNameLength = 200
 const maxEmailLength = 320
+const maxPasswordLength = 1024
+const authWindowMs = 15 * 60 * 1000
+const maxLoginAttempts = 10
+const maxRegisterAttempts = 20
 const dummyPasswordHash =
   '$argon2id$v=19$m=65536,t=2,p=1$LkhlmtRUmqfvrVhnuh5K7RTrBSlVT9ndhHDT/jsNa4o$0t5BuC8dkuwqqyKPd55X5k/S33WbWIfxKj8QXK2A+H4'
+
+const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
 function setSessionCookie(
   c: Context,
@@ -58,6 +64,15 @@ authRoutes.post('/register', async (c) => {
   const password = readString(form, 'password')
   const emailNormalized = normalizeEmail(email)
 
+  if (!allowAttempt(`register:${clientKey(c)}`, maxRegisterAttempts)) {
+    c.status(429)
+    return c.var.render('auth/register', {
+      title: 'Register',
+      errors: ['Too many registration attempts. Try again later.'],
+      values: { name, email },
+    })
+  }
+
   const errors: string[] = []
   if (!name) errors.push('Name is required')
   if (name.length > maxNameLength) {
@@ -68,6 +83,9 @@ authRoutes.post('/register', async (c) => {
     errors.push(`Email must be ${maxEmailLength} characters or fewer`)
   }
   if (password.length < 8) errors.push('Password must be at least 8 characters')
+  if (password.length > maxPasswordLength) {
+    errors.push(`Password must be ${maxPasswordLength} characters or fewer`)
+  }
 
   if (errors.length > 0) {
     return c.var.render('auth/register', {
@@ -104,7 +122,7 @@ authRoutes.post('/register', async (c) => {
   }
 
   setSessionCookie(c, user)
-  return c.redirect('/dashboard')
+  return c.redirect('/conversations')
 })
 
 authRoutes.get('/login', async (c) => {
@@ -121,6 +139,23 @@ authRoutes.post('/login', async (c) => {
   const password = readString(form, 'password')
   const emailNormalized = normalizeEmail(email)
 
+  if (!allowAttempt(`login:${clientKey(c)}:${emailNormalized}`, maxLoginAttempts)) {
+    c.status(429)
+    return c.var.render('auth/login', {
+      title: 'Login',
+      errors: ['Too many login attempts. Try again later.'],
+      values: { email },
+    })
+  }
+
+  if (password.length > maxPasswordLength) {
+    return c.var.render('auth/login', {
+      title: 'Login',
+      errors: ['Invalid email or password'],
+      values: { email },
+    })
+  }
+
   const user = await getUserByEmailNormalized(emailNormalized)
   const passwordHash = user?.password_hash ?? dummyPasswordHash
   const valid = await verifyPassword(password, passwordHash)
@@ -134,7 +169,7 @@ authRoutes.post('/login', async (c) => {
   }
 
   setSessionCookie(c, user)
-  return c.redirect('/dashboard')
+  return c.redirect('/conversations')
 })
 
 authRoutes.post('/logout', async (c) => {
@@ -152,4 +187,25 @@ function isUniqueViolation(error: unknown) {
     'code' in error &&
     error.code === '23505'
   )
+}
+
+function clientKey(c: Context) {
+  return (
+    c.req.header('cf-connecting-ip') ??
+    c.req.header('x-real-ip') ??
+    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
+    'unknown'
+  )
+}
+
+function allowAttempt(key: string, limit: number) {
+  const now = Date.now()
+  const current = authAttempts.get(key)
+  if (!current || current.resetAt <= now) {
+    authAttempts.set(key, { count: 1, resetAt: now + authWindowMs })
+    return true
+  }
+  if (current.count >= limit) return false
+  current.count += 1
+  return true
 }

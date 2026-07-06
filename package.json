@@ -8,7 +8,7 @@
     "css:build": "tailwindcss -i ./src/static/app.tailwind.css -o ./src/static/app.css --minify",
     "css:watch": "tailwindcss -i ./src/static/app.tailwind.css -o ./src/static/app.css --watch",
     "start": "bun run css:build && bun src/index.ts",
-    "start:prod": "bun build/index.js",
+    "start:prod": "NODE_ENV=production bun build/index.js",
     "db:migrate": "bun src/tasks/migrate.ts",
     "db:types": "bun bun-sqlgen generate 'src/**/*.ts' --migrations src/db/migrations --out src/db/queries/queries.gen.d.ts",
     "typecheck": "tsc --noEmit",

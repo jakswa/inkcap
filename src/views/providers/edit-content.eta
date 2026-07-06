@@ -1,13 +1,25 @@
 <section class="grid grid-cols-[minmax(0,1fr)_minmax(18rem,25rem)] items-start gap-[clamp(1.5rem,6vw,4rem)] max-[720px]:grid-cols-1">
   <div>
-    <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Registry</p>
-    <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Edit provider</h1>
-    <p class="mt-4 text-slate-500">Stored API key: <strong><%= it.provider.maskedApiKey %></strong></p>
+    <p class="eyebrow mb-3">Registry</p>
+    <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Edit provider</h1>
+    <% if (it.provider.kind === 'openai-codex') { %>
+      <p class="mt-4 text-ink-dim">
+        ChatGPT OAuth: <strong><%= it.provider.oauthConnected ? 'connected' : 'not connected' %></strong>
+        <% if (it.provider.oauthAccountId) { %>
+          &middot; account <code class="text-sm"><%= it.provider.oauthAccountId %></code>
+        <% } %>
+      </p>
+      <form class="mt-4" method="post" action="/providers/<%= it.provider.id %>/reauth">
+        <button class="btn btn-ghost" type="submit">Re-authenticate with ChatGPT</button>
+      </form>
+    <% } else { %>
+      <p class="mt-4 text-ink-dim">Stored API key: <strong><%= it.provider.maskedApiKey %></strong></p>
+    <% } %>
   </div>
 
-  <form class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10" method="post" action="/providers/<%= it.provider.id %>">
+  <form class="card grid gap-4" method="post" action="/providers/<%= it.provider.id %>">
     <% if (it.errors.length > 0) { %>
-      <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+      <div class="alert-danger" role="alert">
         <% it.errors.forEach((error) => { %>
           <p class="last:mb-0"><%= error %></p>
         <% }) %>
@@ -16,38 +28,73 @@
 
     <label class="grid gap-1.5">
       <span>Name</span>
-      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="name" maxlength="200" value="<%= it.values.name || '' %>" required>
+      <input class="input" name="name" maxlength="200" value="<%= it.values.name || '' %>" required>
     </label>
 
-    <label class="grid gap-1.5">
-      <span>Kind</span>
-      <select class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="kind" required>
-        <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>llama-server</option>
-        <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>openai-compat</option>
-      </select>
-    </label>
+    <% if (it.provider.kind === 'openai-codex') { %>
+      <input type="hidden" name="kind" value="openai-codex">
+      <div class="grid gap-1.5">
+        <span>Kind</span>
+        <p class="mb-0 text-ink-dim">openai-codex (ChatGPT subscription OAuth)</p>
+      </div>
+    <% } else { %>
+      <label class="grid gap-1.5">
+        <span>Kind</span>
+        <select class="input" name="kind" required>
+          <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>llama-server</option>
+          <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>openai-compat</option>
+        </select>
+      </label>
+    <% } %>
 
     <label class="grid gap-1.5">
       <span>Base URL</span>
-      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="base_url" maxlength="2048" value="<%= it.values.baseUrl || '' %>" required>
+      <input class="input" name="base_url" maxlength="2048" value="<%= it.values.baseUrl || '' %>" required>
     </label>
 
-    <label class="grid gap-1.5">
-      <span>New API key</span>
-      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="api_key" type="password" autocomplete="off" placeholder="Leave blank to keep the current key" value="<%= it.values.apiKey || '' %>">
-    </label>
+    <% if (it.provider.kind !== 'openai-codex') { %>
+      <label class="grid gap-1.5">
+        <span>New API key</span>
+        <input class="input" name="api_key" type="password" autocomplete="off" placeholder="Leave blank to keep the current key" value="<%= it.values.apiKey || '' %>">
+      </label>
 
-    <label class="flex items-center gap-2">
-      <input type="checkbox" name="clear_api_key">
-      <span>Clear the stored API key</span>
-    </label>
+      <label class="flex items-center gap-2">
+        <input type="checkbox" name="clear_api_key">
+        <span>Clear the stored API key</span>
+      </label>
+    <% } %>
 
     <label class="grid gap-1.5">
       <span>Default model</span>
-      <input class="w-full rounded-lg border border-slate-300 px-3 py-2.5" name="default_model" value="<%= it.values.defaultModel || '' %>">
+      <input class="input" name="default_model" maxlength="200" list="provider-models" value="<%= it.values.defaultModel || '' %>">
     </label>
 
-    <button class="inline-flex cursor-pointer items-center justify-center rounded-lg border-0 bg-indigo-600 px-4 py-2.5 font-bold text-white hover:bg-indigo-700" type="submit">Save changes</button>
-    <p class="mb-0 text-slate-500"><a class="text-indigo-600 underline-offset-4 hover:underline" href="/providers">Back to providers</a></p>
+    <label class="grid gap-1.5">
+      <span>Available models <span class="text-ink-faint">(one per line or comma-separated)</span></span>
+      <textarea class="input font-mono text-sm" name="models" rows="6"><%= it.values.modelsText || '' %></textarea>
+    </label>
+
+    <datalist id="provider-models">
+      <% ;(it.values.modelsText || '').split(/[\n,]/).map((model) => model.trim()).filter(Boolean).forEach((model) => { %>
+        <option value="<%= model %>"></option>
+      <% }) %>
+    </datalist>
+
+    <% if (it.testResult) { %>
+      <% if (it.testResult.ok) { %>
+        <div class="alert-ok" role="status">
+          <p class="mb-0 font-bold">Provider test passed</p>
+          <p class="mb-0">Inference<% if (it.testResult.inferenceModel) { %> on <%= it.testResult.inferenceModel %><% } %>: <%= it.testResult.inferenceText %></p>
+        </div>
+      <% } else if (it.testResult.models && it.testResult.models.length > 0) { %>
+        <div class="alert-danger" role="alert">
+          <p class="mb-0 font-bold">Inference failed after model discovery</p>
+          <p class="mb-0">Discovered models were copied into the list so you can pick one and retry.</p>
+        </div>
+      <% } %>
+    <% } %>
+
+    <button class="btn btn-primary" type="submit">Test and save changes</button>
+    <p class="mb-0 text-ink-dim"><a class="link" href="/providers">Back to providers</a></p>
   </form>
 </section>

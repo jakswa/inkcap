@@ -1,5 +1,6 @@
 import { sql } from '../db/client'
 import {
+  type ProviderModelMetadata,
   createProvider,
   getProviderByName,
   setProviderEnabled,
@@ -28,6 +29,8 @@ try {
       baseUrl: normalizedBaseUrl,
       apiKey,
       defaultModel: existing.default_model,
+      models: existing.models ?? [],
+      modelMetadata: existing.model_metadata as ProviderModelMetadata,
     })
     if (!existing.enabled) {
       await setProviderEnabled({ id: existing.id, enabled: true })

@@ -57,6 +57,15 @@ describe('app', () => {
     expect(res.headers.get('vary')).toBe('Accept-Encoding')
   })
 
+  test('asset server honors q=0 compressed encodings', async () => {
+    const res = await app.request('/assets/test/compressed-test.js', {
+      headers: { 'Accept-Encoding': 'br;q=0, gzip;q=1' },
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-encoding')).toBe('gzip')
+  })
+
   test('dashboard redirects anonymous users', async () => {
     const res = await app.request('/dashboard')
     expect(res.status).toBe(302)
@@ -83,6 +92,47 @@ describe('app', () => {
 
     expect(res.status).toBe(200)
     expect(await res.text()).toContain('Signed in as <strong>Test User</strong>')
+  })
+
+  test('dashboard rejects expired and tampered session cookies', async () => {
+    const expiresAt = new Date(Date.now() - 1000)
+    const expired = encryptSession({
+      expiresAt: expiresAt.toISOString(),
+      user: {
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Test User',
+        email: 'test@example.com',
+        created_at: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+      },
+      issuedAt: new Date(Date.now() - 2000).toISOString(),
+    })
+    const validExpiresAt = new Date(Date.now() + 86_400_000)
+    const valid = encryptSession({
+      expiresAt: validExpiresAt.toISOString(),
+      user: {
+        id: '00000000-0000-4000-8000-000000000001',
+        name: 'Test User',
+        email: 'test@example.com',
+        created_at: new Date('2026-01-01T00:00:00.000Z').toISOString(),
+      },
+      issuedAt: new Date().toISOString(),
+    })
+    // Flip a mid-string character: the final base64url char can encode only
+    // discarded padding bits, so flipping it sometimes decodes to identical
+    // bytes and the "tampered" cookie stays valid.
+    const tamperIndex = 10
+    const tampered =
+      valid.slice(0, tamperIndex) +
+      (valid[tamperIndex] === 'a' ? 'b' : 'a') +
+      valid.slice(tamperIndex + 1)
+
+    for (const cookie of [expired, tampered]) {
+      const res = await app.request('/dashboard', {
+        headers: { Cookie: `session=${cookie}` },
+      })
+      expect(res.status).toBe(302)
+      expect(res.headers.get('location')).toBe('/login')
+    }
   })
 
   test('missing pages render a styled 404', async () => {

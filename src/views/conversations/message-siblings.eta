@@ -1,0 +1,29 @@
+<% const m = it.m %>
+<% /* "‹ i/n ›" branch switcher. Only present on a full SSR render — the
+      route computes siblingNav; the runner's finalize-swap doesn't, degrading
+      to reload. */ %>
+<% if (m.siblingNav && m.siblingNav.total > 1) { %>
+  <span class="mr-1 inline-flex items-center gap-0.5 text-xs" data-sibling-nav>
+    <% if (m.siblingNav.prevId) { %>
+      <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
+        <input type="hidden" name="target" value="<%= m.siblingNav.prevId %>">
+        <button class="icon-btn size-6" type="submit" aria-label="Previous branch" title="Previous branch">
+          <%~ include('../partials/icon', { name: 'chevronLeft', class: 'size-3.5' }) %>
+        </button>
+      </form>
+    <% } else { %>
+      <span class="grid size-6 place-items-center opacity-40" aria-hidden="true"><%~ include('../partials/icon', { name: 'chevronLeft', class: 'size-3.5' }) %></span>
+    <% } %>
+    <span class="tabular-nums" data-sibling-index><%= m.siblingNav.index %>/<%= m.siblingNav.total %></span>
+    <% if (m.siblingNav.nextId) { %>
+      <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
+        <input type="hidden" name="target" value="<%= m.siblingNav.nextId %>">
+        <button class="icon-btn size-6" type="submit" aria-label="Next branch" title="Next branch">
+          <%~ include('../partials/icon', { name: 'chevronRight', class: 'size-3.5' }) %>
+        </button>
+      </form>
+    <% } else { %>
+      <span class="grid size-6 place-items-center opacity-40" aria-hidden="true"><%~ include('../partials/icon', { name: 'chevronRight', class: 'size-3.5' }) %></span>
+    <% } %>
+  </span>
+<% } %>

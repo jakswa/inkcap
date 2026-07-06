@@ -1,0 +1,14 @@
+<% const m = it.m %>
+<% /* Trash icon opening a small confirm popover (it.align: 'left' | 'right'
+      anchors it under assistant / user actions respectively). */ %>
+<details class="relative" data-delete>
+  <summary class="icon-btn size-7 hover:bg-danger/10 hover:text-danger" aria-label="Delete message" title="Delete this message and everything after it">
+    <%~ include('../partials/icon', { name: 'trash', class: 'size-4' }) %>
+  </summary>
+  <div class="absolute <%= it.align === 'right' ? 'right-0' : 'left-0' %> bottom-full z-10 mb-1 grid w-max max-w-[calc(100vw-3rem)] gap-2 rounded-2xl border border-edge bg-raised p-3 shadow-xl shadow-black/10">
+    <p class="mb-0 text-xs text-ink-dim">Delete this message and everything after it?</p>
+    <form class="flex justify-end" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/delete">
+      <button class="btn btn-danger px-3 py-1.5 text-xs" type="submit">Confirm delete</button>
+    </form>
+  </div>
+</details>

@@ -4,6 +4,7 @@ import { randomUUIDv7 } from 'bun'
 const { app } = await import('../../src/app')
 const { createUser } = await import('../../src/db/queries/users')
 const { createConversation } = await import('../../src/db/queries/conversations')
+const { createProvider } = await import('../../src/db/queries/providers')
 const { listMcpServers, listEnabledMcpServersForConversation } = await import(
   '../../src/db/queries/mcp-servers'
 )
@@ -16,9 +17,15 @@ function url(path: string) {
   return `${origin}${path}`
 }
 
-function form(input: Record<string, string>) {
+function form(input: Record<string, string | string[]>) {
   const body = new FormData()
-  for (const [key, value] of Object.entries(input)) body.set(key, value)
+  for (const [key, value] of Object.entries(input)) {
+    if (Array.isArray(value)) {
+      for (const item of value) body.append(key, item)
+    } else {
+      body.set(key, value)
+    }
+  }
   return body
 }
 
@@ -178,13 +185,26 @@ describe('MCP servers CRUD', () => {
     expect(toolsHtml).toContain(name)
     expect(toolsHtml).toContain('Off — turn on')
 
+    const chatPage = await app.request(url(`/conversations/${conversation.id}`), {
+      headers: { Cookie: cookie },
+    })
+    const chatHtml = await chatPage.text()
+    expect(chatHtml).toContain('Options')
+    expect(chatHtml).toContain('Save tool choices')
+    expect(chatHtml).toContain(name)
+
     // Turn it on for this conversation.
     const toggle = await app.request(url(`/conversations/${conversation.id}/tools`), {
       method: 'POST',
       headers,
-      body: form({ mcp_server_id: id, enabled: 'on' }),
+      body: form({
+        mcp_server_id: [id],
+        enabled_mcp_server_id: [id],
+        redirect_to: 'conversation',
+      }),
     })
     expect(toggle.status).toBe(302)
+    expect(toggle.headers.get('location')).toBe(`/conversations/${conversation.id}`)
 
     const enabled = await listEnabledMcpServersForConversation(conversation.id)
     expect(enabled.map((s) => s.id)).toContain(id)
@@ -196,5 +216,41 @@ describe('MCP servers CRUD', () => {
       body: form({ mcp_server_id: id }),
     })
     expect(await listEnabledMcpServersForConversation(conversation.id)).toHaveLength(0)
+  })
+
+  test('new-chat options can enable MCP before the first run', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const headers = { Cookie: cookie, Origin: origin }
+    const provider = await createProvider({
+      name: `provider-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: 'http://127.0.0.1:1',
+      defaultModel: 'stub-model',
+      enabled: true,
+    })
+
+    const name = `new-chat-mcp-${randomUUIDv7()}`
+    await app.request(url('/mcp-servers'), {
+      method: 'POST',
+      headers,
+      body: form({ name, url: 'https://mcp.example.com/mcp', headers: '', request_timeout_ms: '30000' }),
+    })
+    const id = (await listMcpServers()).find((s) => s.name === name)!.id
+
+    const create = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers,
+      body: form({
+        providerId: provider.id,
+        model: 'stub-model',
+        enabled_mcp_server_id: [id],
+      }),
+    })
+    expect(create.status).toBe(302)
+    const conversationId = (create.headers.get('location') ?? '').slice('/conversations/'.length)
+
+    const enabled = await listEnabledMcpServersForConversation(conversationId)
+    expect(enabled.map((s) => s.id)).toContain(id)
   })
 })

@@ -1,0 +1,28 @@
+<% /* Chats sidebar for the chat shell (landing + conversation pages).
+      Expects it.sidebar: [{ id, title, updatedLabel, current }]. */ %>
+<aside class="hidden w-64 shrink-0 flex-col overflow-hidden border-r border-edge bg-veil backdrop-blur-xl lg:flex">
+  <div class="p-3 pb-1">
+    <a class="btn btn-ghost w-full justify-start" href="/conversations">
+      <%~ include('../partials/icon', { name: 'plus', class: 'size-4' }) %>
+      New chat
+    </a>
+  </div>
+  <% if (it.sidebar.length > 0) { %>
+    <p class="mb-1 px-6 pt-3 text-xs font-semibold tracking-wider text-ink-faint uppercase">Recent</p>
+  <% } %>
+  <nav class="scroll-thin flex-1 overflow-y-auto px-3 pb-4" aria-label="Conversations">
+    <% it.sidebar.forEach((row) => { %>
+      <div class="group/row relative">
+        <a class="block truncate rounded-lg px-3 py-2 pr-8 text-sm no-underline transition-colors <%= row.current ? 'bg-ink/10 font-semibold text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink' %>" href="/conversations/<%= row.id %>" title="<%= row.title || 'New chat' %> · <%= row.updatedLabel %>"<% if (row.current) { %> aria-current="page"<% } %>><%= row.title || 'New chat' %></a>
+        <form class="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/row:opacity-100" method="post" action="/conversations/<%= row.id %>/delete">
+          <button class="grid size-6 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 text-ink-faint hover:bg-danger/10 hover:text-danger" type="submit" aria-label="Delete conversation" title="Delete conversation">
+            <%~ include('../partials/icon', { name: 'x', class: 'size-3.5' }) %>
+          </button>
+        </form>
+      </div>
+    <% }) %>
+    <% if (it.sidebar.length === 0) { %>
+      <p class="px-3 py-2 text-sm text-ink-faint">No chats yet.</p>
+    <% } %>
+  </nav>
+</aside>

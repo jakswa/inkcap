@@ -47,7 +47,7 @@ describe('auth integration', () => {
     const { res, user } = await registerUser()
 
     expect(res.status).toBe(302)
-    expect(res.headers.get('location')).toBe('/dashboard')
+    expect(res.headers.get('location')).toBe('/conversations')
     const registrationCookie = sessionCookie(res)
 
     const dashboard = await app.request('/dashboard', {
@@ -77,7 +77,7 @@ describe('auth integration', () => {
     })
 
     expect(login.status).toBe(302)
-    expect(login.headers.get('location')).toBe('/dashboard')
+    expect(login.headers.get('location')).toBe('/conversations')
     const loginCookie = sessionCookie(login)
 
     const logout = await app.request(url('/logout'), {

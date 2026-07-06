@@ -1,20 +1,20 @@
-<header class="border-b border-slate-300 bg-white/80 backdrop-blur-xl">
-  <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 max-[720px]:grid">
-    <a class="flex items-center gap-3 font-extrabold text-slate-900 no-underline" href="/">
-      <img src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="28" height="28">
+<header class="z-10 shrink-0 border-b border-edge bg-veil backdrop-blur-xl">
+  <div class="flex h-14 items-center justify-between gap-4 <%= it.shell === 'chat' ? 'px-4' : 'mx-auto w-full max-w-5xl px-4' %>">
+    <a class="flex items-center gap-2.5 font-extrabold tracking-tight text-ink no-underline" href="/">
+      <img src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="24" height="24">
       <span>spail</span>
     </a>
-    <nav class="flex flex-wrap items-center justify-end gap-3 max-[720px]:justify-start" aria-label="Primary">
+    <nav class="flex items-center gap-1" aria-label="Primary">
       <% if (it.user) { %>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 no-underline hover:bg-indigo-50 hover:text-indigo-700" href="/conversations">Chats</a>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 no-underline hover:bg-indigo-50 hover:text-indigo-700" href="/providers">Providers</a>
-        <a class="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-600 no-underline hover:bg-indigo-50 hover:text-indigo-700" href="/dashboard">Dashboard</a>
+        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/conversations">Chats</a>
+        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/providers">Providers</a>
+        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/mcp-servers">MCP</a>
         <form method="post" action="/logout">
-          <button class="cursor-pointer rounded-lg border-0 bg-transparent px-3 py-1.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 hover:text-slate-900" type="submit">Logout</button>
+          <button class="cursor-pointer rounded-lg border-0 bg-transparent px-3 py-1.5 text-sm font-medium text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink" type="submit">Logout</button>
         </form>
       <% } else { %>
-        <a class="text-indigo-600 underline-offset-4 hover:underline" href="/login">Login</a>
-        <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-3 py-2 text-sm font-bold text-white no-underline hover:bg-indigo-700" href="/register">Register</a>
+        <a class="rounded-lg px-3 py-1.5 text-sm font-medium text-ink-dim no-underline transition-colors hover:bg-ink/5 hover:text-ink" href="/login">Login</a>
+        <a class="btn btn-primary px-3 py-1.5" href="/register">Register</a>
       <% } %>
     </nav>
   </div>

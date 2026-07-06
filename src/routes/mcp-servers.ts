@@ -16,6 +16,15 @@ const maxNameLength = 200
 const maxUrlLength = 2048
 const minTimeoutMs = 1000
 const maxTimeoutMs = 600_000
+const forbiddenHeaderNames = new Set([
+  'connection',
+  'content-length',
+  'host',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+])
 
 type McpServerFormValues = {
   name: string
@@ -47,7 +56,16 @@ function parseHeaders(raw: string): { headers: unknown } | { error: string } {
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { error: 'Headers must be a JSON object' }
   }
-  for (const value of Object.values(parsed as Record<string, unknown>)) {
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    const name = key.toLowerCase()
+    if (
+      forbiddenHeaderNames.has(name) ||
+      name.startsWith('proxy-') ||
+      name.startsWith('x-forwarded-') ||
+      name === 'forwarded'
+    ) {
+      return { error: `Header "${key}" is not allowed` }
+    }
     if (typeof value !== 'string') {
       return { error: 'Every header value must be a string' }
     }

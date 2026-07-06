@@ -1,5 +1,5 @@
 import type { Context } from 'hono'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { env } from '../utils/env'
 import { paths } from '../utils/paths'
 
@@ -30,11 +30,15 @@ function assetCacheHeader() {
 function safeAssetPath(path: string) {
   const cleaned = path.replace(/^\/+/, '')
 
-  if (!cleaned || cleaned.includes('..') || cleaned.includes('\\')) {
+  if (!cleaned || cleaned.includes('\\')) {
     return null
   }
 
-  return cleaned
+  const root = resolve(paths.appAssets)
+  const resolved = resolve(root, cleaned)
+  if (resolved !== root && !resolved.startsWith(`${root}${sep}`)) return null
+
+  return { relative: cleaned, absolute: resolved }
 }
 
 function contentTypeFor(path: string) {
@@ -45,23 +49,34 @@ function contentTypeFor(path: string) {
 function acceptsEncoding(header: string | undefined, encoding: CompressedEncoding) {
   if (!header) return false
 
-  return header
-    .toLowerCase()
-    .split(',')
-    .some((part) => part.trim().split(';')[0] === encoding)
+  let wildcardQ: number | null = null
+  for (const rawPart of header.toLowerCase().split(',')) {
+    const [rawToken, ...params] = rawPart.trim().split(';')
+    const token = rawToken?.trim()
+    if (!token) continue
+
+    const qParam = params.find((param) => param.trim().startsWith('q='))
+    const q = qParam ? Number(qParam.trim().slice(2)) : 1
+    const acceptable = Number.isFinite(q) && q > 0
+
+    if (token === encoding) return acceptable
+    if (token === '*') wildcardQ = q
+  }
+
+  return wildcardQ !== null && Number.isFinite(wildcardQ) && wildcardQ > 0
 }
 
 async function compressedVariantFor(
-  path: string,
+  path: { relative: string; absolute: string },
   acceptEncoding: string | undefined,
 ) {
   if (acceptsEncoding(acceptEncoding, 'br')) {
-    const file = Bun.file(join(paths.appAssets, `${path}.br`))
+    const file = Bun.file(`${path.absolute}.br`)
     if (await file.exists()) return { encoding: 'br' as const, file }
   }
 
   if (acceptsEncoding(acceptEncoding, 'gzip')) {
-    const file = Bun.file(join(paths.appAssets, `${path}.gz`))
+    const file = Bun.file(`${path.absolute}.gz`)
     if (await file.exists()) return { encoding: 'gzip' as const, file }
   }
 
@@ -81,6 +96,11 @@ async function readAppCss() {
 }
 
 export async function serveAssets(c: Context) {
+  const version = c.req.param('version')
+  if (env.NODE_ENV === 'production' && version !== env.ASSET_VERSION) {
+    return c.notFound()
+  }
+
   const rawPath = c.req.path.replace(/^\/assets\/[^/]+\//, '')
   const path = safeAssetPath(rawPath)
 
@@ -96,21 +116,21 @@ export async function serveAssets(c: Context) {
   )
   if (compressed) {
     c.header('Content-Encoding', compressed.encoding)
-    c.header('Content-Type', contentTypeFor(path))
+    c.header('Content-Type', contentTypeFor(path.relative))
     return c.body(compressed.file.stream())
   }
 
-  if (path === 'app.css') {
+  if (path.relative === 'app.css') {
     c.header('Content-Type', 'text/css; charset=utf-8')
     return c.body(await readAppCss())
   }
 
-  const file = Bun.file(join(paths.appAssets, path))
+  const file = Bun.file(path.absolute)
 
   if (!(await file.exists())) {
     return c.notFound()
   }
 
-  c.header('Content-Type', contentTypeFor(path))
+  c.header('Content-Type', contentTypeFor(path.relative))
   return c.body(file.stream())
 }

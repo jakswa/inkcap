@@ -1,64 +1,83 @@
 <section class="grid gap-4">
   <div class="flex flex-wrap items-end justify-between gap-4">
     <div>
-      <p class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">Registry</p>
-      <h1 class="max-w-[16ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Providers</h1>
-      <p class="mt-4 text-slate-500">llama-server and OpenAI-compatible endpoints, picked per conversation.</p>
+      <p class="eyebrow mb-3">Registry</p>
+      <h1 class="max-w-[16ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Providers</h1>
+      <p class="mt-4 text-ink-dim">llama-server and OpenAI-compatible endpoints, picked per conversation.</p>
     </div>
-    <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white no-underline hover:bg-indigo-700" href="/providers/new">Add provider</a>
+    <a class="btn btn-primary" href="/providers/new">Add provider</a>
   </div>
 
   <% if (it.providers.length === 0) { %>
-    <div class="rounded-lg border border-slate-300 bg-white p-6 text-slate-500 shadow-sm shadow-slate-900/10">
-      No providers yet. <a class="text-indigo-600 underline-offset-4 hover:underline" href="/providers/new">Add one</a> to get started.
+    <div class="card text-ink-dim">
+      No providers yet. <a class="link" href="/providers/new">Add one</a> to get started.
     </div>
   <% } %>
 
   <% it.providers.forEach((provider) => { %>
-    <article class="grid gap-4 rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+    <article class="card grid gap-4">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div class="flex flex-wrap items-center gap-2">
             <h2 class="text-lg font-bold"><%= provider.name %></h2>
-            <span class="rounded-full border border-slate-300 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500"><%= provider.kind %></span>
+            <span class="rounded-full border border-edge-strong px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ink-dim"><%= provider.kind %></span>
             <% if (provider.enabled) { %>
-              <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-emerald-700">Enabled</span>
+              <span class="rounded-full border border-ok/40 bg-ok/10 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ok">Enabled</span>
             <% } else { %>
-              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-slate-500">Disabled</span>
+              <span class="rounded-full border border-edge bg-ink/5 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ink-dim">Disabled</span>
             <% } %>
           </div>
-          <p class="mb-0 mt-2 text-slate-500"><%= provider.base_url %></p>
-          <p class="mb-0 mt-1 text-sm text-slate-500">
-            Default model: <%= provider.default_model || 'not set' %> &middot; API key: <%= provider.maskedApiKey %>
+          <p class="mb-0 mt-2 text-ink-dim"><%= provider.base_url %></p>
+          <p class="mb-0 mt-1 text-sm text-ink-dim">
+            Default model: <%= provider.default_model || 'not set' %> &middot;
+            <% if (provider.kind === 'openai-codex') { %>
+              ChatGPT OAuth: <%= provider.oauthConnected ? 'connected' : 'not connected' %>
+            <% } else { %>
+              API key: <%= provider.maskedApiKey %>
+            <% } %>
           </p>
+          <% if (provider.models.length > 0) { %>
+            <p class="mb-0 mt-2 flex flex-wrap gap-1 text-sm text-ink-dim">
+              <% provider.models.slice(0, 8).forEach((model) => { %>
+                <% const info = provider.model_metadata && provider.model_metadata[model] ? provider.model_metadata[model] : null %>
+                <% const caps = info && info.capabilities ? info.capabilities.filter((cap) => cap !== 'text') : [] %>
+                <span class="chip" title="<%= caps.length > 0 ? caps.join(', ') : 'text' %>">
+                  <%= model %><% if (caps.length > 0) { %> · <%= caps.join('/') %><% } %>
+                </span>
+              <% }) %>
+              <% if (provider.models.length > 8) { %>
+                <span class="chip">+<%= provider.models.length - 8 %> more</span>
+              <% } %>
+            </p>
+          <% } %>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
-          <a class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 no-underline hover:bg-indigo-50" href="/providers/<%= provider.id %>/edit">Edit</a>
+          <a class="btn btn-ghost px-3 py-2" href="/providers/<%= provider.id %>/edit">Edit</a>
 
           <form method="post" action="/providers/<%= provider.id %>/test">
-            <button class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 hover:bg-indigo-50" type="submit">Test connection</button>
+            <button class="btn btn-ghost px-3 py-2" type="submit">Test connection</button>
           </form>
 
           <% if (provider.enabled) { %>
             <form method="post" action="/providers/<%= provider.id %>/disable">
-              <button class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 hover:bg-indigo-50" type="submit">Disable</button>
+              <button class="btn btn-ghost px-3 py-2" type="submit">Disable</button>
             </form>
           <% } else { %>
             <form method="post" action="/providers/<%= provider.id %>/enable">
-              <button class="cursor-pointer rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-bold text-slate-900 hover:bg-indigo-50" type="submit">Enable</button>
+              <button class="btn btn-ghost px-3 py-2" type="submit">Enable</button>
             </form>
           <% } %>
 
           <form method="post" action="/providers/<%= provider.id %>/delete">
-            <button class="cursor-pointer rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-800 hover:bg-red-100" type="submit">Delete</button>
+            <button class="btn btn-danger px-3 py-2" type="submit">Delete</button>
           </form>
         </div>
       </div>
 
       <% if (it.testResult && it.testResult.providerId === provider.id) { %>
         <% if (it.testResult.result.ok) { %>
-          <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-800" role="status">
+          <div class="alert-ok" role="status">
             <p class="mb-0 font-bold">Connection ok</p>
             <% if (it.testResult.result.contextSize) { %>
               <p class="mb-0">Context size: <%= it.testResult.result.contextSize %> tokens</p>
@@ -66,11 +85,21 @@
             <% if (it.testResult.result.models.length > 0) { %>
               <p class="mb-0">Models: <%= it.testResult.result.models.join(', ') %></p>
             <% } %>
+            <% if (it.testResult.result.modelMetadata) { %>
+              <% const capable = Object.entries(it.testResult.result.modelMetadata).filter(([, info]) => info.capabilities && info.capabilities.some((cap) => cap !== 'text')) %>
+              <% if (capable.length > 0) { %>
+                <p class="mb-0">Capabilities: <%= capable.map(([model, info]) => `${model}: ${info.capabilities.filter((cap) => cap !== 'text').join('/')}`).join(', ') %></p>
+              <% } %>
+            <% } %>
+            <p class="mb-0">Inference<% if (it.testResult.result.inferenceModel) { %> on <%= it.testResult.result.inferenceModel %><% } %>: <%= it.testResult.result.inferenceText %></p>
           </div>
         <% } else { %>
-          <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800" role="alert">
+          <div class="alert-danger" role="alert">
             <p class="mb-0 font-bold">Connection failed</p>
             <p class="mb-0"><%= it.testResult.result.error %></p>
+            <% if (it.testResult.result.models && it.testResult.result.models.length > 0) { %>
+              <p class="mb-0">Models discovered before failure: <%= it.testResult.result.models.join(', ') %></p>
+            <% } %>
           </div>
         <% } %>
       <% } %>

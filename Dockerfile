@@ -10,6 +10,7 @@ COPY package.json bun.lock ./
 RUN bun install --ci
 
 FROM deps AS verify
+RUN test "$ASSET_VERSION" != "dev"
 RUN apt-get update \
   && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends brotli gzip \
   && rm -rf /var/lib/apt/lists/*

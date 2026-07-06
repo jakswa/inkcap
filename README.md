@@ -1,152 +1,154 @@
-# Bun Hono SSR Starter
+# spail
 
-A small Bun SSR starter for AI-assisted apps: Hono routes, Eta templates, HTML forms, PostgreSQL, raw SQL migrations, encrypted cookie sessions, and generated Tailwind CSS.
+A server-driven LLM chat app: the **server owns the conversation**. A chat "run"
+is a durable server-side job — close the laptop mid-generation, open your phone
+later, and the chat reached a sensible stopping point without you. Rewrite of
+llama.cpp's web UI (the fork at `~/sandbox/llama-ui` is the living spec), built
+on the bun-hono-ssr starter: Hono routes, Eta SSR templates, HTML forms,
+PostgreSQL, raw SQL migrations, encrypted cookie sessions, Tailwind.
+
+Read `docs/THE_PLAN.md` for the full design and milestone story (M0–M7, all
+landed), `docs/STATUS.md` for current state and known gaps, `docs/specs/` for
+harvested provider/export/MCP specs, `docs/issues/` for tracked hardening work.
 
 ## Shape
 
-- Run from source in development and bundle to `build/` for production.
-- Use Hono middleware/routes and Eta SSR templates.
-- Use plain HTML forms for UI actions.
-- Use `Bun.SQL` with named bun-sqlgen queries in `src/db/queries/*.ts`.
-- Use raw SQL migrations in `src/db/migrations/*.sql`.
-- Use encrypted private-cookie sessions. There is no session table or per-request session lookup, so sessions are stateless and non-revocable by default.
-- Use `Bun.password` for password hashing.
-- Put templates in `src/views`, Tailwind source and generated CSS in `src/static`, and images in `src/static`.
+- **Boring CRUD is boring.** Conversation list, providers, MCP servers, auth:
+  SSR templates and plain HTML forms, no client JS.
+- **JS is a budget, spent on the chat view only.** One hand-rolled island
+  (`src/static/chat.js`): SSE subscribe, token append, composer submit. Every
+  action still works as a plain form with JS off.
+- **The server is the agent runtime.** `src/services/runner.ts` streams from
+  the provider, persists deltas on a debounce (300ms/24 deltas), runs the MCP
+  tool loop, parks on `waiting_approval`, recovers interrupted runs on boot.
+  Browsers are spectators: SSE fan-out with `Last-Event-ID` replay; zero
+  subscribers changes nothing; page reload always shows DB truth.
+- **Provider and MCP keys never reach the browser.** Server-side rows; the
+  server makes all upstream calls (`src/utils/outbound-url.ts` guards targets).
+- **Messages are a tree.** `messages.parent_id` + `conversations.curr_node`
+  pick the active path; edit/regenerate create siblings; branching is schema,
+  the UI is just forms.
+- Markdown renders **server-side** (`marked` + `highlight.js` + `sanitize-html`
+  in `src/utils/markdown.ts`); streams show plain text, then finalize-swap to
+  rendered HTML.
 
 ## Quick Start
 
-Create a local copy from the starter template, then configure and run:
+Needs local PostgreSQL with `spail` and `spail_test` databases.
 
 ```sh
-bun create gh:jakswa/bun-hono-ssr my-app
-cd my-app
-cp .env.example .env.local   # then edit DATABASE_URL and SESSION_SECRET
 bun install
+cp .env.example .env.local         # DATABASE_URL, SESSION_SECRET
 bun run db:migrate
-bun run dev
+bun src/tasks/seed-provider.ts     # llama-server provider from DEV_LLAMA_SERVER / DEV_LLAMA_KEY
+bun run dev                        # http://localhost:3000 — register, then chat
 ```
 
-Open `http://localhost:3000`.
+Import llama-ui history (idempotent; JSONL or zip, attachments, branch trees):
+
+```sh
+bun src/tasks/import-llama-ui.ts <export.jsonl-or-.zip> --user you@example.com
+```
+
+Chat on your own ChatGPT subscription (Codex): Providers → Add provider →
+"Sign in with ChatGPT". The server runs the Codex CLI's OAuth flow with a
+loopback callback on `localhost:1455`, so browse from the machine running
+spail (or tunnel that port) and keep it free during sign-in. Tokens stay
+server-side and auto-refresh; see `docs/specs/openai-codex.md` for the
+protocol details and caveats (undocumented backend, personal use only).
 
 ## Env
 
-```env
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/honossr"
-SESSION_SECRET="change-me-in-production"
-ASSET_VERSION="dev"
-PORT=3000
-NODE_ENV=development
-```
-
-Create the local database named in `DATABASE_URL` before running migrations.
-For Docker builds, pass `ASSET_VERSION` as a build arg so asset URLs roll back with the image.
+`DATABASE_URL`, `SESSION_SECRET`, `ASSET_VERSION`, `PORT`, `NODE_ENV` (see
+`.env.example`); `DEV_LLAMA_SERVER` / `DEV_LLAMA_KEY` feed the provider seed
+task. In production, `SESSION_SECRET` must be ≥32 bytes and not a placeholder,
+and `ASSET_VERSION` must be set (pass as a Docker build arg so asset URLs roll
+back with the image).
 
 ## Scripts
 
 ```sh
-bun run dev         # Watch Tailwind CSS and run src/index.ts
-bun run css:build   # Generate src/static/app.css from Tailwind
-bun run css:watch   # Watch and regenerate src/static/app.css
-bun run start       # Build CSS, then run src/index.ts
-bun run start:prod  # Run build/index.js
+bun run dev         # css:watch + bun --watch src/index.ts
 bun run db:migrate  # Apply unapplied SQL migrations
 bun run db:types    # Generate bun-sqlgen query result types
 bun run typecheck   # TypeScript verification
 bun test            # Concurrent test suite using .env.test
-bun run app:build   # Build CSS, then bundle src/index.ts and src/tasks/*.ts into build/
-bun run build       # Verification plus app:build
+bun run app:build   # Build CSS, bundle src/index.ts + src/tasks/*.ts into build/
+bun run build       # db:types + typecheck + test + app:build
 ```
 
-Every `src/tasks/*.ts` file becomes a production-runnable `build/tasks/*.js` entrypoint. Task files accept normal CLI args through `Bun.argv`.
+Every `src/tasks/*.ts` file becomes a production-runnable `build/tasks/*.js`
+entrypoint taking CLI args via `Bun.argv`.
 
 ## Structure
 
-All code lives under `src/`. Runtime files (templates, assets, migrations) stay as
-files and are copied verbatim into `build/`; the rest is bundled.
-
-- **`src/views/`** — `.eta` templates. Read at runtime by Eta (`paths.views`). Copied to `build/views/`.
-- **`src/static/`** — Tailwind input, generated `.css`, and `.svg` assets. Read at runtime by `serve-assets.ts` (`paths.appAssets`). Copied to `build/static/`.
-- **`src/db/migrations/`** — raw SQL migrations. Read at runtime by `migrate.ts` (`paths.dbMigrations`). Copied to `build/db/migrations/`.
-- Everything else under `src/` is TypeScript bundled by `bun run app:build` into `build/index.js` and `build/tasks/*.js`. Only the bundled output ships to prod.
-- **`src/build.ts`** — build-time tooling. Runs on the dev/CI machine only; never bundled or shipped.
-
-`runtimeRoot` in `src/utils/paths.ts` flips between `src` (dev) and `build` (prod) so
-the same code resolves runtime files in both. `build/` is gitignored and won't exist
-until you run `bun run app:build`.
+Runtime files (`src/views`, `src/static`, `src/db/migrations`) stay as files
+and are copied verbatim into `build/`; everything else is bundled. `runtimeRoot`
+in `src/utils/paths.ts` flips between `src` (dev) and `build` (prod). `build/`
+is gitignored.
 
 ```txt
 src/
-├── index.ts                # server entrypoint (dev + prod)
-├── app.ts                  # Hono app, middleware, routes
-├── app-types.ts            # Hono app/variables typings
-├── build.ts                # build tooling, never shipped
-├── views/                  # .eta templates, copied to build/views/
-│   ├── layouts/main.eta
-│   ├── partials/header.eta, footer.eta
-│   ├── home.eta, home-content.eta
-│   ├── dashboard.eta, dashboard-content.eta
-│   ├── error.eta, error-content.eta
-│   └── auth/login.eta, login-content.eta, register.eta, register-content.eta
-├── static/                 # app.tailwind.css source, generated app.css, svg assets
-├── assets/serve-assets.ts  # versioned, cached asset serving
+├── index.ts, app.ts        # entrypoint; Hono app, middleware, routes
+├── routes/                 # auth, conversations (chat + SSE + branching), providers, mcp-servers, ...
+├── services/               # runner.ts (the agent runtime), provider-client, codex-auth/-client, mcp-client, branching
+├── views/                  # .eta templates (conversations/, providers/, mcp-servers/, auth/, partials/)
+├── static/                 # app.tailwind.css → generated app.css, chat.js island, svgs
 ├── db/
-│   ├── client.ts           # Bun.SQL client
-│   ├── typed-sql.ts        # bun-sqlgen sql-tagged template helper
-│   ├── migrate.ts          # migration runner
-│   ├── migrations/001_init.sql  # raw SQL, copied to build/db/migrations/
-│   └── queries/            # named queries (users.ts) + queries.gen.d.ts
+│   ├── migrations/         # 001_init ... 011_openai_codex (raw SQL)
+│   └── queries/            # named bun-sqlgen queries per table + queries.gen.d.ts
 ├── middleware/             # render.ts, current-user.ts
-├── routes/                 # home.ts, dashboard.ts, auth.ts
-├── tasks/                  # migrate.ts (each file → build/tasks/*.js)
-└── utils/                  # env, password, validation, private-session, paths
+├── tasks/                  # migrate, seed-provider, import-llama-ui, mock-provider
+├── utils/                  # env, markdown, message-view, outbound-url, private-session, ...
+└── build.ts                # build-time tooling, never shipped
 ```
 
 ## Development Rules
 
-- Add pages in `src/routes` and render templates with `c.var.render('template-name', data)`.
-- Keep templates simple: display data, avoid business logic, and do not raw-print user input.
-- Keep Eta escaping enabled.
-- Prefer Tailwind utilities in `src/views/**/*.eta`; keep `src/static/app.tailwind.css` limited to imports, sources, theme tokens, font faces, and rare base/global rules.
+- Add pages in `src/routes`, render with `c.var.render('template-name', data)`.
+- Templates display data; no business logic; never raw-print user input; keep
+  Eta escaping enabled. Assistant markdown goes through `renderMarkdown()` only.
+- Prefer Tailwind utilities in templates; keep `app.tailwind.css` to imports,
+  theme tokens, and rare global rules. Never hand-edit generated `app.css`.
 - Do not concatenate SQL strings or use `sql.unsafe` with user input.
-- After DB changes, run `bun run db:types`, `bun run typecheck`, and `bun test`.
+- Commit only at milestones (working end-to-end slices).
+- After DB changes: `bun run db:types && bun run typecheck && bun test`.
 
 ## Database
 
-- Add schema changes as numbered SQL files in `src/db/migrations`.
-- Put app queries in `src/db/queries/*.ts` using `sql.QueryName\`...\``.
-- `bun run db:types` validates queries against migrations and refreshes `queries.gen.d.ts`.
-- `bun test` resets and migrates the `.env.test` database before running tests concurrently.
-- Test `DATABASE_URL` must end with `test`; the setup refuses to reset any other database name.
-- Tests should create unique data and avoid global row-count assertions.
-- Runtime registration/login need a real `DATABASE_URL` and `bun run db:migrate`.
-- The migration runner applies pending files inside one transaction, so PostgreSQL commands that cannot run in a transaction block (for example `CREATE INDEX CONCURRENTLY`) need a custom migration path.
+- Schema changes are numbered SQL files in `src/db/migrations`; the runner
+  applies pending files in one transaction (so no `CREATE INDEX CONCURRENTLY`
+  without a custom path).
+- App queries live in `src/db/queries/*.ts` as `sql.QueryName\`...\``;
+  `bun run db:types` validates them against migrations.
+- `bun test` resets and migrates the `.env.test` database (name must end with
+  `test`) and runs concurrently — tests create unique data, no global
+  row-count assertions.
+- Core tables: `users`, `providers`, `conversations`, `messages` (tree),
+  `runs` (+ partial unique index: one active run per conversation),
+  `run_events` (SSE replay log), `attachments` (bytea), `mcp_servers`.
 
 ## Auth
 
-- Registration stores a user with `Bun.password.hash()`.
-- Login verifies with `Bun.password.verify()`.
-- The session payload is encrypted into an HTTP-only cookie using `SESSION_SECRET` and includes an `issuedAt` timestamp for future invalidation checks.
-- Protected routes check `c.var.user`; logout clears only the current browser cookie.
-- Stateless sessions are not globally revocable by default and can carry stale user identity until expiry. Re-fetch users on sensitive routes, and compare `issuedAt` against a per-user or global invalidation watermark if you add password changes, account deletion, or "log out everywhere".
+- `Bun.password` hash/verify; session payload encrypted into an HTTP-only
+  cookie via `SESSION_SECRET` with an `issuedAt` timestamp.
+- Stateless sessions are non-revocable by default (`docs/issues/09`): re-fetch
+  users on sensitive routes; add an invalidation watermark before shipping
+  password changes or "log out everywhere".
 
 ## Assets
 
-- `/assets/:version/app.css` maps to generated `src/static/app.css`.
-- Other files map to `src/static/*`. Do not hand-edit or track generated `src/static/app.css`; edit `src/static/app.tailwind.css` and templates instead.
-- Production responses use long-lived immutable caching.
-- Development responses use `no-store`.
+- `/assets/:version/app.css` serves generated `src/static/app.css`; other
+  files map to `src/static/*`. Production: immutable caching; dev: `no-store`.
 
-## Production Build
+## Production
 
-- `bun run app:build` generates CSS, then `src/build.ts` bundles `src/index.ts` and every `src/tasks/*.ts` file.
-- It copies runtime files (`src/views`, `src/static`, `src/db/migrations`) into `build/`.
-- Docker copies only `build/`; it does not need `src/` or `node_modules/` at runtime.
-
-## Docker
+- `bun run app:build` → `build/`; Docker copies only `build/` (no `src/`,
+  no `node_modules/`). Migrate inside the image: `bun build/tasks/migrate.js`.
+- The app is a single stateful process (web server + runner) by design;
+  restart is always safe — boot recovery finalizes interrupted runs.
 
 ```sh
-docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t my-app .
-docker run -p 3000:3000 --env-file .env.production my-app
+docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t spail .
+docker run -p 3000:3000 --env-file .env.production spail
 ```
-
-Set `DATABASE_URL` and `SESSION_SECRET` in the runtime environment. Do not override the image's `NODE_ENV=production` unless you mean to disable production caching.

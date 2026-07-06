@@ -34,6 +34,7 @@ import {
 } from '../db/queries/messages'
 import {
   createRun,
+  getBlockingRunForConversation,
   getLatestRunForConversation,
   getRunningRunForConversation,
   incrementRunTurnCount,
@@ -64,6 +65,7 @@ import {
   type ChatMessage,
   type ChatRole,
   type ProviderConfig,
+  type ReasoningEffort,
   type ToolCall,
 } from './provider-client'
 
@@ -283,9 +285,6 @@ class DeltaFlusher {
         await appendMessageDeltas({ id: messageId, content, reasoning })
         await emitEvent(runId, 'delta', { messageId, content, reasoning })
       })
-      .catch((error) => {
-        console.error('delta flush failed', error)
-      })
   }
 
   async close() {
@@ -311,6 +310,7 @@ async function streamTurn(
   history: ChatMessage[],
   stallTimeoutMs: number,
   tools: unknown[],
+  reasoningEffort: ReasoningEffort | null,
 ): Promise<TurnResult> {
   const result: TurnResult = {
     toolCalls: [],
@@ -327,6 +327,7 @@ async function streamTurn(
       handle.abort.signal,
       stallTimeoutMs,
       tools,
+      reasoningEffort,
     )) {
       switch (delta.kind) {
         case 'content':
@@ -390,12 +391,31 @@ async function finishRun(
 interface RunContext {
   provider: ProviderConfig
   model: string | null
+  reasoningEffort: ReasoningEffort | null
   history: ChatMessage[]
   maxTurns: number
   stallTimeoutMs: number
   tools: OpenAiTool[]
   servers: McpServerConfig[]
   toolIndex: Map<string, string>
+}
+
+const reasoningEfforts = new Set(['off', 'low', 'medium', 'high', 'max'])
+
+function normalizeReasoningEffort(value: string | null | undefined): ReasoningEffort {
+  return reasoningEfforts.has(value ?? '') ? (value as ReasoningEffort) : 'medium'
+}
+
+function providerSupportsReasoning(
+  provider: { default_model: string | null; model_metadata?: unknown },
+  model: string | null,
+): boolean {
+  const metadata = provider.model_metadata
+  if (!metadata || typeof metadata !== 'object') return false
+  const selected = model || provider.default_model
+  if (!selected) return false
+  const info = (metadata as Record<string, { reasoning?: unknown }>)[selected]
+  return info?.reasoning === true
 }
 
 // One tool call to run during a batch: its identity, args, and the human (or
@@ -573,6 +593,7 @@ async function driveRun(
         ctx.history,
         ctx.stallTimeoutMs,
         ctx.tools,
+        ctx.reasoningEffort,
       )
       await incrementRunTurnCount(handle.runId)
 
@@ -673,6 +694,14 @@ export async function startRun(
   try {
     const conversation = await getConversationById(conversationId)
     if (!conversation) throw new Error('Conversation not found.')
+    const blockingRun = await getBlockingRunForConversation(conversationId)
+    if (blockingRun) {
+      throw new Error(
+        blockingRun.status === 'waiting_approval'
+          ? 'A reply is waiting for tool approval. Approve, deny, or stop it first.'
+          : 'A reply is already streaming for this conversation.',
+      )
+    }
     if (!conversation.curr_node) {
       throw new Error('Nothing to reply to yet — send a message first.')
     }
@@ -719,8 +748,16 @@ export async function startRun(
     const { servers, tools, toolIndex } = await buildToolContext(conversationId)
 
     const ctx: RunContext = {
-      provider: { base_url: provider.base_url, api_key: provider.api_key },
+      provider: {
+        id: provider.id,
+        kind: provider.kind,
+        base_url: provider.base_url,
+        api_key: provider.api_key,
+      },
       model: conversation.model,
+      reasoningEffort: providerSupportsReasoning(provider, conversation.model)
+        ? normalizeReasoningEffort(conversation.reasoning_effort)
+        : null,
       history,
       maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
       stallTimeoutMs: options.stallTimeoutMs ?? defaultStallTimeoutMs(),
@@ -831,8 +868,16 @@ export async function resumeParkedRun(
     await emitEvent(run.id, 'run-status', { status: 'running', error: null })
 
     const ctx: RunContext = {
-      provider: { base_url: provider.base_url, api_key: provider.api_key },
+      provider: {
+        id: provider.id,
+        kind: provider.kind,
+        base_url: provider.base_url,
+        api_key: provider.api_key,
+      },
       model: conversation.model,
+      reasoningEffort: providerSupportsReasoning(provider, conversation.model)
+        ? normalizeReasoningEffort(conversation.reasoning_effort)
+        : null,
       history,
       maxTurns: options.maxTurns ?? DEFAULT_MAX_TURNS,
       stallTimeoutMs: options.stallTimeoutMs ?? defaultStallTimeoutMs(),
@@ -863,8 +908,11 @@ export async function cancelRun(conversationId: string) {
     return true
   }
 
-  const run = await getRunningRunForConversation(conversationId)
+  const run = await getBlockingRunForConversation(conversationId)
   if (!run) return false
+  if (run.status === 'waiting_approval') {
+    await decideRunApprovals({ runId: run.id, decision: 'denied' })
+  }
   await parkOrphanedRun(
     { id: run.id, leaf_message_id: run.leaf_message_id },
     'cancelled',

@@ -11,6 +11,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { assertSafeOutboundUrl } from '../utils/outbound-url'
 
 const CLIENT_INFO = { name: 'spail', version: '1.0.0' }
 const DEFAULT_TIMEOUT_MS = 30_000
@@ -82,6 +83,7 @@ async function withClient<T>(
   server: McpServerConfig,
   fn: (client: Client) => Promise<T>,
 ): Promise<T> {
+  await assertSafeOutboundUrl(server.url)
   const headers = parseHeaders(server.headers)
   const transport = new StreamableHTTPClientTransport(new URL(server.url), {
     requestInit: Object.keys(headers).length > 0 ? { headers } : undefined,

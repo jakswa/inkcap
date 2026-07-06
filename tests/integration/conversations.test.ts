@@ -112,6 +112,42 @@ async function createConversationViaForm(
 }
 
 describe('conversations chat loop', () => {
+  test('new-chat composer uses provider-backed model and reasoning controls', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const model = `reasoning-${randomUUIDv7()}`
+    const provider = await createProvider({
+      name: `controls-${randomUUIDv7()}`,
+      kind: 'llama-server',
+      baseUrl: stubBaseUrl,
+      defaultModel: model,
+      models: [model],
+      modelMetadata: {
+        [model]: {
+          capabilities: ['text', 'reasoning'],
+          reasoning: true,
+          contextSize: null,
+          source: 'test',
+        },
+      },
+      enabled: true,
+    })
+
+    const res = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: origin },
+      body: form({ providerId: provider.id, model, title: 'x'.repeat(201) }),
+    })
+    expect(res.status).toBe(200)
+    const html = await res.text()
+
+    expect(html).toContain('data-model-select')
+    expect(html).toContain(`value="${model}"`)
+    expect(html).toContain('data-reasoning="1"')
+    expect(html).toContain('data-reasoning-control')
+    expect(html).not.toContain('list="new-chat-models"')
+  })
+
   test('send delivers a reply, advances curr_node, and renders the transcript', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)

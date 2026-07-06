@@ -29,6 +29,7 @@ export interface ICreateConversationResult {
     title: string | null;
     provider_id: string | null;
     model: string | null;
+    reasoning_effort: string | null;
     curr_node: string | null;
     pinned: boolean;
     forked_from_conversation_id: string | null;
@@ -45,6 +46,7 @@ export interface IGetConversationByIdResult {
     model: string | null;
     curr_node: string | null;
     pinned: boolean;
+    reasoning_effort: string | null;
     forked_from_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -59,6 +61,7 @@ export interface IListConversationsForUserResult {
     model: string | null;
     curr_node: string | null;
     pinned: boolean;
+    reasoning_effort: string | null;
     forked_from_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -71,6 +74,22 @@ export interface ISetConversationCurrNodeResult {
     title: string | null;
     provider_id: string | null;
     model: string | null;
+    reasoning_effort: string | null;
+    curr_node: string | null;
+    pinned: boolean;
+    forked_from_conversation_id: string | null;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `UpdateConversationModelSettings`. */
+export interface IUpdateConversationModelSettingsResult {
+    id: string;
+    user_id: string;
+    title: string | null;
+    provider_id: string | null;
+    model: string | null;
+    reasoning_effort: string | null;
     curr_node: string | null;
     pinned: boolean;
     forked_from_conversation_id: string | null;
@@ -90,6 +109,7 @@ export interface ICreateImportedConversationResult {
     title: string | null;
     provider_id: string | null;
     model: string | null;
+    reasoning_effort: string | null;
     curr_node: string | null;
     pinned: boolean;
     forked_from_conversation_id: string | null;
@@ -104,6 +124,7 @@ export interface IFindConversationMatchResult {
     title: string | null;
     provider_id: string | null;
     model: string | null;
+    reasoning_effort: string | null;
     curr_node: string | null;
     pinned: boolean;
     forked_from_conversation_id: string | null;
@@ -367,15 +388,18 @@ export interface IGetActivePathResult {
 
 /** Result of query `CreateProvider`. */
 export interface ICreateProviderResult {
-    id: string;
-    name: string;
-    kind: string;
-    base_url: string;
+    id: string | null;
+    name: string | null;
+    kind: string | null;
+    base_url: string | null;
     api_key: string | null;
     default_model: string | null;
-    enabled: boolean;
-    created_at: Date;
-    updated_at: Date;
+    models: string[] | null;
+    model_metadata: unknown | null;
+    oauth_credentials: unknown | null;
+    enabled: boolean | null;
+    created_at: Date | null;
+    updated_at: Date | null;
 }
 
 /** Result of query `GetProviderById`. */
@@ -386,6 +410,9 @@ export interface IGetProviderByIdResult {
     base_url: string;
     api_key: string | null;
     default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
     enabled: boolean;
     created_at: Date;
     updated_at: Date;
@@ -399,6 +426,9 @@ export interface IListProvidersResult {
     base_url: string;
     api_key: string | null;
     default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
     enabled: boolean;
     created_at: Date;
     updated_at: Date;
@@ -412,6 +442,9 @@ export interface ISetProviderEnabledResult {
     base_url: string;
     api_key: string | null;
     default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
     enabled: boolean;
     created_at: Date;
     updated_at: Date;
@@ -425,6 +458,9 @@ export interface IGetProviderByNameResult {
     base_url: string;
     api_key: string | null;
     default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
     enabled: boolean;
     created_at: Date;
     updated_at: Date;
@@ -432,12 +468,31 @@ export interface IGetProviderByNameResult {
 
 /** Result of query `UpdateProvider`. */
 export interface IUpdateProviderResult {
+    id: string | null;
+    name: string | null;
+    kind: string | null;
+    base_url: string | null;
+    api_key: string | null;
+    default_model: string | null;
+    models: string[] | null;
+    model_metadata: unknown | null;
+    oauth_credentials: unknown | null;
+    enabled: boolean | null;
+    created_at: Date | null;
+    updated_at: Date | null;
+}
+
+/** Result of query `UpdateProviderOauthCredentials`. */
+export interface IUpdateProviderOauthCredentialsResult {
     id: string;
     name: string;
     kind: string;
     base_url: string;
     api_key: string | null;
     default_model: string | null;
+    models: string[];
+    model_metadata: unknown;
+    oauth_credentials: unknown | null;
     enabled: boolean;
     created_at: Date;
     updated_at: Date;
@@ -521,6 +576,20 @@ export interface IIncrementRunSeqResult {
 
 /** Result of query `GetRunningRunForConversation`. */
 export interface IGetRunningRunForConversationResult {
+    id: string;
+    conversation_id: string;
+    status: string;
+    leaf_message_id: string | null;
+    turn_count: number;
+    budget: unknown | null;
+    error: string | null;
+    seq: string;
+    created_at: Date;
+    updated_at: Date;
+}
+
+/** Result of query `GetBlockingRunForConversation`. */
+export interface IGetBlockingRunForConversationResult {
     id: string;
     conversation_id: string;
     status: string;
@@ -658,6 +727,7 @@ export interface Queries {
     GetConversationById: IGetConversationByIdResult;
     ListConversationsForUser: IListConversationsForUserResult;
     SetConversationCurrNode: ISetConversationCurrNodeResult;
+    UpdateConversationModelSettings: IUpdateConversationModelSettingsResult;
     DeleteConversation: IDeleteConversationResult;
     CreateImportedConversation: ICreateImportedConversationResult;
     FindConversationMatch: IFindConversationMatchResult;
@@ -687,6 +757,7 @@ export interface Queries {
     SetProviderEnabled: ISetProviderEnabledResult;
     GetProviderByName: IGetProviderByNameResult;
     UpdateProvider: IUpdateProviderResult;
+    UpdateProviderOauthCredentials: IUpdateProviderOauthCredentialsResult;
     DeleteProvider: IDeleteProviderResult;
     InsertRunEvent: IInsertRunEventResult;
     ListRunEventsAfter: IListRunEventsAfterResult;
@@ -696,6 +767,7 @@ export interface Queries {
     SetRunStatus: ISetRunStatusResult;
     IncrementRunSeq: IIncrementRunSeqResult;
     GetRunningRunForConversation: IGetRunningRunForConversationResult;
+    GetBlockingRunForConversation: IGetBlockingRunForConversationResult;
     GetLatestRunForConversation: IGetLatestRunForConversationResult;
     SetRunLeafMessage: ISetRunLeafMessageResult;
     IncrementRunTurnCount: IIncrementRunTurnCountResult;

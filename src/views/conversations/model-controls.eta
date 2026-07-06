@@ -1,0 +1,56 @@
+<% const controls = it.controls %>
+<% const selectedProvider = controls.providers.find((provider) => provider.id === controls.selectedProviderId) || controls.providers[0] %>
+<% const modelOptions = selectedProvider ? selectedProvider.models : [] %>
+<% const providerModelsJson = (provider) => JSON.stringify(provider.models).replace(/</g, '\\u003c') %>
+
+<% if (selectedProvider) { %>
+  <% if (controls.allowProviderSelect && controls.providers.length > 1) { %>
+    <label class="chip max-w-[11rem] cursor-pointer" title="Provider">
+      <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
+      <select class="min-w-0 max-w-[8.5rem] cursor-pointer truncate bg-transparent outline-none field-sizing-content" name="providerId" aria-label="Provider" data-provider-select>
+        <% controls.providers.forEach((provider) => { %>
+          <option value="<%= provider.id %>" data-default-model="<%= provider.defaultModel || '' %>" data-models="<%= providerModelsJson(provider) %>" <%= provider.id === selectedProvider.id ? 'selected' : '' %>><%= provider.name %></option>
+        <% }) %>
+      </select>
+    </label>
+  <% } else if (controls.allowProviderSelect) { %>
+    <input type="hidden" name="providerId" value="<%= selectedProvider.id %>">
+    <span class="chip max-w-[11rem]" title="Provider: <%= selectedProvider.name %>">
+      <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
+      <span class="truncate"><%= selectedProvider.name %></span>
+    </span>
+  <% } %>
+
+  <% if (modelOptions.length > 0) { %>
+    <label class="chip max-w-[13rem] cursor-pointer sm:max-w-[18rem]" title="Model">
+      <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
+      <select class="min-w-0 max-w-[10.5rem] cursor-pointer truncate bg-transparent outline-none field-sizing-content sm:max-w-[15.5rem]" name="model" aria-label="Model" data-model-select>
+        <% modelOptions.forEach((model) => { %>
+          <option value="<%= model.name %>" data-reasoning="<%= model.reasoning ? '1' : '0' %>" <%= model.name === controls.selectedModel ? 'selected' : '' %>><%= model.name %></option>
+        <% }) %>
+      </select>
+    </label>
+  <% } else { %>
+    <label class="chip max-w-[13rem] sm:max-w-[18rem]" title="Model">
+      <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
+      <input class="min-w-0 max-w-[10.5rem] bg-transparent outline-none field-sizing-content sm:max-w-[15.5rem]" name="model" maxlength="200" value="<%= controls.selectedModel || '' %>" placeholder="model" aria-label="Model">
+    </label>
+  <% } %>
+
+  <input type="hidden" name="reasoning_effort" value="off" data-reasoning-hidden <%= controls.modelSupportsReasoning ? 'disabled' : '' %>>
+  <% const reasoningLevels = [['off', 'Off'], ['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['max', 'Max']] %>
+  <% const reasoningLabel = (reasoningLevels.find(([value]) => value === controls.selectedReasoning) || reasoningLevels[0])[1] %>
+  <label class="group relative grid size-6.5 shrink-0 cursor-pointer place-items-center rounded-full bg-ink/5 text-ink-faint transition-colors hover:bg-ink/10 hover:text-ink-dim data-[on]:bg-warn/15 data-[on]:text-warn data-[on]:hover:bg-warn/25 <%= controls.modelSupportsReasoning ? '' : 'hidden' %>" title="Reasoning: <%= reasoningLabel %>" data-reasoning-control <%= controls.selectedReasoning && controls.selectedReasoning !== 'off' ? 'data-on' : '' %>>
+    <%~ include('../partials/icon', { name: 'bulb', class: 'hidden size-3.5 group-data-[on]:block' }) %>
+    <%~ include('../partials/icon', { name: 'bulbOff', class: 'size-3.5 group-data-[on]:hidden' }) %>
+    <select class="absolute inset-0 size-full cursor-pointer appearance-none opacity-0" name="reasoning_effort" aria-label="Reasoning effort" <%= controls.modelSupportsReasoning ? '' : 'disabled' %>>
+      <% reasoningLevels.forEach(([value, label]) => { %>
+        <option value="<%= value %>" <%= controls.selectedReasoning === value ? 'selected' : '' %>><%= label %></option>
+      <% }) %>
+    </select>
+  </label>
+<% } else { %>
+  <span class="chip border-warn/40 text-warn">no provider</span>
+  <input type="hidden" name="model" value="">
+  <input type="hidden" name="reasoning_effort" value="off">
+<% } %>

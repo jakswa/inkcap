@@ -28,7 +28,7 @@ app.use(
 )
 app.use(
   bodyLimit({
-    maxSize: 50 * 1024 * 1024,
+    maxSize: 1024 * 1024,
     onError: (c) => c.text('Request body too large', 413),
   }),
 )

@@ -217,16 +217,37 @@ describe('runs', () => {
     expect(Number(second?.seq)).toBe(2)
   })
 
+  test('only one non-terminal run is allowed per conversation', async () => {
+    const user = await makeUser()
+    const convo = await createConversation({ userId: user.id })
+    const running = await createRun({ conversationId: convo.id })
+    await assertRejects(() => createRun({ conversationId: convo.id }))
+    await assertRejects(() =>
+      createRun({ conversationId: convo.id, status: 'waiting_approval' }),
+    )
+
+    await setRunStatus({ id: running.id, status: 'done' })
+    const waiting = await createRun({
+      conversationId: convo.id,
+      status: 'waiting_approval',
+    })
+    await assertRejects(() => createRun({ conversationId: convo.id }))
+    await setRunStatus({ id: waiting.id, status: 'cancelled' })
+  })
+
   test('running partial index query only returns running runs', async () => {
     const user = await makeUser()
     const convo = await createConversation({ userId: user.id })
     const running = await createRun({ conversationId: convo.id })
+    await setRunStatus({ id: running.id, status: 'done' })
     const done = await createRun({ conversationId: convo.id })
     await setRunStatus({ id: done.id, status: 'done' })
+    const nextRunning = await createRun({ conversationId: convo.id })
 
     const runningList = await listRunningRuns()
     const ids = runningList.map((r) => r.id)
-    expect(ids).toContain(running.id)
+    expect(ids).toContain(nextRunning.id)
+    expect(ids).not.toContain(running.id)
     expect(ids).not.toContain(done.id)
     expect(runningList.every((r) => r.status === 'running')).toBe(true)
   })

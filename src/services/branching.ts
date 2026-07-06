@@ -88,6 +88,7 @@ export async function forkConversationPath(conversation: {
   title: string | null
   provider_id: string | null
   model: string | null
+  reasoning_effort?: string | null
   curr_node: string | null
 }): Promise<string> {
   const forked = await createConversation({
@@ -95,6 +96,7 @@ export async function forkConversationPath(conversation: {
     title: conversation.title ? `${conversation.title} (fork)` : null,
     providerId: conversation.provider_id,
     model: conversation.model,
+    reasoningEffort: conversation.reasoning_effort ?? null,
     forkedFromConversationId: conversation.id,
   })
 

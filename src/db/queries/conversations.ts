@@ -6,19 +6,21 @@ export async function createConversation(input: {
   title?: string | null
   providerId?: string | null
   model?: string | null
+  reasoningEffort?: string | null
   forkedFromConversationId?: string | null
 }) {
   const [conversation] = await sql.CreateConversation`
-    INSERT INTO conversations (id, user_id, title, provider_id, model, forked_from_conversation_id)
+    INSERT INTO conversations (id, user_id, title, provider_id, model, reasoning_effort, forked_from_conversation_id)
     VALUES (
       ${randomUUIDv7()},
       ${input.userId},
       ${input.title ?? null},
       ${input.providerId ?? null},
       ${input.model ?? null},
+      ${input.reasoningEffort ?? null},
       ${input.forkedFromConversationId ?? null}
     )
-    RETURNING id, user_id, title, provider_id, model, curr_node, pinned,
+    RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
               forked_from_conversation_id, created_at, updated_at
   `
 
@@ -28,6 +30,7 @@ export async function createConversation(input: {
 export async function getConversationById(id: string) {
   const [conversation] = await sql.GetConversationById`
     SELECT id, user_id, title, provider_id, model, curr_node, pinned,
+           reasoning_effort,
            forked_from_conversation_id, created_at, updated_at
     FROM conversations
     WHERE id = ${id}
@@ -39,6 +42,7 @@ export async function getConversationById(id: string) {
 export async function listConversationsForUser(userId: string) {
   return sql.ListConversationsForUser`
     SELECT id, user_id, title, provider_id, model, curr_node, pinned,
+           reasoning_effort,
            forked_from_conversation_id, created_at, updated_at
     FROM conversations
     WHERE user_id = ${userId}
@@ -51,7 +55,23 @@ export async function setConversationCurrNode(input: { id: string; currNode: str
     UPDATE conversations
     SET curr_node = ${input.currNode}, updated_at = now()
     WHERE id = ${input.id}
-    RETURNING id, user_id, title, provider_id, model, curr_node, pinned,
+    RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
+              forked_from_conversation_id, created_at, updated_at
+  `
+
+  return conversation
+}
+
+export async function updateConversationModelSettings(input: {
+  id: string
+  model: string | null
+  reasoningEffort: string | null
+}) {
+  const [conversation] = await sql.UpdateConversationModelSettings`
+    UPDATE conversations
+    SET model = ${input.model}, reasoning_effort = ${input.reasoningEffort}, updated_at = now()
+    WHERE id = ${input.id}
+    RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
               forked_from_conversation_id, created_at, updated_at
   `
 
@@ -95,7 +115,7 @@ export async function createImportedConversation(input: {
       ${input.createdAt},
       ${input.createdAt}
     )
-    RETURNING id, user_id, title, provider_id, model, curr_node, pinned,
+    RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
               forked_from_conversation_id, created_at, updated_at
   `
 
@@ -112,7 +132,7 @@ export async function findConversationMatch(input: {
   createdAt: Date
 }) {
   const [conversation] = await sql.FindConversationMatch`
-    SELECT id, user_id, title, provider_id, model, curr_node, pinned,
+    SELECT id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
            forked_from_conversation_id, created_at, updated_at
     FROM conversations
     WHERE user_id = ${input.userId}

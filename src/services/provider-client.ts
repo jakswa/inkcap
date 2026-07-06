@@ -7,9 +7,11 @@
 // arrives through an AbortSignal passed to fetch.
 //
 // Request/response shapes follow docs/specs/completions.md. We intentionally
-// stay on the generic OpenAI-compatible subset here (messages, model, stream)
-// and leave the llama-server-only knobs (samplers, reasoning_control, timings
-// telemetry, etc.) for later waves.
+// stay on the generic OpenAI-compatible subset by default. llama-server
+// reasoning knobs are only sent when the caller explicitly passes a reasoning
+// effort for a model discovered as reasoning-capable.
+
+import { assertSafeOutboundUrl } from '../utils/outbound-url'
 
 export type ChatRole = 'system' | 'user' | 'assistant' | 'tool'
 
@@ -26,8 +28,13 @@ export interface ChatMessage {
 }
 
 // The subset of a providers row this client needs. Callers pass the row from
-// getProviderById; base_url and api_key are the only fields read here.
+// getProviderById. `kind` selects the wire protocol (openai-codex routes to
+// codex-client's Responses translation; everything else speaks OpenAI chat
+// completions); `id` lets the codex path load/refresh OAuth tokens from the
+// canonical provider row.
 export interface ProviderConfig {
+  id?: string
+  kind?: string
   base_url: string
   api_key: string | null
 }
@@ -37,6 +44,8 @@ export interface ChatRequest {
   headers: Record<string, string>
   body: Record<string, unknown>
 }
+
+export type ReasoningEffort = 'off' | 'low' | 'medium' | 'high' | 'max'
 
 export interface ChatCompletion {
   content: string
@@ -75,7 +84,7 @@ export function buildChatRequest(
   provider: ProviderConfig,
   model: string | null,
   messages: ChatMessage[],
-  options: { stream?: boolean; tools?: unknown[] } = {},
+  options: { stream?: boolean; tools?: unknown[]; reasoningEffort?: ReasoningEffort | null } = {},
 ): ChatRequest {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -95,8 +104,29 @@ export function buildChatRequest(
   if (options.tools && options.tools.length > 0) {
     body.tools = options.tools
   }
+  if (options.reasoningEffort) {
+    const enabled = options.reasoningEffort !== 'off'
+    body.reasoning_format = 'auto'
+    body.chat_template_kwargs = { enable_thinking: enabled }
+    body.reasoning_control = true
+    const budget = reasoningBudgetTokens(options.reasoningEffort)
+    if (budget !== null) body.thinking_budget_tokens = budget
+  }
 
   return { url: completionsUrl(provider.base_url), headers, body }
+}
+
+function reasoningBudgetTokens(effort: ReasoningEffort): number | null {
+  switch (effort) {
+    case 'low':
+      return 512
+    case 'medium':
+      return 2048
+    case 'high':
+      return 8192
+    default:
+      return null
+  }
 }
 
 // Extract a human-readable message from an error response body (spec §6.1).
@@ -121,8 +151,14 @@ export async function completeOnce(
   provider: ProviderConfig,
   model: string | null,
   messages: ChatMessage[],
+  options: { signal?: AbortSignal } = {},
 ): Promise<ChatCompletion> {
+  if (provider.kind === 'openai-codex') {
+    const { completeCodexOnce } = await import('./codex-client')
+    return completeCodexOnce(provider, model, messages, options)
+  }
   const request = buildChatRequest(provider, model, messages)
+  await assertSafeOutboundUrl(request.url)
 
   let response: Response
   try {
@@ -130,6 +166,8 @@ export async function completeOnce(
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body),
+      redirect: 'manual',
+      signal: options.signal,
     })
   } catch (error) {
     throw new Error(
@@ -298,8 +336,27 @@ export async function* streamChat(
   signal?: AbortSignal,
   stallTimeoutMs: number = DEFAULT_STALL_TIMEOUT_MS,
   tools?: unknown[],
+  reasoningEffort?: ReasoningEffort | null,
 ): AsyncGenerator<StreamDelta, void, undefined> {
-  const request = buildChatRequest(provider, model, messages, { stream: true, tools })
+  if (provider.kind === 'openai-codex') {
+    const { streamCodexChat } = await import('./codex-client')
+    yield* streamCodexChat(
+      provider,
+      model,
+      messages,
+      signal,
+      stallTimeoutMs,
+      tools,
+      reasoningEffort,
+    )
+    return
+  }
+  const request = buildChatRequest(provider, model, messages, {
+    stream: true,
+    tools,
+    reasoningEffort,
+  })
+  await assertSafeOutboundUrl(request.url)
 
   // The watchdog aborts through its own controller, merged with the caller's
   // cancel signal, so a stall tears down the socket without the caller's
@@ -335,6 +392,7 @@ export async function* streamChat(
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body),
+      redirect: 'manual',
       signal: fetchSignal,
     })
   } catch (error) {

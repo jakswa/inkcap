@@ -1,30 +1,31 @@
 <section class="grid gap-5 pb-[clamp(2rem,7vw,5rem)]">
-  <div class="mb-3 text-xs font-extrabold uppercase tracking-[0.14em] text-indigo-600">server-driven LLM chat</div>
-  <h1 class="max-w-[13ch] text-[clamp(2.5rem,8vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.06em]">Chats that keep going when you close the tab.</h1>
-  <p class="max-w-2xl text-xl leading-relaxed text-slate-500">
+  <div class="eyebrow mb-3">server-driven LLM chat</div>
+  <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Chats that keep going when you close the tab.</h1>
+  <p class="max-w-2xl text-xl leading-relaxed text-ink-dim">
     The server owns the conversation: close your laptop mid-generation, open your
     phone later, and the chat reached a sensible stopping point without you.
   </p>
   <div class="flex flex-wrap gap-3">
     <% if (it.user) { %>
-      <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white no-underline hover:bg-indigo-700" href="/dashboard">Open dashboard</a>
+      <a class="btn btn-primary" href="/conversations">Open your chats</a>
+      <a class="btn btn-ghost" href="/providers">Providers</a>
     <% } else { %>
-      <a class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 font-bold text-white no-underline hover:bg-indigo-700" href="/register">Create an account</a>
-      <a class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2.5 font-bold text-slate-900 no-underline hover:bg-indigo-50" href="/login">Log in</a>
+      <a class="btn btn-primary" href="/register">Create an account</a>
+      <a class="btn btn-ghost" href="/login">Log in</a>
     <% } %>
   </div>
 </section>
 
 <section class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1" aria-label="Principles">
-  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+  <article class="card">
     <h2 class="mb-2 text-lg font-bold">Durable runs</h2>
     <p class="mb-0">Completions are server-side jobs. Browsers attach, detach, and reattach as spectators.</p>
   </article>
-  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+  <article class="card">
     <h2 class="mb-2 text-lg font-bold">Your providers</h2>
     <p class="mb-0">llama-server, OpenAI-compatible endpoints — registered once, picked per conversation, keys never in the browser.</p>
   </article>
-  <article class="rounded-lg border border-slate-300 bg-white p-6 shadow-sm shadow-slate-900/10">
+  <article class="card">
     <h2 class="mb-2 text-lg font-bold">Boring on purpose</h2>
     <p class="mb-0">SSR templates and HTML forms everywhere; JavaScript spent only where the chat streams.</p>
   </article>

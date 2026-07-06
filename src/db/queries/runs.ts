@@ -78,6 +78,21 @@ export async function getRunningRunForConversation(conversationId: string) {
   return run
 }
 
+// Any non-terminal run that blocks starting another run for the conversation.
+export async function getBlockingRunForConversation(conversationId: string) {
+  const [run] = await sql.GetBlockingRunForConversation`
+    SELECT id, conversation_id, status, leaf_message_id, turn_count, budget,
+           error, seq, created_at, updated_at
+    FROM runs
+    WHERE conversation_id = ${conversationId}
+      AND status IN ('running', 'waiting_approval')
+    ORDER BY CASE status WHEN 'running' THEN 0 ELSE 1 END, created_at DESC
+    LIMIT 1
+  `
+
+  return run
+}
+
 // The most recent run for a conversation regardless of status; the SSE
 // endpoint attaches to this when no run is currently in flight.
 export async function getLatestRunForConversation(conversationId: string) {

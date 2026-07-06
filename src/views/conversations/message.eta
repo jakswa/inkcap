@@ -1,88 +1,111 @@
 <% const m = it.message %>
-<article class="group grid gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5 <%= m.role === 'user' ? 'lg:ml-10 border-indigo-100 bg-indigo-50/40' : 'lg:mr-10' %>" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
-  <p class="flex items-center gap-2 text-xs font-extrabold uppercase tracking-[0.14em] <%= m.role === 'user' ? 'text-slate-500' : 'text-indigo-600' %>">
-    <%= m.role %>
-    <% if (m.status === 'streaming') { %><span class="font-semibold normal-case tracking-normal text-slate-400" data-streaming-marker>streaming…</span><% } %>
-    <% if (m.status === 'interrupted') { %><span class="font-semibold normal-case tracking-normal text-amber-600">interrupted</span><% } %>
-  </p>
-
-  <% if (m.status === 'streaming') { %>
-    <% /* Live path: the island appends plain-text deltas into these nodes, then
-          message-final swaps this whole <article> for the settled render below. */ %>
-    <pre class="m-0 hidden whitespace-pre-wrap break-words font-body text-sm text-slate-500 [&:not(:empty)]:block" data-reasoning><%= m.reasoning_content || '' %></pre>
-    <pre class="m-0 whitespace-pre-wrap break-words font-body text-slate-900" data-content><%= m.content %></pre>
-  <% } else { %>
-    <% if (m.reasoning_content) { %>
-      <details class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        <summary class="cursor-pointer select-none font-semibold text-slate-500">Reasoning</summary>
-        <pre class="m-0 mt-2 whitespace-pre-wrap break-words font-body"><%= m.reasoning_content %></pre>
-      </details>
-    <% } %>
-    <div class="md text-slate-900 [&:empty]:hidden" data-content><%~ m.contentHtml %></div>
-  <% } %>
-
-  <% if ((m.model || m.timingLabel) && m.role === 'assistant') { %>
-    <footer class="text-xs text-slate-400">
-      <% if (m.model) { %><span><%= m.model %></span><% } %>
-      <% if (m.model && m.timingLabel) { %> · <% } %>
-      <% if (m.timingLabel) { %><span><%= m.timingLabel %></span><% } %>
-    </footer>
-  <% } %>
-
-  <% /* Branching controls (M7). Only on settled messages — a streaming leaf has
-        no actions. Action URLs use m.conversation_id (present on the row) so the
-        same partial works for the SSR transcript and the runner's finalize-swap.
-        The sibling switcher only appears on a full SSR render (siblingNav is
-        computed in the route, not by the runner), degrading to reload. */ %>
-  <% if (m.status !== 'streaming' && m.id) { %>
-    <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
-      <% if (m.siblingNav && m.siblingNav.total > 1) { %>
-        <span class="inline-flex items-center gap-1" data-sibling-nav>
-          <% if (m.siblingNav.prevId) { %>
-            <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
-              <input type="hidden" name="target" value="<%= m.siblingNav.prevId %>">
-              <button class="cursor-pointer rounded border border-slate-200 px-1.5 font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600" type="submit" aria-label="Previous sibling">‹</button>
-            </form>
-          <% } else { %>
-            <span class="px-1.5 text-slate-300" aria-hidden="true">‹</span>
-          <% } %>
-          <span data-sibling-index><%= m.siblingNav.index %> / <%= m.siblingNav.total %></span>
-          <% if (m.siblingNav.nextId) { %>
-            <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/switch">
-              <input type="hidden" name="target" value="<%= m.siblingNav.nextId %>">
-              <button class="cursor-pointer rounded border border-slate-200 px-1.5 font-bold text-slate-500 hover:border-indigo-300 hover:text-indigo-600" type="submit" aria-label="Next sibling">›</button>
-            </form>
-          <% } else { %>
-            <span class="px-1.5 text-slate-300" aria-hidden="true">›</span>
-          <% } %>
-        </span>
+<% /* One partial for every role, shared by the SSR transcript and the
+      runner's finalize-swap (action URLs use m.conversation_id, present on
+      the row). Streaming keeps plain-text <pre> nodes the island appends
+      into; message-final swaps in this same partial's settled render. */ %>
+<% if (m.role === 'system' || m.role === 'tool') { %>
+  <article class="group" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
+    <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm">
+      <summary class="flex cursor-pointer items-center gap-2 font-semibold text-ink-dim select-none">
+        <%~ include('../partials/icon', { name: m.role === 'tool' ? 'terminal' : 'sliders', class: 'size-4' }) %>
+        <%= m.role === 'tool' ? 'Tool result' : 'System prompt' %>
+        <%~ include('../partials/icon', { name: 'chevronDown', class: 'ml-auto size-4 transition-transform group-open/acc:rotate-180' }) %>
+      </summary>
+      <pre class="m-0 mt-2 whitespace-pre-wrap break-words text-ink-dim <%= m.role === 'tool' ? 'font-mono text-xs' : 'font-body' %>" data-content><%= m.content %></pre>
+    </details>
+  </article>
+<% } else if (m.role === 'user') { %>
+  <article class="group grid justify-items-end gap-1.5" data-message-id="<%= m.id %>" data-role="user" data-status="<%= m.status %>">
+    <div class="max-w-[85%] rounded-3xl rounded-br-lg bg-ink/8 px-4 py-2.5">
+      <% if (m.status === 'streaming') { %>
+        <pre class="m-0 font-body whitespace-pre-wrap break-words text-ink" data-content><%= m.content %></pre>
+      <% } else { %>
+        <div class="md [&:empty]:hidden" data-content><%~ m.contentHtml %></div>
       <% } %>
+    </div>
 
-      <% if (m.role === 'user') { %>
-        <details class="group/edit" data-edit>
-          <summary class="cursor-pointer select-none font-semibold hover:text-indigo-600">Edit</summary>
-          <form class="mt-2 grid gap-2" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/edit">
-            <textarea class="w-full resize-y rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900" name="content" rows="3"><%= m.content %></textarea>
-            <div class="flex justify-end">
-              <button class="cursor-pointer rounded-lg border-0 bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-indigo-700" type="submit">Save &amp; regenerate</button>
-            </div>
-          </form>
+    <% if (m.status !== 'streaming' && m.id) { %>
+      <div class="msg-actions flex items-center gap-0.5 text-ink-faint">
+        <%~ include('./message-siblings', { m: m }) %>
+        <button class="js-only icon-btn size-7" type="button" data-copy data-clip="<%= m.clipContent %>" aria-label="Copy message" title="Copy">
+          <%~ include('../partials/icon', { name: 'copy', class: 'size-4' }) %>
+        </button>
+        <details class="relative" data-edit>
+          <summary class="icon-btn size-7" aria-label="Edit message" title="Edit — saves as a new branch and regenerates">
+            <%~ include('../partials/icon', { name: 'pencil', class: 'size-4' }) %>
+          </summary>
+          <div class="absolute bottom-full right-0 z-10 mb-1 w-[min(32rem,calc(100vw-3rem))] rounded-2xl border border-edge bg-raised p-3 shadow-xl shadow-black/10">
+            <form class="grid gap-2" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/edit">
+              <textarea class="input text-sm" name="content" rows="4"><%= m.content %></textarea>
+              <div class="flex justify-end">
+                <button class="btn btn-primary px-3 py-1.5 text-xs" type="submit">Save &amp; regenerate</button>
+              </div>
+            </form>
+          </div>
+        </details>
+        <%~ include('./message-delete', { m: m, align: 'right' }) %>
+      </div>
+    <% } %>
+  </article>
+<% } else { %>
+  <article class="group grid gap-2" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
+    <% if (m.status === 'streaming') { %>
+      <% /* Live path: the island appends plain-text deltas into these nodes,
+            then message-final swaps this whole <article> for the settled
+            render. */ %>
+      <pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning><%= m.reasoning_content || '' %></pre>
+      <pre class="m-0 font-body whitespace-pre-wrap break-words text-ink" data-content><%= m.content %></pre>
+    <% } else { %>
+      <% if (m.reasoning_content) { %>
+        <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm">
+          <summary class="flex cursor-pointer items-center gap-2 font-semibold text-ink-dim select-none">
+            <%~ include('../partials/icon', { name: 'bulb', class: 'size-4' }) %>
+            Reasoning
+            <%~ include('../partials/icon', { name: 'chevronDown', class: 'ml-auto size-4 transition-transform group-open/acc:rotate-180' }) %>
+          </summary>
+          <pre class="m-0 mt-2 font-body whitespace-pre-wrap break-words text-ink-dim"><%= m.reasoning_content %></pre>
         </details>
       <% } %>
+      <div class="md [&:empty]:hidden" data-content><%~ m.contentHtml %></div>
+    <% } %>
 
-      <% if (m.role === 'assistant') { %>
-        <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/regenerate">
-          <button class="cursor-pointer font-semibold hover:text-indigo-600" type="submit">Regenerate</button>
-        </form>
-      <% } %>
+    <% if (m.status === 'interrupted') { %>
+      <p class="mb-0 text-xs font-medium text-warn">interrupted</p>
+    <% } %>
 
-      <details data-delete>
-        <summary class="cursor-pointer select-none font-semibold hover:text-red-600">Delete</summary>
-        <form class="mt-2 flex items-center gap-2" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/delete">
-          <span class="text-slate-500">Delete this message and everything below it?</span>
-          <button class="cursor-pointer rounded-lg border border-red-300 bg-white px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-50" type="submit">Confirm delete</button>
-        </form>
-      </details>
-    </div>
-  <% } %>
-</article>
+    <% if (m.status !== 'streaming' && (m.model || m.stats || m.id)) { %>
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <% if (m.model || m.stats) { %>
+          <footer class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-faint">
+            <% if (m.model) { %>
+              <span class="inline-flex items-center gap-1.5 rounded-md border border-edge px-1.5 py-0.5 font-medium text-ink-dim">
+                <%~ include('../partials/icon', { name: 'cube', class: 'size-3' }) %>
+                <%= m.model %>
+              </span>
+            <% } %>
+            <% if (m.stats) { %>
+              <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3' }) %><%= m.stats.tokens %></span>
+              <% if (m.stats.seconds) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'clock', class: 'size-3' }) %><%= m.stats.seconds %></span><% } %>
+              <% if (m.stats.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3' }) %><%= m.stats.rate %></span><% } %>
+            <% } %>
+          </footer>
+        <% } %>
+
+        <% if (m.id) { %>
+          <div class="msg-actions flex items-center gap-0.5 text-ink-faint">
+            <%~ include('./message-siblings', { m: m }) %>
+            <button class="js-only icon-btn size-7" type="button" data-copy data-clip="<%= m.clipContent %>" aria-label="Copy message" title="Copy">
+              <%~ include('../partials/icon', { name: 'copy', class: 'size-4' }) %>
+            </button>
+            <form class="contents" method="post" action="/conversations/<%= m.conversation_id %>/messages/<%= m.id %>/regenerate">
+              <button class="icon-btn size-7" type="submit" aria-label="Regenerate" title="Regenerate — the old reply stays as a branch">
+                <%~ include('../partials/icon', { name: 'refresh', class: 'size-4' }) %>
+              </button>
+            </form>
+            <%~ include('./message-delete', { m: m, align: 'left' }) %>
+          </div>
+        <% } %>
+      </div>
+    <% } %>
+  </article>
+<% } %>
