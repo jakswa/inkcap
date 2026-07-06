@@ -12,6 +12,7 @@
 // turns will extend the loop).
 
 import { eta } from '../middleware/render'
+import { toRenderable } from '../utils/message-view'
 import {
   getConversationById,
   setConversationCurrNode,
@@ -147,8 +148,10 @@ async function emitEvent(runId: string, type: RunEventType, payload: unknown) {
   return event
 }
 
-export async function renderMessageHtml(message: unknown) {
-  return eta.renderAsync('conversations/message', { message })
+export async function renderMessageHtml<
+  T extends Parameters<typeof toRenderable>[0],
+>(message: T | null | undefined) {
+  return eta.renderAsync('conversations/message', { message: toRenderable(message ?? {}) })
 }
 
 // Rows from getActivePath come back all-nullable (recursive CTE).

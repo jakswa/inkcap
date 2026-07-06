@@ -10,15 +10,18 @@
     <% } else { %>
       <ul class="grid list-none gap-3 p-0">
         <% it.conversations.forEach((conversation) => { %>
-          <li>
-            <a class="grid gap-1 rounded-lg border border-slate-300 bg-white p-4 no-underline shadow-sm shadow-slate-900/10 hover:border-indigo-400" href="/conversations/<%= conversation.id %>">
+          <li class="group relative rounded-lg border border-slate-300 bg-white shadow-sm shadow-slate-900/10 hover:border-indigo-400">
+            <a class="grid gap-1 p-4 pr-12 no-underline" href="/conversations/<%= conversation.id %>">
               <span class="font-bold text-slate-900"><%= conversation.title || 'untitled' %></span>
               <span class="text-sm text-slate-500">
                 <%= conversation.provider_id && it.providerNames[conversation.provider_id] ? it.providerNames[conversation.provider_id] : 'no provider' %>
                 <% if (conversation.model) { %> · <%= conversation.model %><% } %>
               </span>
-              <span class="text-xs text-slate-400">Updated <%= conversation.updated_at.toISOString() %></span>
+              <span class="text-xs text-slate-400"><%= conversation.updatedLabel %></span>
             </a>
+            <form class="absolute right-2 top-2" method="post" action="/conversations/<%= conversation.id %>/delete">
+              <button class="cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1 text-sm text-slate-400 hover:bg-red-50 hover:text-red-700" type="submit" aria-label="Delete conversation" title="Delete conversation">✕</button>
+            </form>
           </li>
         <% }) %>
       </ul>

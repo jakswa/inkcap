@@ -58,6 +58,19 @@ export async function setConversationCurrNode(input: { id: string; currNode: str
   return conversation
 }
 
+// Delete a conversation the given user owns. Scoped by user_id so one user can
+// never delete another's conversation. Messages, runs, and run_events cascade
+// (ON DELETE CASCADE). Returns the deleted id, or undefined if nothing matched.
+export async function deleteConversation(input: { id: string; userId: string }) {
+  const [conversation] = await sql.DeleteConversation`
+    DELETE FROM conversations
+    WHERE id = ${input.id} AND user_id = ${input.userId}
+    RETURNING id
+  `
+
+  return conversation
+}
+
 // Importer-only: the llama-ui export carries its own id (reused verbatim as
 // our conversation id when it's UUID-shaped) and original timestamps, so this
 // bypasses the randomUUIDv7()/now() defaults that createConversation uses.

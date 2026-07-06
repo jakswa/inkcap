@@ -78,6 +78,11 @@ export interface ISetConversationCurrNodeResult {
     updated_at: Date;
 }
 
+/** Result of query `DeleteConversation`. */
+export interface IDeleteConversationResult {
+    id: string;
+}
+
 /** Result of query `CreateImportedConversation`. */
 export interface ICreateImportedConversationResult {
     id: string;
@@ -453,6 +458,7 @@ export interface Queries {
     GetConversationById: IGetConversationByIdResult;
     ListConversationsForUser: IListConversationsForUserResult;
     SetConversationCurrNode: ISetConversationCurrNodeResult;
+    DeleteConversation: IDeleteConversationResult;
     CreateImportedConversation: ICreateImportedConversationResult;
     FindConversationMatch: IFindConversationMatchResult;
     CreateMessage: ICreateMessageResult;

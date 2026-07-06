@@ -3,6 +3,7 @@ import type { Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import {
   createConversation,
+  deleteConversation,
   getConversationById,
   listConversationsForUser,
   setConversationCurrNode,
@@ -23,6 +24,8 @@ import {
   type RunEventRecord,
 } from '../services/runner'
 import { readString } from '../utils/validation'
+import { toRenderable } from '../utils/message-view'
+import { relativeTime } from '../utils/relative-time'
 
 export const conversationRoutes = new Hono()
 
@@ -58,11 +61,12 @@ async function renderShow(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const [provider, activeRun] = await Promise.all([
+  const [provider, activeRun, sidebar] = await Promise.all([
     conversation.provider_id
       ? getProviderById(conversation.provider_id)
       : Promise.resolve(null),
     getRunningRunForConversation(conversation.id),
+    listConversationsForUser(conversation.user_id),
   ])
 
   const path = conversation.curr_node
@@ -74,7 +78,15 @@ async function renderShow(
     title: conversation.title || 'untitled',
     conversation,
     provider,
-    messages: path,
+    // Settled messages carry rendered-markdown HTML; the streaming leaf keeps
+    // plain text for the island's live tail (contentHtml === null).
+    messages: path.map((message) => toRenderable(message)),
+    sidebar: sidebar.map((row) => ({
+      id: row.id,
+      title: row.title,
+      updatedLabel: relativeTime(row.updated_at),
+      current: row.id === conversation.id,
+    })),
     activeRun: activeRun ?? null,
     error: options.error ?? null,
     draft: options.draft ?? '',
@@ -96,7 +108,10 @@ conversationRoutes.get('/conversations', async (c) => {
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/list', {
     title: 'Conversations',
-    conversations,
+    conversations: conversations.map((row) => ({
+      ...row,
+      updatedLabel: relativeTime(row.updated_at),
+    })),
     providerNames,
     providers: enabledProviders,
     errors: [],
@@ -132,7 +147,10 @@ conversationRoutes.post('/conversations', async (c) => {
     c.header('Cache-Control', 'private, no-store')
     return c.var.render('conversations/list', {
       title: 'Conversations',
-      conversations: await listConversationsForUser(user.id),
+      conversations: (await listConversationsForUser(user.id)).map((row) => ({
+        ...row,
+        updatedLabel: relativeTime(row.updated_at),
+      })),
       providerNames: Object.fromEntries(providers.map((p) => [p.id, p.name])),
       providers: enabledProviders,
       errors,
@@ -159,6 +177,16 @@ conversationRoutes.post('/conversations', async (c) => {
   }
 
   return c.redirect(`/conversations/${conversation.id}`)
+})
+
+// POST /conversations/:id/delete — remove a conversation the user owns.
+// Messages/runs/run-events cascade. Redirects back to the list.
+conversationRoutes.post('/conversations/:id/delete', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+
+  await deleteConversation({ id: c.req.param('id'), userId: user.id })
+  return c.redirect('/conversations')
 })
 
 // GET /conversations/:id — SSR transcript of the active path + composer.
