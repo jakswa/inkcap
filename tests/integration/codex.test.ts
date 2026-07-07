@@ -551,6 +551,22 @@ describe('codex connect flow', () => {
     }
   })
 
+  test('a pasted callback URL with the wrong port is rejected', async () => {
+    const { headers } = await authHeadersFor()
+    // Tests run with CODEX_OAUTH_PORT=14855, so the CLI's real default port
+    // is the wrong one here — the paste form must only accept the exact
+    // redirect_uri the token endpoint will be told about.
+    const pasted = await app.request(url('/providers/codex/callback'), {
+      method: 'POST',
+      headers,
+      body: form({
+        callback_url: 'http://localhost:1455/auth/callback?code=x&state=y',
+      }),
+    })
+    expect(pasted.status).toBe(400)
+    expect(await pasted.text()).toContain('does not look like the Codex localhost callback URL')
+  })
+
   test('codex callback returns to the configured public origin, not a LAN/IP origin', async () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()

@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import { randomUUIDv7 } from 'bun'
 
-process.env['CSRF_TRUSTED_ORIGINS'] = 'http://192.168.1.160'
+// Trailing slash on purpose: entries are normalized before comparison with
+// the browser's Origin header, which never carries one.
+process.env['CSRF_TRUSTED_ORIGINS'] = 'http://192.168.1.160/'
 const { app } = await import('../../src/app')
 
 const password = 'correct horse battery staple'

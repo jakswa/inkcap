@@ -1,31 +1,32 @@
 import { getCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import type { CurrentUser } from '../app-types'
-import { decryptSession, sessionCookieNames } from '../utils/private-session'
+import { acceptedSessionCookieNames, decryptSession } from '../utils/private-session'
 
 export const currentUser = createMiddleware<{
   Variables: {
     user: CurrentUser
   }
 }>(async (c, next) => {
-  const cookie = sessionCookieNames.map((name) => getCookie(c, name)).find(Boolean)
+  const cookies = getCookie(c)
 
-  if (!cookie) {
-    c.set('user', null)
-    await next()
-    return
+  // First cookie that decrypts wins — a stale or undecryptable
+  // __Host-session must not shadow a valid `session` from a plain-http
+  // login on the same host (docs/issues/18).
+  for (const name of acceptedSessionCookieNames()) {
+    const value = cookies[name]
+    if (!value) continue
+    const session = decryptSession(value)
+    if (session) {
+      c.set('user', {
+        ...session.user,
+        created_at: new Date(session.user.created_at),
+      })
+      await next()
+      return
+    }
   }
 
-  const session = decryptSession(cookie)
-  c.set(
-    'user',
-    session
-      ? {
-          ...session.user,
-          created_at: new Date(session.user.created_at),
-        }
-      : null,
-  )
-
+  c.set('user', null)
   await next()
 })

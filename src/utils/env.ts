@@ -19,6 +19,15 @@ export const env = {
   REGISTRATION: readRegistration(),
 }
 
+// Comma-separated list env var. Read lazily (not snapshotted into `env`):
+// the split-origin knobs are optional and tests vary them at runtime.
+export function readEnvList(name: string): string[] {
+  return (process.env[name] ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
 function mustGet(name: string) {
   const value = process.env[name]
   if (!value) throw new Error(`Missing required environment variable: ${name}`)

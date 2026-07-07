@@ -7,7 +7,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { serveAssets } from './assets/serve-assets'
 import { currentUser } from './middleware/current-user'
 import { renderMiddleware } from './middleware/render'
-import { publicOrigin } from './utils/public-origin'
+import { trustedOrigins } from './utils/public-origin'
 import { authRoutes } from './routes/auth'
 import { conversationRoutes } from './routes/conversations'
 import { dashboardRoutes } from './routes/dashboard'
@@ -41,23 +41,12 @@ app.get('/assets/:version/*', serveAssets)
 // Hono's default same-origin check, plus operator-declared extra origins for
 // split-origin deployments: PUBLIC_ORIGIN (a TLS-terminating proxy makes the
 // browser's https origin differ from the http URL the server sees) and
-// CSRF_TRUSTED_ORIGINS (comma-separated, e.g. a LAN IP used to dodge hairpin
-// NAT). Read lazily so tests can vary them.
-function csrfTrustedOrigins() {
-  const origins = (process.env['CSRF_TRUSTED_ORIGINS'] ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-  const configured = publicOrigin()
-  if (configured) origins.push(configured)
-  return origins
-}
-
+// CSRF_TRUSTED_ORIGINS (e.g. a LAN IP used to dodge hairpin NAT).
 app.use(
   csrf({
     origin: (origin, c) => {
       if (origin === new URL(c.req.url).origin) return true
-      return csrfTrustedOrigins().includes(origin)
+      return trustedOrigins().includes(origin)
     },
   }),
 )
@@ -78,8 +67,14 @@ app.notFound((c) =>
 
 app.onError((error, c) => {
   // Deliberate rejections (CSRF's 403, most visibly) keep their status and
-  // response instead of masquerading as a server error.
-  if (error instanceof HTTPException) return error.getResponse()
+  // response instead of masquerading as a server error. Logged at warn so a
+  // misconfigured trusted origin is diagnosable from the server side.
+  if (error instanceof HTTPException) {
+    console.warn(
+      `HTTP ${error.status} on ${c.req.method} ${new URL(c.req.url).pathname}${error.message ? `: ${error.message}` : ''}`,
+    )
+    return error.getResponse()
+  }
 
   console.error(error)
   return renderError(

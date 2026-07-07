@@ -6,10 +6,14 @@ import { hashPassword, verifyPassword } from '../utils/password'
 import { env } from '../utils/env'
 import {
   encryptSession,
+  insecureSessionCookieAllowed,
+  insecureSessionCookieName,
+  secureSessionCookieName,
   sessionCookieNameForSecureRequest,
   sessionCookieNames,
   sessionExpirationDate,
 } from '../utils/private-session'
+import { requestIsSecure } from '../utils/public-origin'
 import { normalizeEmail, readString } from '../utils/validation'
 
 export const authRoutes = new Hono()
@@ -25,18 +29,14 @@ const dummyPasswordHash =
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
-function requestIsSecure(c: Context) {
-  const forwardedProto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase()
-  if (forwardedProto) return forwardedProto === 'https'
-  return new URL(c.req.url).protocol === 'https:'
-}
-
 function setSessionCookie(
   c: Context,
   user: { id: string; name: string; email: string; created_at: Date },
 ) {
   const expiresAt = sessionExpirationDate()
-  const secure = requestIsSecure(c)
+  // Without the split-origin opt-in, production always issues __Host-session
+  // — a proxy that forgets x-forwarded-proto must not downgrade the cookie.
+  const secure = requestIsSecure(c) || !insecureSessionCookieAllowed()
   const cookie = encryptSession({
     user: {
       id: user.id,
@@ -55,6 +55,11 @@ function setSessionCookie(
     path: '/',
     expires: expiresAt,
   })
+
+  // A leftover insecure cookie must not linger next to a fresh secure one.
+  // (The reverse cleanup is impossible: browsers reject Secure Set-Cookie —
+  // including deletions — over plain http. docs/issues/18.)
+  if (secure) deleteCookie(c, insecureSessionCookieName, { path: '/' })
 }
 
 authRoutes.get('/register', async (c) => {
@@ -188,7 +193,7 @@ authRoutes.post('/login', async (c) => {
 
 authRoutes.post('/logout', async (c) => {
   for (const name of sessionCookieNames) {
-    deleteCookie(c, name, { path: '/', secure: name.startsWith('__Host-') })
+    deleteCookie(c, name, { path: '/', secure: name === secureSessionCookieName })
   }
   return c.redirect('/')
 })

@@ -44,3 +44,14 @@ gap, not a direct hole.
 route reaches it), so not remotely reachable. A malicious zip could still be a
 decompression-bomb DoS against the operator running the import. Low priority given it's
 operator-invoked.
+
+## 17g — Concurrent tests mutate shared process.env
+
+`bunfig.toml` sets `concurrentTestGlob = "*"`, and several integration tests
+set/delete process-global env vars mid-test (`CODEX_AUTH_ISSUER`,
+`CODEX_BASE_URL`, `PUBLIC_ORIGIN`) with cleanup in `finally`. A concurrently
+running test that reads the same var during that window (codex `returnTo`
+assertions, CSRF origin checks) can flake. Hasn't been observed in practice —
+the windows are microseconds — but the pattern scales badly; a shared
+env-mutation lock in `tests/helpers` (or per-request config injection) would
+retire it.
