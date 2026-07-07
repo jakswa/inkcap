@@ -7,9 +7,10 @@
     <form class="card mt-6 grid max-w-[25rem] gap-3" method="post" action="/providers/codex/connect">
       <p class="mb-0 font-bold">ChatGPT subscription (Codex)</p>
       <p class="mb-0 text-sm text-ink-dim">
-        Use your own ChatGPT plan via the Codex CLI's OAuth flow. Your browser
-        signs in at auth.openai.com and returns to <code>localhost:1455</code>,
-        so run inkcap on the machine you're browsing from.
+        Use your own ChatGPT plan via the Codex CLI's OAuth flow. OpenAI always
+        redirects to <code>localhost:1455</code>. If inkcap is running on a
+        different machine, the browser may show a connection error after sign-in;
+        copy that localhost URL and paste it below to finish.
       </p>
       <label class="grid gap-1.5">
         <span>Name</span>
@@ -21,6 +22,19 @@
         that may change without notice. Usage counts against your plan's
         rolling limits.
       </p>
+    </form>
+
+    <form class="card mt-4 grid max-w-[25rem] gap-3" method="post" action="/providers/codex/callback">
+      <p class="mb-0 font-bold">Finish a remote ChatGPT sign-in</p>
+      <p class="mb-0 text-sm text-ink-dim">
+        Paste the failed <code>http://localhost:1455/auth/callback?...</code>
+        address from your browser after approving the login.
+      </p>
+      <label class="grid gap-1.5">
+        <span>Callback URL</span>
+        <input class="input" name="callback_url" placeholder="http://localhost:1455/auth/callback?code=...&amp;state=..." autocomplete="off">
+      </label>
+      <button class="btn btn-ghost" type="submit">Finish ChatGPT sign-in</button>
     </form>
   </div>
 

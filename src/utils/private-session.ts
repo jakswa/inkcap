@@ -14,8 +14,13 @@ export type PrivateSession = {
 
 const algorithm = 'aes-256-gcm'
 
-export const sessionCookieName =
-  env.NODE_ENV === 'production' ? '__Host-session' : 'session'
+export const secureSessionCookieName = '__Host-session'
+export const insecureSessionCookieName = 'session'
+export const sessionCookieNames = [secureSessionCookieName, insecureSessionCookieName]
+
+export function sessionCookieNameForSecureRequest(secure: boolean) {
+  return secure ? secureSessionCookieName : insecureSessionCookieName
+}
 
 function encryptionKey() {
   return createHash('sha256').update(env.SESSION_SECRET).digest()

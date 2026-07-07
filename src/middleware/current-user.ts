@@ -1,14 +1,14 @@
 import { getCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
 import type { CurrentUser } from '../app-types'
-import { decryptSession, sessionCookieName } from '../utils/private-session'
+import { decryptSession, sessionCookieNames } from '../utils/private-session'
 
 export const currentUser = createMiddleware<{
   Variables: {
     user: CurrentUser
   }
 }>(async (c, next) => {
-  const cookie = getCookie(c, sessionCookieName)
+  const cookie = sessionCookieNames.map((name) => getCookie(c, name)).find(Boolean)
 
   if (!cookie) {
     c.set('user', null)

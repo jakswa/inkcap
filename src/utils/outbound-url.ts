@@ -4,6 +4,19 @@ import { env } from './env'
 
 const blockedHostnames = new Set(['localhost', 'localhost.localdomain'])
 
+function trustedOutboundHosts() {
+  return new Set(
+    (process.env['OUTBOUND_TRUSTED_HOSTS'] ?? '')
+      .split(',')
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean),
+  )
+}
+
+function isTrustedOutboundHost(hostname: string) {
+  return trustedOutboundHosts().has(hostname.toLowerCase())
+}
+
 export async function assertSafeOutboundUrl(raw: string) {
   const url = new URL(raw)
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
@@ -11,6 +24,8 @@ export async function assertSafeOutboundUrl(raw: string) {
   }
 
   if (env.NODE_ENV !== 'production') return
+
+  if (isTrustedOutboundHost(url.hostname)) return
 
   if (url.protocol !== 'https:') {
     throw new Error('Outbound URLs must use https in production')

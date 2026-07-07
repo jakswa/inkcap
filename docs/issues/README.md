@@ -33,6 +33,7 @@ Fix in this sequence:
 
 ### Low
 - [17 — Low-priority hardening bundle](17-low-priority-hardening.md)
+- [18 — Split-origin support accepts the insecure session cookie everywhere](18-split-origin-session-cookie-downgrade.md)
 
 ## Verified clean (no action needed)
 

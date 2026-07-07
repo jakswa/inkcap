@@ -68,7 +68,9 @@ not a placeholder, and `ASSET_VERSION` must be set (pass as a Docker build arg
 so asset URLs roll back with the image). `REGISTRATION` defaults to `closed`
 in production (`open` elsewhere); bootstrap a closed deployment with
 `bun build/tasks/create-user.js --name ... --email ...` (password via the
-`CREATE_USER_PASSWORD` env var).
+`CREATE_USER_PASSWORD` env var). Split-origin deployments (TLS-terminating
+proxy and/or direct LAN IP access) opt in via `PUBLIC_ORIGIN`,
+`CSRF_TRUSTED_ORIGINS`, and `OUTBOUND_TRUSTED_HOSTS` (see `.env.example`).
 
 ## Scripts
 

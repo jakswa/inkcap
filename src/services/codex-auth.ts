@@ -59,6 +59,30 @@ function redirectUri() {
   return `http://localhost:${callbackPort()}/auth/callback`
 }
 
+class CodexCallbackError extends Error {
+  constructor(
+    message: string,
+    readonly returnTo: string | null,
+  ) {
+    super(message)
+  }
+}
+
+function parseCallbackUrl(raw: string): URL {
+  let url: URL
+  try {
+    url = new URL(raw.trim())
+  } catch {
+    throw new CodexCallbackError('Paste the full localhost callback URL from your browser address bar.', null)
+  }
+
+  const localhost = new Set(['localhost', '127.0.0.1', '[::1]'])
+  if (url.protocol !== 'http:' || !localhost.has(url.hostname) || url.pathname !== '/auth/callback') {
+    throw new CodexCallbackError('That does not look like the Codex localhost callback URL.', null)
+  }
+  return url
+}
+
 function base64url(buffer: Buffer) {
   return buffer.toString('base64url')
 }
@@ -200,25 +224,27 @@ function callbackErrorPage(message: string, returnTo: string | null) {
   )
 }
 
-async function handleLoopbackCallback(url: URL): Promise<Response> {
-  const state = url.searchParams.get('state') ?? ''
-  const pending = pendingLogins.get(state)
-  if (!pending || Date.now() - pending.createdAt > LOGIN_TTL_MS) {
-    return callbackErrorPage('This sign-in link expired or was already used. Start again from the Providers page.', pending?.returnTo ?? null)
-  }
-  pendingLogins.delete(state)
-
-  const oauthError = url.searchParams.get('error')
-  if (oauthError) {
-    const description = url.searchParams.get('error_description')
-    return callbackErrorPage(description || oauthError, pending.returnTo)
-  }
-  const code = url.searchParams.get('code')
-  if (!code) {
-    return callbackErrorPage('The callback did not include an authorization code.', pending.returnTo)
-  }
-
+async function completeCodexLoginCallback(url: URL): Promise<string> {
+  let returnTo: string | null = null
   try {
+    const state = url.searchParams.get('state') ?? ''
+    const pending = pendingLogins.get(state)
+    if (!pending || Date.now() - pending.createdAt > LOGIN_TTL_MS) {
+      throw new CodexCallbackError('This sign-in link expired or was already used. Start again from the Providers page.', pending?.returnTo ?? null)
+    }
+    returnTo = pending.returnTo
+    pendingLogins.delete(state)
+
+    const oauthError = url.searchParams.get('error')
+    if (oauthError) {
+      const description = url.searchParams.get('error_description')
+      throw new CodexCallbackError(description || oauthError, pending.returnTo)
+    }
+    const code = url.searchParams.get('code')
+    if (!code) {
+      throw new CodexCallbackError('The callback did not include an authorization code.', pending.returnTo)
+    }
+
     const tokens = await postTokenEndpoint(
       new URLSearchParams({
         grant_type: 'authorization_code',
@@ -228,16 +254,29 @@ async function handleLoopbackCallback(url: URL): Promise<Response> {
         code_verifier: pending.verifier,
       }),
     )
-    const redirectTo = await pending.complete(credentialsFromTokenResponse(tokens))
-    return new Response(null, { status: 302, headers: { Location: redirectTo } })
+    return await pending.complete(credentialsFromTokenResponse(tokens))
   } catch (error) {
-    return callbackErrorPage(
-      error instanceof Error ? error.message : String(error),
-      pending.returnTo,
-    )
+    if (error instanceof CodexCallbackError) throw error
+    throw new CodexCallbackError(error instanceof Error ? error.message : String(error), returnTo)
   } finally {
     sweepExpiredLogins()
     stopLoopbackIfIdle()
+  }
+}
+
+export async function completeCodexLoginFromCallbackUrl(callbackUrl: string): Promise<string> {
+  return completeCodexLoginCallback(parseCallbackUrl(callbackUrl))
+}
+
+async function handleLoopbackCallback(url: URL): Promise<Response> {
+  try {
+    const redirectTo = await completeCodexLoginCallback(url)
+    return new Response(null, { status: 302, headers: { Location: redirectTo } })
+  } catch (error) {
+    if (error instanceof CodexCallbackError) {
+      return callbackErrorPage(error.message, error.returnTo)
+    }
+    return callbackErrorPage(error instanceof Error ? error.message : String(error), null)
   }
 }
 
@@ -256,9 +295,10 @@ function ensureLoopbackServer() {
   })
 }
 
-// Begin a browser login. Binds the loopback callback port (fails loudly when
-// something else holds it), registers the pending login, and returns the
-// auth.openai.com authorize URL to redirect the user's browser to.
+// Begin a browser login. Tries to bind the loopback callback port for local
+// browsers, registers the pending login either way, and returns the
+// auth.openai.com authorize URL to redirect the user's browser to. Deployed
+// servers can finish by accepting a pasted localhost callback URL.
 export function startCodexLogin(options: {
   returnTo: string
   complete: (credentials: CodexOauthCredentials) => Promise<string>
@@ -267,8 +307,8 @@ export function startCodexLogin(options: {
   try {
     ensureLoopbackServer()
   } catch (error) {
-    throw new Error(
-      `Could not bind the OAuth callback port ${callbackPort()} (is the Codex CLI or another login mid-flight?): ${
+    console.warn(
+      `Could not bind the OAuth callback port ${callbackPort()}; continuing with manual callback paste fallback: ${
         error instanceof Error ? error.message : String(error)
       }`,
     )

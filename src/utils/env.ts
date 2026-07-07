@@ -1,5 +1,15 @@
 const nodeEnv = process.env['NODE_ENV'] ?? 'development'
 
+// Declared before `env`: its initializer calls readSessionSecret(), which
+// reads this set in production — a later `const` would still be in its
+// temporal dead zone and crash the boot.
+const placeholderSessionSecrets = new Set([
+  'change-me-in-production',
+  'changeme',
+  'secret',
+  'password',
+])
+
 export const env = {
   DATABASE_URL: mustGet('DATABASE_URL'),
   SESSION_SECRET: readSessionSecret(),
@@ -8,13 +18,6 @@ export const env = {
   ASSET_VERSION: readAssetVersion(),
   REGISTRATION: readRegistration(),
 }
-
-const placeholderSessionSecrets = new Set([
-  'change-me-in-production',
-  'changeme',
-  'secret',
-  'password',
-])
 
 function mustGet(name: string) {
   const value = process.env[name]

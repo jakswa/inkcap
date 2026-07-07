@@ -6,7 +6,8 @@ import { hashPassword, verifyPassword } from '../utils/password'
 import { env } from '../utils/env'
 import {
   encryptSession,
-  sessionCookieName,
+  sessionCookieNameForSecureRequest,
+  sessionCookieNames,
   sessionExpirationDate,
 } from '../utils/private-session'
 import { normalizeEmail, readString } from '../utils/validation'
@@ -24,11 +25,18 @@ const dummyPasswordHash =
 
 const authAttempts = new Map<string, { count: number; resetAt: number }>()
 
+function requestIsSecure(c: Context) {
+  const forwardedProto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim().toLowerCase()
+  if (forwardedProto) return forwardedProto === 'https'
+  return new URL(c.req.url).protocol === 'https:'
+}
+
 function setSessionCookie(
   c: Context,
   user: { id: string; name: string; email: string; created_at: Date },
 ) {
   const expiresAt = sessionExpirationDate()
+  const secure = requestIsSecure(c)
   const cookie = encryptSession({
     user: {
       id: user.id,
@@ -40,9 +48,9 @@ function setSessionCookie(
     expiresAt: expiresAt.toISOString(),
   })
 
-  setCookie(c, sessionCookieName, cookie, {
+  setCookie(c, sessionCookieNameForSecureRequest(secure), cookie, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    secure,
     sameSite: 'Lax',
     path: '/',
     expires: expiresAt,
@@ -179,10 +187,9 @@ authRoutes.post('/login', async (c) => {
 })
 
 authRoutes.post('/logout', async (c) => {
-  deleteCookie(c, sessionCookieName, {
-    path: '/',
-    secure: env.NODE_ENV === 'production',
-  })
+  for (const name of sessionCookieNames) {
+    deleteCookie(c, name, { path: '/', secure: name.startsWith('__Host-') })
+  }
   return c.redirect('/')
 })
 
