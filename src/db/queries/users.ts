@@ -1,5 +1,6 @@
 import { sql } from '../client'
 import { randomUUIDv7 } from 'bun'
+import { parseUserSettings, type UserSettings } from '../../utils/user-settings'
 
 export async function getUserById(id: string) {
   const [user] = await sql.GetUserById`
@@ -9,6 +10,30 @@ export async function getUserById(id: string) {
   `
 
   return user
+}
+
+// users.settings is a per-user jsonb preference blob (migration 013) whose
+// shape src/utils/user-settings.ts owns. Parsed here at the chokepoint, so
+// unvalidated JSON never escapes the data layer.
+export async function getUserSettings(userId: string): Promise<UserSettings> {
+  const [row] = await sql.GetUserSettings`
+    SELECT settings FROM users WHERE id = ${userId}
+  `
+
+  return parseUserSettings(row?.settings)
+}
+
+// Merge, don't replace: `settings || patch` only touches the patch's keys, so
+// concurrent writers of different settings can't clobber each other.
+export async function patchUserSettings(input: {
+  userId: string
+  patch: Partial<UserSettings>
+}) {
+  await sql.PatchUserSettings`
+    UPDATE users
+    SET settings = settings || ${input.patch}::jsonb
+    WHERE id = ${input.userId}
+  `
 }
 
 export async function getUserByEmailNormalized(emailNormalized: string) {

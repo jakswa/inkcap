@@ -28,6 +28,7 @@ import {
   listMcpServersWithOverride,
   setConversationMcpOverride,
 } from '../db/queries/mcp-servers'
+import { getUserSettings, patchUserSettings } from '../db/queries/users'
 import { listPendingApprovalsForRun } from '../db/queries/tool-approvals'
 import {
   cancelRun,
@@ -83,6 +84,19 @@ function readStringList(form: FormData, name: string): string[] {
     .getAll(name)
     .map((value) => (typeof value === 'string' ? value.trim() : ''))
     .filter(Boolean)
+}
+
+// Submitted MCP server ids may only point at servers the user can see;
+// duplicates and foreign ids from a tampered form are dropped (the runner's
+// membership join would refuse foreign servers anyway, but don't persist
+// garbage).
+async function filterOwnedMcpServerIds(userId: string, ids: string[]) {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return []
+  const ownedIds = new Set(
+    (await listMcpServersForUser(userId)).map((server) => server.id),
+  )
+  return unique.filter((id) => ownedIds.has(id))
 }
 
 function modelSupportsReasoning(
@@ -337,12 +351,18 @@ async function renderLanding(
     selectedMcpServerIds?: string[]
   } = {},
 ) {
-  const [conversations, providers, mcpServers] = await Promise.all([
+  const [conversations, providers, mcpServers, settings] = await Promise.all([
     listConversationsForUser(userId),
     listProvidersForUser(userId),
     listMcpServersForUser(userId),
+    getUserSettings(userId),
   ])
-  const selectedMcpServerIds = new Set(options.selectedMcpServerIds ?? [])
+  // Fresh landing: pre-check the servers from the user's saved defaults (the
+  // last created conversation's selection). A validation-error re-render
+  // passes the submitted selection instead — even when it's empty.
+  const selectedMcpServerIds = new Set(
+    options.selectedMcpServerIds ?? settings.defaultMcpServerIds,
+  )
 
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/list', {
@@ -441,21 +461,30 @@ conversationRoutes.post('/conversations', async (c) => {
     reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,
   })
 
-  if (selectedMcpServerIds.length > 0) {
-    const validIds = new Set(
-      (await listMcpServersForUser(user.id)).map((server) => server.id),
-    )
-    await Promise.all(
-      selectedMcpServerIds
-        .filter((id) => validIds.has(id))
-        .map((mcpServerId) =>
-          setConversationMcpOverride({
-            conversationId: conversation.id,
-            mcpServerId,
-            enabled: true,
-          }),
-        ),
-    )
+  const enabledMcpServerIds = await filterOwnedMcpServerIds(
+    user.id,
+    selectedMcpServerIds,
+  )
+  await Promise.all(
+    enabledMcpServerIds.map((mcpServerId) =>
+      setConversationMcpOverride({
+        conversationId: conversation.id,
+        mcpServerId,
+        enabled: true,
+      }),
+    ),
+  )
+  // Remember this selection (including "none") as the new-chat default, so
+  // the next landing page comes pre-checked with it. Best-effort: a failed
+  // preference write must not abort the request between conversation
+  // creation and first-message persistence.
+  try {
+    await patchUserSettings({
+      userId: user.id,
+      patch: { defaultMcpServerIds: enabledMcpServerIds },
+    })
+  } catch (error) {
+    console.warn('failed to save new-chat tool defaults', error)
   }
 
   // A configured system prompt lives in the tree as the root message and
@@ -916,13 +945,10 @@ conversationRoutes.post('/conversations/:id/tools', async (c) => {
   if (!conversation) return c.notFound()
 
   const form = await c.req.formData()
-  // Override rows may only point at servers the user can see; foreign ids
-  // from a tampered form are dropped (the runner's membership join would
-  // refuse them anyway, but don't persist garbage).
-  const ownedIds = new Set(
-    (await listMcpServersForUser(user.id)).map((server) => server.id),
+  const serverIds = await filterOwnedMcpServerIds(
+    user.id,
+    readStringList(form, 'mcp_server_id'),
   )
-  const serverIds = readStringList(form, 'mcp_server_id').filter((id) => ownedIds.has(id))
   if (serverIds.length > 1 || form.has('enabled_mcp_server_id')) {
     const enabledIds = new Set(readStringList(form, 'enabled_mcp_server_id'))
     await Promise.all(
