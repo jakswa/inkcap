@@ -503,6 +503,106 @@ describe('codex connect flow', () => {
     }
   })
 
+  test('a remote browser can paste the localhost callback URL to finish sign-in', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub()
+    const backend = codexBackendStub()
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const name = `codex-remote-${randomUUIDv7()}`
+    try {
+      const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name }),
+      })
+      expect(start.status).toBe(302)
+      const authorizeUrl = new URL(start.headers.get('location')!)
+      const state = authorizeUrl.searchParams.get('state')!
+
+      // On a deployed inkcap, auth.openai.com redirects the user's browser to
+      // that browser's localhost:1455, not the inkcap server. The user can copy
+      // the failed localhost URL from the address bar and paste it back into
+      // inkcap, where the server still owns the PKCE verifier and pending state.
+      const pasted = await app.request(url('/providers/codex/callback'), {
+        method: 'POST',
+        headers,
+        body: form({
+          callback_url: `${CALLBACK_URL}?code=remote-code&state=${encodeURIComponent(state)}`,
+        }),
+      })
+      expect(pasted.status).toBe(302)
+      expect(pasted.headers.get('location')).toBe(`${origin}/providers`)
+
+      const exchange = issuer.tokenRequests.find((r) => r['grant_type'] === 'authorization_code')!
+      expect(exchange['code']).toBe('remote-code')
+      expect(exchange['redirect_uri']).toBe(CALLBACK_URL)
+
+      const list = await app.request(url('/providers'), { headers })
+      const listBody = await list.text()
+      expect(listBody).toContain(name)
+      expect(listBody).toContain('ChatGPT OAuth: connected')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      delete process.env['CODEX_BASE_URL']
+      issuer.server.stop(true)
+      backend.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('a pasted callback URL with the wrong port is rejected', async () => {
+    const { headers } = await authHeadersFor()
+    // Tests run with CODEX_OAUTH_PORT=14855, so the CLI's real default port
+    // is the wrong one here — the paste form must only accept the exact
+    // redirect_uri the token endpoint will be told about.
+    const pasted = await app.request(url('/providers/codex/callback'), {
+      method: 'POST',
+      headers,
+      body: form({
+        callback_url: 'http://localhost:1455/auth/callback?code=x&state=y',
+      }),
+    })
+    expect(pasted.status).toBe(400)
+    expect(await pasted.text()).toContain('does not look like the Codex localhost callback URL')
+  })
+
+  test('codex callback returns to the configured public origin, not a LAN/IP origin', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub()
+    const backend = codexBackendStub()
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    process.env['PUBLIC_ORIGIN'] = 'https://chat.home.jake.town/'
+    try {
+      const lanHeaders = { ...headers, Origin: 'http://192.168.1.160' }
+      const start = await app.request('http://192.168.1.160/providers/codex/connect', {
+        method: 'POST',
+        headers: lanHeaders,
+        body: form({ name: `codex-public-origin-${randomUUIDv7()}` }),
+      })
+      expect(start.status).toBe(302)
+      const state = new URL(start.headers.get('location')!).searchParams.get('state')!
+
+      const pasted = await app.request('http://192.168.1.160/providers/codex/callback', {
+        method: 'POST',
+        headers: lanHeaders,
+        body: form({
+          callback_url: `${CALLBACK_URL}?code=public-origin-code&state=${encodeURIComponent(state)}`,
+        }),
+      })
+      expect(pasted.status).toBe(302)
+      expect(pasted.headers.get('location')).toBe('https://chat.home.jake.town/providers')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      delete process.env['CODEX_BASE_URL']
+      delete process.env['PUBLIC_ORIGIN']
+      issuer.server.stop(true)
+      backend.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
   test('a callback with an unknown state fails without creating anything', async () => {
     const issuer = issuerStub()
     process.env['CODEX_AUTH_ISSUER'] = issuer.issuer

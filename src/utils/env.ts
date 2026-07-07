@@ -1,5 +1,15 @@
 const nodeEnv = process.env['NODE_ENV'] ?? 'development'
 
+// Declared before `env`: its initializer calls readSessionSecret(), which
+// reads this set in production — a later `const` would still be in its
+// temporal dead zone and crash the boot.
+const placeholderSessionSecrets = new Set([
+  'change-me-in-production',
+  'changeme',
+  'secret',
+  'password',
+])
+
 export const env = {
   DATABASE_URL: mustGet('DATABASE_URL'),
   SESSION_SECRET: readSessionSecret(),
@@ -9,12 +19,14 @@ export const env = {
   REGISTRATION: readRegistration(),
 }
 
-const placeholderSessionSecrets = new Set([
-  'change-me-in-production',
-  'changeme',
-  'secret',
-  'password',
-])
+// Comma-separated list env var. Read lazily (not snapshotted into `env`):
+// the split-origin knobs are optional and tests vary them at runtime.
+export function readEnvList(name: string): string[] {
+  return (process.env[name] ?? '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
 
 function mustGet(name: string) {
   const value = process.env[name]

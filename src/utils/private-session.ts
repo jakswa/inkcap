@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { env } from './env'
+import { trustedOrigins } from './public-origin'
 
 export type PrivateSession = {
   user: {
@@ -14,8 +15,30 @@ export type PrivateSession = {
 
 const algorithm = 'aes-256-gcm'
 
-export const sessionCookieName =
-  env.NODE_ENV === 'production' ? '__Host-session' : 'session'
+export const secureSessionCookieName = '__Host-session'
+export const insecureSessionCookieName = 'session'
+export const sessionCookieNames = [secureSessionCookieName, insecureSessionCookieName]
+
+export function sessionCookieNameForSecureRequest(secure: boolean) {
+  return secure ? secureSessionCookieName : insecureSessionCookieName
+}
+
+// In production the plain `session` cookie is only issued or accepted when
+// the operator has declared a plain-http trusted origin (the split-origin
+// opt-in) — an https-only deployment keeps full __Host- semantics, and a
+// proxy that forgets x-forwarded-proto degrades to a Secure cookie rather
+// than an insecure one. Trade-offs: docs/issues/18.
+export function insecureSessionCookieAllowed() {
+  if (env.NODE_ENV !== 'production') return true
+  return trustedOrigins().some((origin) => origin.startsWith('http:'))
+}
+
+// Cookie names currentUser may read, in preference order.
+export function acceptedSessionCookieNames(): string[] {
+  return insecureSessionCookieAllowed()
+    ? sessionCookieNames
+    : [secureSessionCookieName]
+}
 
 function encryptionKey() {
   return createHash('sha256').update(env.SESSION_SECRET).digest()

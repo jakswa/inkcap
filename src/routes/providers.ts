@@ -12,7 +12,11 @@ import {
   updateProvider,
   updateProviderOauthCredentials,
 } from '../db/queries/providers'
-import { codexDefaultBaseUrl, startCodexLogin } from '../services/codex-auth'
+import {
+  codexDefaultBaseUrl,
+  completeCodexLoginFromCallbackUrl,
+  startCodexLogin,
+} from '../services/codex-auth'
 import {
   CODEX_FALLBACK_MODELS,
   codexModelMetadata,
@@ -24,6 +28,7 @@ import {
   testProviderConnection,
   uniqueModels,
 } from '../utils/providers'
+import { publicOrigin } from '../utils/public-origin'
 import { readString } from '../utils/validation'
 
 export const providerRoutes = new Hono()
@@ -57,6 +62,18 @@ type ProviderFormValues = {
   clearApiKey: boolean
   defaultModel: string
   modelsText: string
+}
+
+function emptyProviderFormValues(): ProviderFormValues {
+  return {
+    name: '',
+    kind: 'llama-server',
+    baseUrl: '',
+    apiKey: '',
+    clearApiKey: false,
+    defaultModel: '',
+    modelsText: '',
+  }
 }
 
 function readProviderForm(form: FormData): ProviderFormValues {
@@ -176,14 +193,7 @@ providerRoutes.get('/providers/new', async (c) => {
   return c.var.render('providers/new', {
     title: 'Add provider',
     errors: [],
-    values: {
-      name: '',
-      kind: 'llama-server',
-      baseUrl: '',
-      apiKey: '',
-      defaultModel: '',
-      modelsText: '',
-    },
+    values: emptyProviderFormValues(),
     testResult: null,
   })
 })
@@ -255,6 +265,10 @@ providerRoutes.post('/providers', async (c) => {
 
 const defaultCodexName = 'ChatGPT Codex'
 
+function appOrigin(c: Context) {
+  return publicOrigin() ?? new URL(c.req.url).origin
+}
+
 // Login completion for a NEW codex provider: persist the token bundle first
 // (the row is the canonical credential store), then best-effort model
 // discovery — a changed /models endpoint must not strand a fresh login.
@@ -315,7 +329,7 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
 
   const form = await c.req.formData()
   const name = (readString(form, 'name').trim() || defaultCodexName).slice(0, maxNameLength)
-  const returnTo = `${new URL(c.req.url).origin}/providers`
+  const returnTo = `${appOrigin(c)}/providers`
   const accountId = user.id
 
   try {
@@ -332,6 +346,26 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
   }
 })
 
+providerRoutes.post('/providers/codex/callback', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const form = await c.req.formData()
+  const callbackUrl = readString(form, 'callback_url').trim()
+  try {
+    const redirectTo = await completeCodexLoginFromCallbackUrl(callbackUrl)
+    return c.redirect(redirectTo)
+  } catch (error) {
+    c.status(400)
+    return c.var.render('providers/new', {
+      title: 'Add provider',
+      errors: [error instanceof Error ? error.message : String(error)],
+      values: emptyProviderFormValues(),
+      testResult: null,
+    })
+  }
+})
+
 providerRoutes.post('/providers/:id/reauth', async (c) => {
   const user = c.var.user
   if (!user) return c.redirect('/login')
@@ -340,7 +374,7 @@ providerRoutes.post('/providers/:id/reauth', async (c) => {
   const provider = await getProviderForUser({ id, userId: user.id })
   if (!provider || provider.kind !== 'openai-codex') return c.notFound()
 
-  const returnTo = `${new URL(c.req.url).origin}/providers`
+  const returnTo = `${appOrigin(c)}/providers`
   try {
     const { authorizeUrl } = startCodexLogin({
       returnTo,

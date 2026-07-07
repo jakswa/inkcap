@@ -6,9 +6,14 @@ import { hashPassword, verifyPassword } from '../utils/password'
 import { env } from '../utils/env'
 import {
   encryptSession,
-  sessionCookieName,
+  insecureSessionCookieAllowed,
+  insecureSessionCookieName,
+  secureSessionCookieName,
+  sessionCookieNameForSecureRequest,
+  sessionCookieNames,
   sessionExpirationDate,
 } from '../utils/private-session'
+import { requestIsSecure } from '../utils/public-origin'
 import { normalizeEmail, readString } from '../utils/validation'
 
 export const authRoutes = new Hono()
@@ -29,6 +34,9 @@ function setSessionCookie(
   user: { id: string; name: string; email: string; created_at: Date },
 ) {
   const expiresAt = sessionExpirationDate()
+  // Without the split-origin opt-in, production always issues __Host-session
+  // — a proxy that forgets x-forwarded-proto must not downgrade the cookie.
+  const secure = requestIsSecure(c) || !insecureSessionCookieAllowed()
   const cookie = encryptSession({
     user: {
       id: user.id,
@@ -40,13 +48,18 @@ function setSessionCookie(
     expiresAt: expiresAt.toISOString(),
   })
 
-  setCookie(c, sessionCookieName, cookie, {
+  setCookie(c, sessionCookieNameForSecureRequest(secure), cookie, {
     httpOnly: true,
-    secure: env.NODE_ENV === 'production',
+    secure,
     sameSite: 'Lax',
     path: '/',
     expires: expiresAt,
   })
+
+  // A leftover insecure cookie must not linger next to a fresh secure one.
+  // (The reverse cleanup is impossible: browsers reject Secure Set-Cookie —
+  // including deletions — over plain http. docs/issues/18.)
+  if (secure) deleteCookie(c, insecureSessionCookieName, { path: '/' })
 }
 
 authRoutes.get('/register', async (c) => {
@@ -179,10 +192,9 @@ authRoutes.post('/login', async (c) => {
 })
 
 authRoutes.post('/logout', async (c) => {
-  deleteCookie(c, sessionCookieName, {
-    path: '/',
-    secure: env.NODE_ENV === 'production',
-  })
+  for (const name of sessionCookieNames) {
+    deleteCookie(c, name, { path: '/', secure: name === secureSessionCookieName })
+  }
   return c.redirect('/')
 })
 

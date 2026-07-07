@@ -1,8 +1,15 @@
 import { lookup } from 'node:dns/promises'
 import { isIP } from 'node:net'
-import { env } from './env'
+import { env, readEnvList } from './env'
 
 const blockedHostnames = new Set(['localhost', 'localhost.localdomain'])
+
+// Entries match either the bare hostname or host:port — operators naturally
+// copy the host:port form straight from the provider's base URL.
+function isTrustedOutboundHost(url: URL) {
+  const trusted = new Set(readEnvList('OUTBOUND_TRUSTED_HOSTS').map((host) => host.toLowerCase()))
+  return trusted.has(url.hostname.toLowerCase()) || trusted.has(url.host.toLowerCase())
+}
 
 export async function assertSafeOutboundUrl(raw: string) {
   const url = new URL(raw)
@@ -11,6 +18,8 @@ export async function assertSafeOutboundUrl(raw: string) {
   }
 
   if (env.NODE_ENV !== 'production') return
+
+  if (isTrustedOutboundHost(url)) return
 
   if (url.protocol !== 'https:') {
     throw new Error('Outbound URLs must use https in production')
