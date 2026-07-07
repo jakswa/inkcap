@@ -45,7 +45,12 @@ bun run dev</code></pre>
 bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
 
       <h3 id="codex">Chat on your ChatGPT subscription (Codex)</h3>
-      <p>Providers → Add provider → <strong>“Sign in with ChatGPT”</strong>. The server runs the Codex CLI’s OAuth flow with a loopback callback on <code>localhost:1455</code>, so browse from the machine running inkcap (or tunnel that port) during sign-in. Tokens stay server-side and refresh automatically.</p>
+      <p>Providers → Add provider → <strong>“Sign in with ChatGPT”</strong>. The server runs the Codex CLI’s OAuth flow, and OpenAI always redirects the browser back to <code>localhost:1455</code>:</p>
+      <ul>
+        <li><strong>Browsing from the machine running inkcap?</strong> The redirect lands on inkcap’s loopback listener and the sign-in finishes on its own.</li>
+        <li><strong>Browsing from anywhere else</strong> (a deployed inkcap), the redirect hits <em>your</em> machine’s localhost and the browser shows a connection error. Copy that failed <code>http://localhost:1455/auth/callback?…</code> address from the address bar and paste it into the <strong>“Finish a remote ChatGPT sign-in”</strong> form on the Add provider page — the server still holds the pending sign-in and completes the exchange.</li>
+      </ul>
+      <p>Either way, tokens stay server-side and refresh automatically.</p>
 
       <h2 id="import">Import llama.cpp web UI history</h2>
       <p>Coming from llama.cpp’s built-in web UI? The importer is idempotent and takes a JSONL export or a zip, including attachments and branch trees:</p>
@@ -62,6 +67,9 @@ bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
           <tr><td><code>ASSET_VERSION</code></td><td>Cache-busting version for static assets; required in production (pass as a Docker build arg)</td></tr>
           <tr><td><code>PORT</code></td><td>HTTP port (default 3000)</td></tr>
           <tr><td><code>REGISTRATION</code></td><td><code>open</code> or <code>closed</code>; defaults to closed in production, open elsewhere</td></tr>
+          <tr><td><code>PUBLIC_ORIGIN</code></td><td>Canonical browser-facing origin when TLS terminates at a proxy; used for OAuth return redirects and trusted for CSRF</td></tr>
+          <tr><td><code>CSRF_TRUSTED_ORIGINS</code></td><td>Comma-separated extra origins allowed to submit forms (e.g. a LAN IP that dodges hairpin NAT); a plain-http entry also opts production into the insecure session cookie for http logins</td></tr>
+          <tr><td><code>OUTBOUND_TRUSTED_HOSTS</code></td><td>Comma-separated provider/MCP hosts (hostname or host:port) exempt from the production https-only + no-private-address outbound guard</td></tr>
           <tr><td><code>DEV_LLAMA_SERVER</code> / <code>DEV_LLAMA_KEY</code></td><td>Feed the <code>seed-provider</code> task in development</td></tr>
         </tbody>
       </table>
@@ -73,6 +81,7 @@ docker run -p 3000:3000 --env-file .env.production inkcap</code></pre>
       <p>Run migrations inside the image with <code>bun build/tasks/migrate.js</code>. Registration defaults to <em>closed</em> in production — bootstrap your first user from the CLI:</p>
       <pre><code>CREATE_USER_PASSWORD=... bun build/tasks/create-user.js --name You --email you@example.com</code></pre>
       <div class="note">inkcap is deliberately a single stateful process (web server + runner). Restarts are always safe: boot recovery finalizes any runs that were interrupted mid-generation.</div>
+      <p>Serving inkcap behind a TLS-terminating proxy, or also reaching it directly at a LAN IP? Opt in with <code>PUBLIC_ORIGIN</code>, <code>CSRF_TRUSTED_ORIGINS</code>, and <code>OUTBOUND_TRUSTED_HOSTS</code> from the environment reference above — the trade-offs are written down in <a href="https://github.com/jakswa/inkcap/blob/master/docs/issues/18-split-origin-session-cookie-downgrade.md">docs/issues/18</a>.</p>
 
       <h2 id="more">Digging deeper</h2>
       <ul>
