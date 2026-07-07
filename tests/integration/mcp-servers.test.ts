@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUIDv7 } from 'bun'
 
 const { app } = await import('../../src/app')
-const { createUser } = await import('../../src/db/queries/users')
+const { createUser, getUserSettings } = await import('../../src/db/queries/users')
 const { createConversation } = await import('../../src/db/queries/conversations')
 const { createProvider } = await import('../../src/db/queries/providers')
 const { createMcpServer, listMcpServersForUser, listEnabledMcpServersForConversation, setConversationMcpOverride } =
@@ -420,8 +420,8 @@ describe('MCP servers CRUD', () => {
     landing = await app.request(url('/conversations'), { headers: { Cookie: cookie } })
     expect(await landing.text()).toContain(`aria-label="On — turn off ${name}"`)
 
-    // A stale default (server deleted since) renders nothing and stays harmless.
-    // An id outside the user's catalog is never written as a default either.
+    // Foreign ids from a tampered form are never persisted, and repeated ids
+    // collapse to one before touching overrides or the remembered default.
     const foreign = randomUUIDv7()
     const createAgain = await app.request(url('/conversations'), {
       method: 'POST',
@@ -429,7 +429,7 @@ describe('MCP servers CRUD', () => {
       body: form({
         providerId: provider.id,
         model: 'stub-model',
-        enabled_mcp_server_id: [server.id, foreign],
+        enabled_mcp_server_id: [server.id, server.id, foreign],
       }),
     })
     expect(createAgain.status).toBe(302)
@@ -439,6 +439,7 @@ describe('MCP servers CRUD', () => {
     expect(
       (await listEnabledMcpServersForConversation(conversationId)).map((s) => s.id),
     ).toEqual([server.id])
+    expect((await getUserSettings(user.id)).defaultMcpServerIds).toEqual([server.id])
 
     // Creating a chat with nothing selected clears the remembered default.
     const createEmpty = await app.request(url('/conversations'), {

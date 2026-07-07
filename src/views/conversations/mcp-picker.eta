@@ -1,11 +1,11 @@
 <% const servers = it.servers || [] %>
 <% const formId = it.formId || '' %>
-<% const description = it.description || 'Choose which registered servers this chat may use. Servers are off per chat until selected.' %>
+<% const note = it.note || 'Servers are off per chat until selected.' %>
 
 <section class="grid gap-3">
   <div class="grid gap-1">
     <h2 class="m-0 text-sm font-bold text-ink">MCP tools</h2>
-    <p class="mb-0 text-xs text-ink-dim"><%= description %></p>
+    <p class="mb-0 text-xs text-ink-dim">Choose which registered servers this chat may use. <%= note %></p>
   </div>
 
   <% if (servers.length === 0) { %>
