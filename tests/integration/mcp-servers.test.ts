@@ -379,4 +379,75 @@ describe('MCP servers CRUD', () => {
     const enabled = await listEnabledMcpServersForConversation(conversationId)
     expect(enabled.map((s) => s.id)).toContain(id)
   })
+
+  test('new-chat tool selection is remembered as the default for the next chat', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const headers = { Cookie: cookie, Origin: origin }
+    const provider = await createProvider({
+      accountId: user.id,
+      name: `provider-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: 'http://127.0.0.1:1',
+      defaultModel: 'stub-model',
+      enabled: true,
+    })
+    const name = `sticky-${randomUUIDv7()}`
+    const server = await createMcpServer({
+      accountId: user.id,
+      name,
+      url: 'https://mcp.example.com/mcp',
+      enabled: true,
+    })
+
+    // Fresh account: the landing renders the server unchecked.
+    let landing = await app.request(url('/conversations'), { headers: { Cookie: cookie } })
+    expect(await landing.text()).toContain(`aria-label="Off — turn on ${name}"`)
+
+    // Create a chat with the server selected...
+    const create = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers,
+      body: form({
+        providerId: provider.id,
+        model: 'stub-model',
+        enabled_mcp_server_id: [server.id],
+      }),
+    })
+    expect(create.status).toBe(302)
+
+    // ...and the next landing comes pre-checked with it.
+    landing = await app.request(url('/conversations'), { headers: { Cookie: cookie } })
+    expect(await landing.text()).toContain(`aria-label="On — turn off ${name}"`)
+
+    // A stale default (server deleted since) renders nothing and stays harmless.
+    // An id outside the user's catalog is never written as a default either.
+    const foreign = randomUUIDv7()
+    const createAgain = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers,
+      body: form({
+        providerId: provider.id,
+        model: 'stub-model',
+        enabled_mcp_server_id: [server.id, foreign],
+      }),
+    })
+    expect(createAgain.status).toBe(302)
+    const conversationId = (createAgain.headers.get('location') ?? '').slice(
+      '/conversations/'.length,
+    )
+    expect(
+      (await listEnabledMcpServersForConversation(conversationId)).map((s) => s.id),
+    ).toEqual([server.id])
+
+    // Creating a chat with nothing selected clears the remembered default.
+    const createEmpty = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers,
+      body: form({ providerId: provider.id, model: 'stub-model' }),
+    })
+    expect(createEmpty.status).toBe(302)
+    landing = await app.request(url('/conversations'), { headers: { Cookie: cookie } })
+    expect(await landing.text()).toContain(`aria-label="Off — turn on ${name}"`)
+  })
 })

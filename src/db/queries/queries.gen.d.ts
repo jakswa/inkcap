@@ -723,6 +723,15 @@ export interface IGetUserByIdResult {
     created_at: Date;
 }
 
+/** Result of query `GetUserSettings`. */
+export interface IGetUserSettingsResult {
+    settings: unknown;
+}
+
+/** Result of query `PatchUserSettings`. */
+export interface IPatchUserSettingsResult {
+}
+
 /** Result of query `GetUserByEmailNormalized`. */
 export interface IGetUserByEmailNormalizedResult {
     id: string;
@@ -800,6 +809,8 @@ export interface Queries {
     ListApprovalsForRun: IListApprovalsForRunResult;
     DecideRunApprovals: IDecideRunApprovalsResult;
     GetUserById: IGetUserByIdResult;
+    GetUserSettings: IGetUserSettingsResult;
+    PatchUserSettings: IPatchUserSettingsResult;
     GetUserByEmailNormalized: IGetUserByEmailNormalizedResult;
     CreateUser: ICreateUserResult;
 }

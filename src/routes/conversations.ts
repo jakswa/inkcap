@@ -28,6 +28,8 @@ import {
   listMcpServersWithOverride,
   setConversationMcpOverride,
 } from '../db/queries/mcp-servers'
+import { getUserSettings, patchUserSettings } from '../db/queries/users'
+import { parseUserSettings } from '../utils/user-settings'
 import { listPendingApprovalsForRun } from '../db/queries/tool-approvals'
 import {
   cancelRun,
@@ -337,12 +339,18 @@ async function renderLanding(
     selectedMcpServerIds?: string[]
   } = {},
 ) {
-  const [conversations, providers, mcpServers] = await Promise.all([
+  const [conversations, providers, mcpServers, settings] = await Promise.all([
     listConversationsForUser(userId),
     listProvidersForUser(userId),
     listMcpServersForUser(userId),
+    getUserSettings(userId),
   ])
-  const selectedMcpServerIds = new Set(options.selectedMcpServerIds ?? [])
+  // Fresh landing: pre-check the servers from the user's saved defaults (the
+  // last created conversation's selection). A validation-error re-render
+  // passes the submitted selection instead — even when it's empty.
+  const selectedMcpServerIds = new Set(
+    options.selectedMcpServerIds ?? parseUserSettings(settings).defaultMcpServerIds,
+  )
 
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/list', {
@@ -441,22 +449,30 @@ conversationRoutes.post('/conversations', async (c) => {
     reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,
   })
 
-  if (selectedMcpServerIds.length > 0) {
-    const validIds = new Set(
-      (await listMcpServersForUser(user.id)).map((server) => server.id),
-    )
-    await Promise.all(
-      selectedMcpServerIds
-        .filter((id) => validIds.has(id))
-        .map((mcpServerId) =>
-          setConversationMcpOverride({
-            conversationId: conversation.id,
-            mcpServerId,
-            enabled: true,
-          }),
-        ),
-    )
-  }
+  const enabledMcpServerIds =
+    selectedMcpServerIds.length > 0
+      ? await (async () => {
+          const validIds = new Set(
+            (await listMcpServersForUser(user.id)).map((server) => server.id),
+          )
+          return selectedMcpServerIds.filter((id) => validIds.has(id))
+        })()
+      : []
+  await Promise.all(
+    enabledMcpServerIds.map((mcpServerId) =>
+      setConversationMcpOverride({
+        conversationId: conversation.id,
+        mcpServerId,
+        enabled: true,
+      }),
+    ),
+  )
+  // Remember this selection (including "none") as the new-chat default, so
+  // the next landing page comes pre-checked with it.
+  await patchUserSettings({
+    userId: user.id,
+    patch: { defaultMcpServerIds: enabledMcpServerIds },
+  })
 
   // A configured system prompt lives in the tree as the root message and
   // becomes curr_node, so the first user turn hangs off it (spec §1.2).

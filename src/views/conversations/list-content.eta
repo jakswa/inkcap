@@ -52,7 +52,7 @@
               Tools
             </summary>
             <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10" data-menu-panel>
-              <%~ include('./mcp-picker', { servers: it.mcpServers }) %>
+              <%~ include('./mcp-picker', { servers: it.mcpServers, description: 'Choose which registered servers this chat may use. Your last selection is remembered for new chats.' }) %>
             </div>
           </details>
 

@@ -11,6 +11,30 @@ export async function getUserById(id: string) {
   return user
 }
 
+// users.settings is a per-user jsonb preference blob (migration 013). The
+// shape lives in src/utils/user-settings.ts — read through parseUserSettings,
+// never trust the raw value.
+export async function getUserSettings(userId: string) {
+  const [row] = await sql.GetUserSettings`
+    SELECT settings FROM users WHERE id = ${userId}
+  `
+
+  return row?.settings ?? null
+}
+
+// Merge, don't replace: `settings || patch` only touches the patch's keys, so
+// concurrent writers of different settings can't clobber each other.
+export async function patchUserSettings(input: {
+  userId: string
+  patch: Record<string, unknown>
+}) {
+  await sql.PatchUserSettings`
+    UPDATE users
+    SET settings = settings || ${input.patch}::jsonb
+    WHERE id = ${input.userId}
+  `
+}
+
 export async function getUserByEmailNormalized(emailNormalized: string) {
   const [user] = await sql.GetUserByEmailNormalized`
     SELECT id, name, email, email_normalized, password_hash, created_at
