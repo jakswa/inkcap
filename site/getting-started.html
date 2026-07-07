@@ -45,7 +45,8 @@ bun run dev</code></pre>
 bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
 
       <h3 id="codex">Chat on your ChatGPT subscription (Codex)</h3>
-      <p>Providers → Add provider → <strong>“Sign in with ChatGPT”</strong>. The server runs the Codex CLI’s OAuth flow with a loopback callback on <code>localhost:1455</code>, so browse from the machine running inkcap (or tunnel that port) during sign-in. Tokens stay server-side and refresh automatically.</p>
+      <p>Providers → Add provider → <strong>“Sign in with ChatGPT”</strong>. The server runs the Codex CLI’s OAuth flow; OpenAI always redirects back to <code>localhost:1455</code>, which inkcap listens on while a sign-in is pending. Tokens stay server-side and refresh automatically.</p>
+      <p>Browsing from a different machine than the one running inkcap? After you approve the login, the redirect lands on <em>your browser’s</em> localhost and shows a connection error — that’s expected. Copy the failed <code>http://localhost:1455/auth/callback?…</code> address and paste it into the <strong>“Finish a remote ChatGPT sign-in”</strong> form on the Add provider page. No tunnel needed: the server holds the pending sign-in state and completes the exchange itself.</p>
 
       <h2 id="import">Import llama.cpp web UI history</h2>
       <p>Coming from llama.cpp’s built-in web UI? The importer is idempotent and takes a JSONL export or a zip, including attachments and branch trees:</p>
@@ -62,6 +63,7 @@ bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
           <tr><td><code>ASSET_VERSION</code></td><td>Cache-busting version for static assets; required in production (pass as a Docker build arg)</td></tr>
           <tr><td><code>PORT</code></td><td>HTTP port (default 3000)</td></tr>
           <tr><td><code>REGISTRATION</code></td><td><code>open</code> or <code>closed</code>; defaults to closed in production, open elsewhere</td></tr>
+          <tr><td><code>PUBLIC_ORIGIN</code>, <code>CSRF_TRUSTED_ORIGINS</code>, <code>OUTBOUND_TRUSTED_HOSTS</code></td><td>Opt-ins for split-origin deployments (TLS-terminating proxy and/or direct LAN IP access); see <code>.env.example</code></td></tr>
           <tr><td><code>DEV_LLAMA_SERVER</code> / <code>DEV_LLAMA_KEY</code></td><td>Feed the <code>seed-provider</code> task in development</td></tr>
         </tbody>
       </table>
