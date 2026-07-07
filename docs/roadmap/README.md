@@ -59,8 +59,8 @@ None block daily use.
 
 - Usage-window surfacing (`/wham/usage`) is not built; 429s surface as run
   errors with the upstream message.
-- No device-code fallback — sign-in needs the browser on the server's
-  machine (or an SSH tunnel of :1455).
+- No device-code fallback — remote sign-in works, but via the manual
+  paste-the-callback-URL form rather than a polished device-code flow.
 - `OpenAI-Beta` header deliberately not sent (HTTP-path value unverified).
 
 ## Manual QA still wanted
