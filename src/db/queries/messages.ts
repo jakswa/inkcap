@@ -169,13 +169,14 @@ export async function createImportedMessage(input: {
   reasoningContent?: string | null
   model?: string | null
   toolCalls?: unknown
+  toolCallId?: string | null
   timings?: unknown
   createdAt: Date
 }) {
   const [message] = await sql.CreateImportedMessage`
     INSERT INTO messages (
       id, conversation_id, parent_id, role, content, reasoning_content,
-      model, tool_calls, timings, created_at
+      model, tool_calls, tool_call_id, timings, created_at
     )
     VALUES (
       ${input.id},
@@ -186,6 +187,7 @@ export async function createImportedMessage(input: {
       ${input.reasoningContent ?? null},
       ${input.model ?? null},
       ${input.toolCalls ?? null},
+      ${input.toolCallId ?? null},
       ${input.timings ?? null},
       ${input.createdAt}
     )

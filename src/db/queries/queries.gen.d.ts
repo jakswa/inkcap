@@ -117,6 +117,11 @@ export interface ICreateImportedConversationResult {
     updated_at: Date;
 }
 
+/** Result of query `SetConversationSeedState`. */
+export interface ISetConversationSeedStateResult {
+    id: string;
+}
+
 /** Result of query `FindConversationMatch`. */
 export interface IFindConversationMatchResult {
     id: string;
@@ -746,6 +751,7 @@ export interface Queries {
     UpdateConversationModelSettings: IUpdateConversationModelSettingsResult;
     DeleteConversation: IDeleteConversationResult;
     CreateImportedConversation: ICreateImportedConversationResult;
+    SetConversationSeedState: ISetConversationSeedStateResult;
     FindConversationMatch: IFindConversationMatchResult;
     CreateMcpServer: ICreateMcpServerResult;
     GetMcpServerForUser: IGetMcpServerForUserResult;

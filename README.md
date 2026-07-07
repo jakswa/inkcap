@@ -47,6 +47,11 @@ bun src/tasks/seed-provider.ts --user you@example.com
                                    # DEV_LLAMA_KEY, owned by that user's account
 ```
 
+No provider handy? `bun src/tasks/seed-demo.ts` creates a demo account
+(`demo@inkcap.dev` / `inkcap-demo`) with realistic conversations — markdown,
+reasoning, tool calls, a parked approval — for kicking the tires or taking
+screenshots (the ones on the site and this landing page come from it).
+
 Import llama-ui history (idempotent; JSONL or zip, attachments, branch trees):
 
 ```sh
@@ -108,7 +113,7 @@ src/
 │   ├── migrations/         # 001_init ... 012_accounts (raw SQL)
 │   └── queries/            # named bun-sqlgen queries per table + queries.gen.d.ts
 ├── middleware/             # render.ts, current-user.ts
-├── tasks/                  # migrate, seed-provider, create-user, import-llama-ui, mock-provider
+├── tasks/                  # migrate, seed-provider, seed-demo, create-user, import-llama-ui, mock-provider
 ├── utils/                  # env, markdown, message-view, outbound-url, private-session, ...
 └── build.ts                # build-time tooling, never shipped
 ```

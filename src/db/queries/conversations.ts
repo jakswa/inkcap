@@ -122,6 +122,25 @@ export async function createImportedConversation(input: {
   return conversation
 }
 
+// Seeder-only: pin created_at/updated_at (and the pinned flag) after content
+// insertion — the helpers above stamp now(), which would flatten a seeded
+// history into a single moment (src/tasks/seed-demo.ts staggers the sidebar).
+export async function setConversationSeedState(input: {
+  id: string
+  createdAt: Date
+  updatedAt: Date
+  pinned: boolean
+}) {
+  const [conversation] = await sql.SetConversationSeedState`
+    UPDATE conversations
+    SET created_at = ${input.createdAt}, updated_at = ${input.updatedAt}, pinned = ${input.pinned}
+    WHERE id = ${input.id}
+    RETURNING id
+  `
+
+  return conversation
+}
+
 // Importer idempotency fallback for conversations whose source id isn't
 // UUID-shaped (the fork's crypto.randomUUID-unavailable fallback): match on
 // (user, title, created_at) instead, since we set created_at from the
