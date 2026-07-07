@@ -5,13 +5,16 @@ Future features and post-v1 polish. Security/correctness hardening lives in
 
 ## Scoped features
 
-- **[Browser push notifications](push-notifications.md)** — notify on run
-  stopping points (approval parks, errors, unwatched completions) via Web
-  Push; includes the iOS install-to-home-screen dance.
 - **[Scheduled prompts (routines)](scheduled-prompts.md)** — saved prompt +
-  provider/tools + cron schedule; each firing is a normal durable run.
+  provider/tools + cron schedule; each firing is a normal durable headless run.
   Bun.cron tick, DB as truth; pg-boss deferred until a second background
   workload exists.
+- **[Artifacts](artifacts.md)** — lightweight AI-created deliverables attached
+  to runs. The model calls a tiny `submit_artifact` tool; the server owns
+  storage, rendering, links, and notification targeting.
+- **[Browser push notifications](push-notifications.md)** — focused first on
+  headless routine outcomes: result ready, approval needed, or failure. Web Push
+  delivery; includes the iOS install-to-home-screen dance.
 
 ## Feature gaps surfaced by the 2026-07-07 audit
 

@@ -1,23 +1,26 @@
 # Browser push notifications
 
-**Status:** scoped, not started (2026-07-06)
+**Status:** scoped, not started (2026-07-07)
 
-## Why this is a natural fit
+## Why this exists
 
-The whole point of inkcap is that runs finish while nobody is watching. Today
-the only way to learn a run reached a stopping point is to come back and look.
-Web Push closes that loop server-side — no polling, no open tab — and it's the
-delivery channel [scheduled-prompts](scheduled-prompts.md) needs to be useful ("your morning
-routine ran, 1 tool call awaiting approval").
+Notifications are primarily for **headless routine runs**: work the server did
+while the user was away. The motivating use case is a daily briefing that
+finishes in the morning and opens as an [artifact](artifacts.md), not raw chat.
 
-Notify on the runner's existing stopping points, nothing new invented:
+Keep the first notification product narrow:
 
-- run **parks on `waiting_approval`** — the highest-value one; a parked run is
-  dead until a human acts.
-- run **errors** (including boot-recovery "interrupted by restart").
-- run **completes** — only when no SSE subscriber saw it land (the runner
-  already knows its subscriber count; someone watching live needs no push).
-- a routine fired (see [scheduled-prompts](scheduled-prompts.md)).
+- routine **completed** → open the conversation, where produced artifacts are
+  visible.
+- routine **parks on `waiting_approval`** → open the conversation approval UI.
+- routine **errors** → open the errored conversation.
+
+Opening a specific artifact directly is desirable, especially for daily
+briefings, but the targeting rule is intentionally not designed yet.
+
+General chat notifications can exist later, but they are not the reason to ship
+Web Push. The personal value is: "my scheduled/headless result is ready" or
+"my scheduled/headless run needs me."
 
 ## Mechanics (the standard part)
 
@@ -95,15 +98,23 @@ Current-state caveats (mid-2026):
 
 1. VAPID keys + `push_subscriptions` migration + subscribe/unsubscribe on the
    settings page (works on desktop Chrome/Firefox immediately).
-2. Runner hooks: `waiting_approval` park + error + unwatched-complete.
+2. Routine-run notification hooks: completed, `waiting_approval`, error.
+   Completed routine runs open the conversation URL first; artifact-specific
+   notification links wait for an explicit targeting design.
 3. Manifest + root-scope `sw.js` + iOS install hint → iPhone works.
-4. (later) Declarative Web Push variant, badge counts, per-event-type
-   preferences.
+4. (later) General chat notifications, Declarative Web Push variant, badge
+   counts, per-event-type preferences.
 
 ## Open questions
 
-- Notification preferences granularity: per-user event-type toggles, or ship
-  all-on and see if it annoys? (Lean: all-on, one global toggle.)
+- Notification preferences granularity: probably one global toggle first,
+  because only routine outcomes notify initially.
 - Does `web-push` run clean under Bun 1.3? (10-minute spike before committing
   to hand-rolling.)
 - Icon set: we have SVGs only; need 192/512 PNGs for the manifest.
+- Should routine completion without an artifact notify, or should only
+  artifact-producing routines produce "ready" pushes? Lean: notify, but link to
+  chat as fallback.
+- How does a run choose an artifact-specific notification target when multiple
+  artifacts exist? Not designed yet; do not add a hidden `primary` rule until
+  this is settled.
