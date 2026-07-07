@@ -22,6 +22,16 @@
   </div>
 </section>
 
+<section class="py-[clamp(1rem,4vw,3rem)]" aria-label="Product screenshot">
+  <figure class="m-0 mx-auto grid max-w-4xl gap-3">
+    <picture>
+      <source srcset="/assets/<%= it.assetVersion %>/shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
+      <img class="h-auto w-full rounded-2xl border border-edge shadow-2xl shadow-black/20" src="/assets/<%= it.assetVersion %>/shots/chat-desktop-light.webp" alt="The inkcap chat view: a conversation with an open reasoning accordion, a syntax-highlighted code block, per-message token stats, and a composer with MCP tools and a model picker" width="1440" height="900" loading="lazy">
+    </picture>
+    <figcaption class="text-center text-sm text-ink-faint">Reasoning, markdown, token stats, MCP tools — rendered server-side.</figcaption>
+  </figure>
+</section>
+
 <section class="grid gap-5 py-[clamp(2rem,7vw,5rem)]" aria-label="What inkcap does">
   <div class="grid gap-2">
     <p class="eyebrow mb-0">what it does</p>

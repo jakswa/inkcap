@@ -46,6 +46,16 @@
         </div>
       </section>
 
+      <section aria-label="Product screenshot">
+        <figure class="shot hero-shot">
+          <picture>
+            <source srcset="shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="shots/chat-desktop-light.webp" alt="The inkcap chat view: a conversation about a flaky Playwright test with an open reasoning accordion, a syntax-highlighted code block, per-message token stats, and a composer with MCP tools and a model picker" width="1440" height="900">
+          </picture>
+          <figcaption>Reasoning, markdown, token stats, MCP tools — rendered server-side, streamed to spectators.</figcaption>
+        </figure>
+      </section>
+
       <section aria-label="What inkcap does">
         <p class="eyebrow">what it does</p>
         <h2 class="section-title">Quiet infrastructure for conversations that keep going.</h2>
@@ -74,6 +84,21 @@
             <h3>A tiny JS budget</h3>
             <p>SSR templates and plain HTML forms everywhere; one hand-rolled island for the chat stream. Everything still works with JavaScript off.</p>
           </article>
+        </div>
+      </section>
+
+      <section aria-label="More screenshots">
+        <p class="eyebrow">up close</p>
+        <h2 class="section-title">Tool calls wait for you. Phones are first-class.</h2>
+        <div class="shot-row">
+          <figure class="shot">
+            <img src="shots/approval-desktop-dark.webp" alt="A run parked in 'waiting for approval': the assistant wants to execute REINDEX INDEX CONCURRENTLY via an MCP postgres tool, with Approve & run and Deny buttons" width="1440" height="900" loading="lazy">
+            <figcaption>An MCP tool call parked for human approval — the run waits server-side. (dark mode)</figcaption>
+          </figure>
+          <figure class="shot">
+            <img src="shots/chat-mobile-light.webp" alt="The same chat UI on a phone: wrapped markdown, a branch switcher reading 2/2, and the composer with tools and model chips" width="390" height="844" loading="lazy">
+            <figcaption>The same conversation from your phone — reload, and it's exactly where the server left it. (light mode)</figcaption>
+          </figure>
         </div>
       </section>
 

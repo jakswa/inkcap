@@ -226,6 +226,10 @@
 .md {
   line-height: 1.65;
   overflow-wrap: anywhere;
+  /* As a grid item, don't let long unbreakable lines (code blocks) set the
+     transcript column's min-content width — the <pre> scrolls instead of
+     stretching the page on narrow viewports. */
+  min-width: 0;
 }
 .md > :first-child {
   margin-top: 0;

@@ -240,6 +240,52 @@ section {
   padding: clamp(1.5rem, 5vw, 3rem) 0;
 }
 
+/* ------------------------------------------------------------------- shots */
+.shot {
+  margin: 0;
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.shot img {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--edge);
+  border-radius: 0.9rem;
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.18);
+}
+
+.shot figcaption {
+  font-size: 0.85rem;
+  color: var(--ink-faint);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.hero-shot {
+  max-width: 56rem;
+  margin: 0 auto;
+}
+
+.shot-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 16rem);
+  gap: 1.75rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .shot-row {
+    grid-template-columns: 1fr;
+  }
+
+  .shot-row .shot:last-child {
+    max-width: 18rem;
+    margin: 0 auto;
+  }
+}
+
 /* -------------------------------------------------------------------- prose */
 .prose {
   max-width: 46rem;
