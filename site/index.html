@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>inkcap — a small, server-driven LLM chat web UI</title>
+  <meta name="description" content="inkcap is a self-hosted LLM chat web UI where the server owns the conversation: durable runs, SSE spectators, bring-your-own providers, and a message tree.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="./"><img src="favicon.svg" alt=""> inkcap</a>
+      <nav class="site-nav">
+        <a href="getting-started.html">Getting started</a>
+        <a href="https://github.com/jakswa/inkcap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <svg class="mushroom" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" role="img" aria-label="inkcap mushroom">
+          <ellipse cx="360" cy="282" rx="252" ry="214" fill="var(--accent)" opacity=".12"/>
+          <g fill="var(--ok)" opacity=".38">
+            <circle cx="120" cy="142" r="7"/>
+            <circle cx="176" cy="86" r="4"/>
+            <circle cx="566" cy="124" r="6"/>
+            <circle cx="612" cy="226" r="4"/>
+            <circle cx="118" cy="318" r="4"/>
+            <circle cx="548" cy="376" r="5"/>
+            <circle cx="222" cy="420" r="5"/>
+            <circle cx="486" cy="72" r="3.5"/>
+          </g>
+          <path d="M146 298c23-121 103-196 222-190 118 6 190 89 205 190-95-35-330-35-427 0Z" fill="var(--accent)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+          <path d="M160 310c82 86 315 86 398 0-91-28-306-28-398 0Z" fill="var(--mushroom-gill)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+          <path d="M302 348c-6 55-30 97-73 135 61 36 201 36 262 0-43-38-67-80-73-135-35 13-81 13-116 0Z" fill="var(--surface-raised)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <h1>inkcap</h1>
+          <p class="tagline">a small, self-hosted LLM chat web UI where the server owns the conversation</p>
+        </div>
+        <div class="actions">
+          <a class="btn btn-primary" href="getting-started.html">Get started</a>
+          <a class="btn btn-ghost" href="https://github.com/jakswa/inkcap">View on GitHub</a>
+        </div>
+      </section>
+
+      <section aria-label="What inkcap does">
+        <p class="eyebrow">what it does</p>
+        <h2 class="section-title">Quiet infrastructure for conversations that keep going.</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>Server-owned runs</h3>
+            <p>A chat run is a durable server-side job. Close the laptop mid-generation, open your phone later — the conversation reached a sensible stopping point without you.</p>
+          </article>
+          <article class="card">
+            <h3>Browsers are spectators</h3>
+            <p>Live tokens fan out over SSE with replay; zero subscribers changes nothing, and a page reload always shows database truth.</p>
+          </article>
+          <article class="card">
+            <h3>Bring your own providers</h3>
+            <p>llama-server, OpenAI-compatible endpoints, or your ChatGPT subscription via Codex sign-in. Keys live server-side and never reach the browser.</p>
+          </article>
+          <article class="card">
+            <h3>Messages are a tree</h3>
+            <p>Edit and regenerate create sibling branches; switching branches is just picking a path. Branching is schema, the UI is just forms.</p>
+          </article>
+          <article class="card">
+            <h3>MCP tools built in</h3>
+            <p>The server runs the tool loop against your MCP servers and parks the run for approval when a tool call needs a human.</p>
+          </article>
+          <article class="card">
+            <h3>A tiny JS budget</h3>
+            <p>SSR templates and plain HTML forms everywhere; one hand-rolled island for the chat stream. Everything still works with JavaScript off.</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-label="Quick start">
+        <p class="eyebrow">quick start</p>
+        <h2 class="section-title">Postgres, Bun, four commands.</h2>
+        <div class="prose">
+          <pre><code>bun install
+cp .env.example .env.local   <span class="cmt"># DATABASE_URL, SESSION_SECRET</span>
+bun run db:migrate
+bun run dev                  <span class="cmt"># http://localhost:3000 — register first</span></code></pre>
+          <p>Then add a provider and start chatting. The full walkthrough — providers, ChatGPT sign-in, importing llama.cpp web UI history, and production Docker deploys — lives in <a href="getting-started.html">Getting started</a>.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>🍄 inkcap — grown in the dark, served warm</span>
+      <a href="https://github.com/jakswa/inkcap">github.com/jakswa/inkcap</a>
+    </footer>
+  </div>
+</body>
+</html>

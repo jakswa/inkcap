@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting started — inkcap</title>
+  <meta name="description" content="Install and run inkcap: requirements, first run, providers, ChatGPT (Codex) sign-in, importing llama.cpp web UI history, and production deployment with Docker.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="./"><img src="favicon.svg" alt=""> inkcap</a>
+      <nav class="site-nav">
+        <a href="getting-started.html" aria-current="page">Getting started</a>
+        <a href="https://github.com/jakswa/inkcap">GitHub</a>
+      </nav>
+    </header>
+
+    <main class="prose">
+      <p class="eyebrow">docs</p>
+      <h1>Getting started</h1>
+      <p class="lede">inkcap is a single stateful process: a web server and an agent runtime in one. You bring PostgreSQL and an LLM provider; it keeps your conversations running even when no browser is watching.</p>
+
+      <h2 id="requirements">Requirements</h2>
+      <ul>
+        <li><a href="https://bun.sh">Bun</a> (runtime, package manager, and test runner)</li>
+        <li>PostgreSQL with an <code>inkcap</code> database (plus <code>inkcap_test</code> if you want to run the test suite)</li>
+        <li>Something to chat with: a running <code>llama-server</code>, any OpenAI-compatible endpoint, or a ChatGPT subscription</li>
+      </ul>
+
+      <h2 id="run">Install and run</h2>
+      <pre><code>git clone https://github.com/jakswa/inkcap
+cd inkcap
+bun install
+cp .env.example .env.local   <span class="cmt"># set DATABASE_URL and SESSION_SECRET</span>
+bun run db:migrate
+bun run dev</code></pre>
+      <p>Open <code>http://localhost:3000</code> and register — outside production, registration is open by default. Your account is created together with a personal workspace that owns your providers and MCP servers.</p>
+
+      <h2 id="providers">Add a provider</h2>
+      <p>Providers live server-side; API keys are stored in the database and never reach the browser. Add one under <strong>Providers → Add provider</strong>, or seed a llama-server provider from the CLI:</p>
+      <pre><code><span class="cmt"># uses DEV_LLAMA_SERVER / DEV_LLAMA_KEY from your env</span>
+bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
+
+      <h3 id="codex">Chat on your ChatGPT subscription (Codex)</h3>
+      <p>Providers → Add provider → <strong>“Sign in with ChatGPT”</strong>. The server runs the Codex CLI’s OAuth flow with a loopback callback on <code>localhost:1455</code>, so browse from the machine running inkcap (or tunnel that port) during sign-in. Tokens stay server-side and refresh automatically.</p>
+
+      <h2 id="import">Import llama.cpp web UI history</h2>
+      <p>Coming from llama.cpp’s built-in web UI? The importer is idempotent and takes a JSONL export or a zip, including attachments and branch trees:</p>
+      <pre><code>bun src/tasks/import-llama-ui.ts export.jsonl --user you@example.com</code></pre>
+
+      <h2 id="env">Environment reference</h2>
+      <table>
+        <thead>
+          <tr><th>Variable</th><th>What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL connection string</td></tr>
+          <tr><td><code>SESSION_SECRET</code></td><td>Encrypts the session cookie; in production it must be ≥32 bytes and not a placeholder</td></tr>
+          <tr><td><code>ASSET_VERSION</code></td><td>Cache-busting version for static assets; required in production (pass as a Docker build arg)</td></tr>
+          <tr><td><code>PORT</code></td><td>HTTP port (default 3000)</td></tr>
+          <tr><td><code>REGISTRATION</code></td><td><code>open</code> or <code>closed</code>; defaults to closed in production, open elsewhere</td></tr>
+          <tr><td><code>DEV_LLAMA_SERVER</code> / <code>DEV_LLAMA_KEY</code></td><td>Feed the <code>seed-provider</code> task in development</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="production">Production (Docker)</h2>
+      <p>The build bundles everything into <code>build/</code>; the image ships no <code>src/</code> and no <code>node_modules/</code>.</p>
+      <pre><code>docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t inkcap .
+docker run -p 3000:3000 --env-file .env.production inkcap</code></pre>
+      <p>Run migrations inside the image with <code>bun build/tasks/migrate.js</code>. Registration defaults to <em>closed</em> in production — bootstrap your first user from the CLI:</p>
+      <pre><code>CREATE_USER_PASSWORD=... bun build/tasks/create-user.js --name You --email you@example.com</code></pre>
+      <div class="note">inkcap is deliberately a single stateful process (web server + runner). Restarts are always safe: boot recovery finalizes any runs that were interrupted mid-generation.</div>
+
+      <h2 id="more">Digging deeper</h2>
+      <ul>
+        <li><a href="https://github.com/jakswa/inkcap/blob/master/README.md">README</a> — architecture shape, scripts, development rules</li>
+        <li><a href="https://github.com/jakswa/inkcap/blob/master/docs/STATUS.md">docs/STATUS.md</a> — current state of the project</li>
+        <li><a href="https://github.com/jakswa/inkcap/tree/master/docs/specs">docs/specs/</a> — provider, export, and MCP protocol notes</li>
+      </ul>
+    </main>
+
+    <footer class="site-footer">
+      <span>🍄 inkcap — grown in the dark, served warm</span>
+      <a href="https://github.com/jakswa/inkcap">github.com/jakswa/inkcap</a>
+    </footer>
+  </div>
+</body>
+</html>
