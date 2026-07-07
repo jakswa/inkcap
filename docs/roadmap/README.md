@@ -13,6 +13,31 @@ Future features and post-v1 polish. Security/correctness hardening lives in
   Bun.cron tick, DB as truth; pg-boss deferred until a second background
   workload exists.
 
+## Feature gaps surfaced by the 2026-07-07 audit
+
+Capabilities the specs/schema anticipate but no route implements yet. None is
+a regression — they're unbuilt.
+
+- **Conversation export (out of inkcap).** `docs/specs/export-format.md` and
+  the importer (`src/utils/llama-ui-import.ts`, `src/tasks/import-llama-ui.ts`)
+  cover import *in*; there is no route or task that serializes an inkcap
+  conversation back to the JSONL/zip wire format. Round-tripping (import →
+  edit → export) and "download my data" both need it. The branch-tree walk
+  already exists on the read side; this is mostly the inverse serializer.
+- **Attachments over HTTP.** The `attachments` table (bytea) is populated
+  *only* by the CLI importer — there is no upload route (no `type=file` in any
+  composer view, no multipart handler) and no download/serve route, so
+  imported attachments can't even be viewed. Building this needs a serving
+  route with a locked-down `Content-Type` + `Content-Disposition: attachment`
+  and an ownership check (imported SVG/HTML served inline would be stored XSS
+  — design it out from the start), plus a per-attachment body-limit carve-out
+  above the global 1 MiB form cap.
+- **Prompts & defaults (system prompt, model knobs).** The settings page
+  already renders a "Coming soon" card for system-prompt presets, naming
+  behaviour, and sampling knobs (`src/views/settings-content.eta`); nothing
+  behind it exists — runs send no system prompt and no temperature/sampling
+  controls. This is the llama-ui parity gap most visible to a daily user.
+
 ## Polish backlog (from v1 final integration, 2026-07-06)
 
 None block daily use.
