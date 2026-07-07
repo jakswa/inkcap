@@ -55,3 +55,30 @@ assertions, CSRF origin checks) can flake. Hasn't been observed in practice —
 the windows are microseconds — but the pattern scales badly; a shared
 env-mutation lock in `tests/helpers` (or per-request config injection) would
 retire it.
+
+## 17h — Unbounded MCP tool-result size
+
+`extractResultText` (`src/services/mcp-client.ts`) joins all text parts (or
+`JSON.stringify`s the whole content array) with no length cap, and the runner
+stores the result verbatim as a tool message. A malicious or buggy MCP server
+can return a multi-megabyte result that is buffered in memory and written to
+`messages.content`. Distinct from 17b, which caps *provider* output but
+explicitly not tool-result content. Add a byte cap with truncation.
+
+## 17i — Codex loopback listener leaks after an abandoned login
+
+`sweepExpiredLogins()` (`src/services/codex-auth.ts`) deletes expired pending
+logins but never calls `stopLoopbackIfIdle()` — that stop is only reached from
+`completeCodexLoginCallback`'s `finally`. If a user starts a Codex sign-in and
+never returns (browser closed), the pending entry is swept on the next
+`startCodexLogin`, but the `Bun.serve` on `127.0.0.1:1455` stays bound
+indefinitely with zero pending logins. Bounded to loopback, so low impact.
+Call `stopLoopbackIfIdle()` after sweeping.
+
+## 17j — Account enumeration on registration
+
+`POST /register` returns `'Email is already registered'` for an existing
+address (`src/routes/auth.ts`), versus the deliberately generic login error —
+so registration discloses account membership. `REGISTRATION` defaults to
+`closed` in production, which contains this to `open` deployments. Use a
+generic message (or a verification-email flow) where open registration is on.

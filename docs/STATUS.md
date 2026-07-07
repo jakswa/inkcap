@@ -1,13 +1,14 @@
-# inkcap — status (2026-07-06)
+# inkcap — status (2026-07-07)
 
-Server-driven chat rewrite of llama-ui. All planned milestones (M0–M7) plus
-two post-plan slices are on master, one commit each — the commit map and M3
-reveal-test evidence live in `docs/completed/THE_PLAN.md`. Verification:
-`bun run db:types` stable (55 typed queries), `bun run typecheck` clean,
-`bun test` 119/119, `bun run build` produces the production bundle.
+Server-driven chat rewrite of llama-ui. All planned milestones (M0–M8) plus
+the post-plan slices below are on master — the commit map and M3 reveal-test
+evidence live in `docs/completed/THE_PLAN.md`. Verification:
+`bun run db:types` stable (59 typed queries), `bun run typecheck` clean,
+`bun test` 146/146, `bun run build` produces the production bundle.
 
 Day-to-day setup and commands: README.md. Future work: `docs/roadmap/`.
-Security/correctness hardening: `docs/issues/`.
+Security/correctness hardening: `docs/issues/` (last swept 2026-07-07 — a sixth
+security pass + an ops-readiness audit; see issues 19–22 and 17h–17j).
 
 ## Post-M7: openai-codex provider (ChatGPT subscription OAuth)
 
@@ -31,3 +32,21 @@ by `REGISTRATION` (default closed in production; `create-user` task
 bootstraps). Details + legacy-data handling:
 `docs/issues/resolved/02-global-unowned-catalog.md`. Sharing later is
 additive — insert a membership row; the scoped queries already grant access.
+
+## Post-accounts: split-origin home deployments
+
+Serving one instance over both an HTTPS proxy origin and a plain-HTTP LAN IP:
+`PUBLIC_ORIGIN` (OAuth/CSRF canonical origin), `CSRF_TRUSTED_ORIGINS` (extra
+form-submit origins), `OUTBOUND_TRUSTED_HOSTS` (SSRF-guard exemptions), and a
+per-request session cookie name (`__Host-session` on secure requests, `session`
+on opted-in insecure ones). Residual warts are catalogued in
+`docs/issues/18-split-origin-session-cookie-downgrade.md`; the forwarding-header
+trust it introduces also underlies issue 21.
+
+## Docs-audit slice (2026-07-07)
+
+Catalog-only pass plus two on-the-spot fixes: the `ci.yml` push trigger
+(`main` → `master`, so direct pushes are actually tested) and the MCP SSRF
+redirect-following hole (issue 22a). New/updated issues: 19–22, 17h–17j, and a
+corrected issue 14. New roadmap entries: conversation export, attachment
+upload/serve over HTTP, and prompts-&-defaults.

@@ -16,6 +16,14 @@ import { assertSafeOutboundUrl } from '../utils/outbound-url'
 const CLIENT_INFO = { name: 'inkcap', version: '1.0.0' }
 const DEFAULT_TIMEOUT_MS = 30_000
 
+// `assertSafeOutboundUrl` only vets the configured URL; a 3xx would let the
+// server redirect our request into a blocked address (loopback, link-local
+// metadata endpoints), bypassing the guard. Refuse to follow redirects — the
+// provider and codex clients do the same. A legitimate MCP JSON-RPC endpoint
+// never redirects the POST.
+const noRedirectFetch = (input: RequestInfo | URL, init?: RequestInit) =>
+  fetch(input, { ...init, redirect: 'manual' })
+
 // The subset of an mcp_servers row this service needs.
 export interface McpServerConfig {
   id: string
@@ -86,6 +94,7 @@ async function withClient<T>(
   await assertSafeOutboundUrl(server.url)
   const headers = parseHeaders(server.headers)
   const transport = new StreamableHTTPClientTransport(new URL(server.url), {
+    fetch: noRedirectFetch,
     requestInit: Object.keys(headers).length > 0 ? { headers } : undefined,
   })
   const client = new Client(CLIENT_INFO)

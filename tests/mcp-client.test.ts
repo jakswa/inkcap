@@ -67,4 +67,25 @@ describe('mcp-client', () => {
     }
     expect(threw).toBe(true)
   })
+
+  test('does not follow redirects (SSRF guard cannot be bypassed via 3xx)', async () => {
+    // In production a server whose URL passes the outbound guard could 302 the
+    // request toward a blocked address (loopback / metadata endpoint). Here we
+    // redirect to the reachable stub with a 307 (which preserves the POST), so
+    // that *following* the redirect would succeed — proving it's the guard, not
+    // an unreachable target, that makes the connection fail.
+    const redirector = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(null, { status: 307, headers: { Location: stub.url } }),
+    })
+    try {
+      const result = await testMcpConnection(
+        config(`http://127.0.0.1:${redirector.port}/mcp`, { request_timeout_ms: 1000 }),
+      )
+      expect(result.ok).toBe(false)
+    } finally {
+      redirector.stop(true)
+    }
+  })
 })
