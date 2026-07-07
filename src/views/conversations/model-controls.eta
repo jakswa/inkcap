@@ -1,39 +1,29 @@
 <% const controls = it.controls %>
 <% const selectedProvider = controls.providers.find((provider) => provider.id === controls.selectedProviderId) || controls.providers[0] %>
-<% const modelOptions = selectedProvider ? selectedProvider.models : [] %>
-<% const providerModelsJson = (provider) => JSON.stringify(provider.models).replace(/</g, '\\u003c') %>
+<% const modelOptions = controls.modelOptions || [] %>
+<% const selectedModelOption = modelOptions.find((model) => model.key === controls.selectedModelKey) || modelOptions[0] %>
 
 <% if (selectedProvider) { %>
-  <% if (controls.allowProviderSelect && controls.providers.length > 1) { %>
-    <label class="chip hidden max-w-[11rem] cursor-pointer sm:inline-flex" title="Provider">
-      <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
-      <select class="min-w-0 max-w-[8.5rem] cursor-pointer truncate bg-transparent outline-none field-sizing-content" name="providerId" aria-label="Provider" data-provider-select>
-        <% controls.providers.forEach((provider) => { %>
-          <option value="<%= provider.id %>" data-default-model="<%= provider.defaultModel || '' %>" data-models="<%= providerModelsJson(provider) %>" <%= provider.id === selectedProvider.id ? 'selected' : '' %>><%= provider.name %></option>
-        <% }) %>
-      </select>
-    </label>
-  <% } else if (controls.allowProviderSelect) { %>
-    <input type="hidden" name="providerId" value="<%= selectedProvider.id %>">
-    <span class="chip hidden max-w-[11rem] sm:inline-flex" title="Provider: <%= selectedProvider.name %>">
-      <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
-      <span class="truncate"><%= selectedProvider.name %></span>
-    </span>
-  <% } %>
-
   <% if (modelOptions.length > 0) { %>
-    <% const selectedModelOption = modelOptions.find((model) => model.name === controls.selectedModel) || modelOptions[0] %>
-    <% const selectedModelName = selectedModelOption ? selectedModelOption.name : '' %>
-    <details class="relative w-0 min-w-0 flex-1 sm:w-auto sm:max-w-[18rem] sm:flex-none" title="Model: <%= selectedModelName %>" data-model-menu data-close-on-outside>
-      <summary class="chip w-full min-w-0 cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink" aria-label="Model: <%= selectedModelName %>">
+    <% const selectedModelName = selectedModelOption ? selectedModelOption.name : (controls.selectedModel || '') %>
+    <% const selectedModelLabel = selectedModelOption ? selectedModelOption.summary : (controls.selectedModel || 'Provider default') %>
+    <% const modelInputName = controls.allowProviderSelect ? 'providerModel' : 'model' %>
+    <details class="relative min-w-0 flex-1 sm:w-auto sm:max-w-[24rem] sm:flex-none" title="Model: <%= selectedModelLabel %>" data-model-menu data-close-on-outside>
+      <summary class="chip w-full min-w-0 cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink" aria-label="Model: <%= selectedModelLabel %>">
         <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
-        <span class="min-w-0 flex-1 truncate" data-model-label><%= selectedModelName %></span>
+        <span class="min-w-0 flex-1 truncate" data-model-label><%= selectedModelLabel %></span>
       </summary>
-      <div class="scroll-thin absolute right-0 bottom-full z-20 mb-1 grid max-h-72 w-[min(16rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-edge bg-raised p-1.5 text-sm text-ink shadow-xl shadow-black/10 sm:w-[min(22rem,calc(100vw-3rem))]" data-menu-panel>
+      <div class="scroll-thin absolute right-0 bottom-full z-20 mb-1 grid max-h-80 w-[min(22rem,calc(100vw-1rem))] overflow-y-auto rounded-2xl border border-edge bg-raised p-1.5 text-sm text-ink shadow-xl shadow-black/10 sm:w-[min(28rem,calc(100vw-3rem))]" data-menu-panel>
         <% modelOptions.forEach((model) => { %>
-          <label class="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink">
-            <span class="min-w-0 truncate"><%= model.name %></span>
-            <input class="size-3.5 shrink-0" type="radio" name="model" value="<%= model.name %>" data-label="<%= model.name %>" data-reasoning="<%= model.reasoning ? '1' : '0' %>" data-model-select data-model-radio <%= model.name === selectedModelName ? 'checked' : '' %>>
+          <% const checked = selectedModelOption ? model.key === selectedModelOption.key : model.name === selectedModelName %>
+          <label class="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink">
+            <span class="grid min-w-0 gap-0.5">
+              <span class="min-w-0 truncate font-medium"><%= model.label %></span>
+              <% if (controls.allowProviderSelect) { %>
+                <span class="min-w-0 truncate text-xs text-ink-faint"><%= model.providerName %></span>
+              <% } %>
+            </span>
+            <input class="size-3.5 shrink-0" type="radio" name="<%= modelInputName %>" value="<%= controls.allowProviderSelect ? model.value : model.name %>" data-label="<%= model.summary %>" data-reasoning="<%= model.reasoning ? '1' : '0' %>" data-model-select data-model-radio <%= checked ? 'checked' : '' %>>
           </label>
         <% }) %>
       </div>
@@ -43,6 +33,9 @@
       <%~ include('../partials/icon', { name: 'sparkles', class: 'size-3.5 shrink-0' }) %>
       <input class="min-w-0 flex-1 bg-transparent outline-none" name="model" maxlength="200" value="<%= controls.selectedModel || '' %>" placeholder="model" aria-label="Model">
     </label>
+    <% if (controls.allowProviderSelect) { %>
+      <input type="hidden" name="providerId" value="<%= selectedProvider.id %>">
+    <% } %>
   <% } %>
 
   <input type="hidden" name="reasoning_effort" value="off" data-reasoning-hidden <%= controls.modelSupportsReasoning ? 'disabled' : '' %>>

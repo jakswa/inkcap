@@ -143,10 +143,47 @@ describe('conversations chat loop', () => {
     const html = await res.text()
 
     expect(html).toContain('data-model-select')
-    expect(html).toContain(`value="${model}"`)
+    expect(html).toContain(model)
+    expect(html).toContain(provider.name)
     expect(html).toContain('data-reasoning="1"')
     expect(html).toContain('data-reasoning-control')
     expect(html).not.toContain('list="new-chat-models"')
+  })
+
+  test('new-chat model option carries provider and model together', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const first = await createProvider({
+      accountId: user.id,
+      name: `first-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'first-model',
+      models: ['first-model'],
+      enabled: true,
+    })
+    const second = await createProvider({
+      accountId: user.id,
+      name: `second-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'second-model',
+      models: ['second-model'],
+      enabled: true,
+    })
+
+    const create = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: origin },
+      body: form({ providerModel: `${second.id}:${encodeURIComponent('second-model')}` }),
+    })
+    expect(create.status).toBe(302)
+
+    const location = create.headers.get('location') ?? ''
+    const conversation = await getConversationById(location.slice('/conversations/'.length))
+    expect(conversation?.provider_id).toBe(second.id)
+    expect(conversation?.provider_id).not.toBe(first.id)
+    expect(conversation?.model).toBe('second-model')
   })
 
   test('send delivers a reply, advances curr_node, and renders the transcript', async () => {

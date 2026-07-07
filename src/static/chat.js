@@ -233,58 +233,6 @@
     menu.open = false;
   }
 
-  function addModelRadio(panel, name, reasoning, checked) {
-    var label = document.createElement('label');
-    label.className = 'flex cursor-pointer items-center justify-between gap-3 rounded-xl px-3 py-2 text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink';
-    var span = document.createElement('span');
-    span.className = 'min-w-0 truncate';
-    span.textContent = name;
-    var radio = document.createElement('input');
-    radio.className = 'size-3.5 shrink-0';
-    radio.type = 'radio';
-    radio.name = 'model';
-    radio.value = name;
-    radio.setAttribute('data-label', name);
-    radio.setAttribute('data-reasoning', reasoning ? '1' : '0');
-    radio.setAttribute('data-model-select', '');
-    radio.setAttribute('data-model-radio', '');
-    radio.checked = !!checked;
-    label.appendChild(span);
-    label.appendChild(radio);
-    panel.appendChild(label);
-    return radio;
-  }
-
-  function syncProviderControls(select) {
-    if (!select || !select.form) return;
-    var option = select.options[select.selectedIndex];
-    var modelMenu = select.form.querySelector('[data-model-menu]');
-    if (!option || !modelMenu) return;
-    var panel = modelMenu.querySelector('[data-menu-panel]');
-    if (!panel) return;
-    var models = [];
-    try {
-      models = JSON.parse(option.getAttribute('data-models') || '[]');
-    } catch (_) {
-      models = [];
-    }
-    var selected = option.getAttribute('data-default-model') || '';
-    panel.textContent = '';
-    var checkedRadio = null;
-    for (var i = 0; i < models.length; i++) {
-      var item = models[i] || {};
-      var name = String(item.name || '');
-      if (!name) continue;
-      var checked = name === selected || (!selected && !checkedRadio);
-      var radio = addModelRadio(panel, name, !!item.reasoning, checked);
-      if (checked) checkedRadio = radio;
-    }
-    if (checkedRadio) {
-      syncModelState(checkedRadio);
-      syncReasoningControl(checkedRadio);
-    }
-  }
-
   function syncStatsToggle(button) {
     var root = button.closest('[data-stats-toggle]');
     if (!root) return;
@@ -389,7 +337,6 @@
       syncModelState(el);
       syncReasoningControl(el);
     }
-    if (el && el.matches && el.matches('[data-provider-select]')) syncProviderControls(el);
     if (el && el.matches && el.matches('select[name="reasoning_effort"], [data-reasoning-radio]')) syncReasoningState(el);
   });
 
@@ -484,9 +431,7 @@
       // Landing page: no island, but autosize the hero composer.
       var hero = document.querySelector('[data-chat-input]');
       if (hero) autosize(hero);
-      var provider = document.querySelector('[data-provider-select]');
-      if (provider) syncProviderControls(provider);
-      var model = document.querySelector('[data-model-select], [data-model-radio]:checked');
+      var model = document.querySelector('[data-model-radio]:checked, [data-model-select]:not([data-model-radio])');
       if (model) syncReasoningControl(model);
       return;
     }
@@ -506,7 +451,7 @@
     }
     var input = r.querySelector('[data-composer-input]');
     if (input) autosize(input);
-    var model = r.querySelector('[data-model-select], [data-model-radio]:checked');
+    var model = r.querySelector('[data-model-radio]:checked, [data-model-select]:not([data-model-radio])');
     if (model) syncReasoningControl(model);
     openStream();
   }

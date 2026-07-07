@@ -460,7 +460,6 @@ providerRoutes.post('/providers/:id', async (c) => {
   })
 
   if (!testResult.ok) {
-    const discoveredModels = testResult.models ?? []
     return c.var.render('providers/edit', {
       title: 'Edit provider',
       errors: ['Provider test must pass before changes are saved', testResult.error],
@@ -468,15 +467,17 @@ providerRoutes.post('/providers/:id', async (c) => {
       values: {
         ...values,
         baseUrl: normalizedBaseUrl,
-        modelsText: modelsText(mergeTestedModels(inputModels, values.defaultModel, discoveredModels)),
+        modelsText: modelsText(inputModels),
       },
       testResult,
     })
   }
 
-  const models = mergeTestedModels(inputModels, values.defaultModel, testResult.models)
-  const defaultModel = values.defaultModel || testResult.inferenceModel || models[0] || null
-  const savedModels = mergeTestedModels(models, defaultModel ?? '', [])
+  // Editing a provider should respect the hand-curated model list. The save
+  // path still tests connectivity, but unlike creation it must not repopulate
+  // the textarea with every model discovered upstream.
+  const defaultModel = values.defaultModel || null
+  const savedModels = mergeTestedModels(inputModels, values.defaultModel, [])
 
   await updateProvider({
     id,

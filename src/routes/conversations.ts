@@ -115,6 +115,25 @@ function providerModelCapabilities(provider: { model_metadata?: unknown } | null
   >
 }
 
+const providerModelSeparator = ':'
+
+function providerModelValue(providerId: string, model: string) {
+  return `${providerId}${providerModelSeparator}${encodeURIComponent(model)}`
+}
+
+function parseProviderModel(value: string) {
+  const index = value.indexOf(providerModelSeparator)
+  if (index < 0) return null
+  try {
+    return {
+      providerId: value.slice(0, index).trim(),
+      model: decodeURIComponent(value.slice(index + providerModelSeparator.length)).trim(),
+    }
+  } catch {
+    return null
+  }
+}
+
 function modelControlData(input: {
   providers: Array<{
     id: string
@@ -135,33 +154,62 @@ function modelControlData(input: {
   const selectedModel =
     input.selectedModel || selectedProvider?.default_model || selectedProvider?.models?.[0] || null
 
+  const providers = input.providers.map((provider) => {
+    const models = uniqueModels([
+      ...(provider.id === selectedProvider?.id && selectedModel ? [selectedModel] : []),
+      ...(provider.default_model ? [provider.default_model] : []),
+      ...(provider.models ?? []),
+    ])
+    const capabilities = providerModelCapabilities(provider)
+    return {
+      id: provider.id,
+      name: provider.name,
+      defaultModel: provider.default_model,
+      models: models.map((model) => ({
+        name: model,
+        reasoning: capabilities[model]?.reasoning === true,
+      })),
+    }
+  })
+
+  const modelOptions = providers.flatMap((provider) => {
+    const models =
+      provider.models.length > 0
+        ? provider.models
+        : input.allowProviderSelect
+          ? [{ name: '', reasoning: false }]
+          : []
+    return models.map((model) => {
+      const label = model.name || 'Provider default'
+      return {
+        key: providerModelValue(provider.id, model.name),
+        value: providerModelValue(provider.id, model.name),
+        name: model.name,
+        label,
+        summary: input.allowProviderSelect ? `${label} · ${provider.name}` : label,
+        providerId: provider.id,
+        providerName: provider.name,
+        reasoning: model.reasoning,
+      }
+    })
+  })
+  const selectedModelKey = selectedProvider
+    ? providerModelValue(selectedProvider.id, selectedModel ?? '')
+    : null
+
   return {
     allowProviderSelect: input.allowProviderSelect,
     selectedProviderId: selectedProvider?.id ?? null,
     selectedModel,
+    selectedModelKey,
     selectedReasoning: currentReasoningEffort(
       selectedProvider,
       selectedModel,
       input.selectedReasoning,
     ),
     modelSupportsReasoning: modelSupportsReasoning(selectedProvider, selectedModel),
-    providers: input.providers.map((provider) => {
-      const models = uniqueModels([
-        ...(provider.id === selectedProvider?.id && selectedModel ? [selectedModel] : []),
-        ...(provider.default_model ? [provider.default_model] : []),
-        ...(provider.models ?? []),
-      ])
-      const capabilities = providerModelCapabilities(provider)
-      return {
-        id: provider.id,
-        name: provider.name,
-        defaultModel: provider.default_model,
-        models: models.map((model) => ({
-          name: model,
-          reasoning: capabilities[model]?.reasoning === true,
-        })),
-      }
-    }),
+    providers,
+    modelOptions,
   }
 }
 
@@ -347,9 +395,10 @@ conversationRoutes.post('/conversations', async (c) => {
   if (!user) return c.redirect('/login')
 
   const form = await c.req.formData()
-  const providerId = readString(form, 'providerId').trim()
+  const selectedProviderModel = parseProviderModel(readString(form, 'providerModel'))
+  const providerId = readString(form, 'providerId').trim() || selectedProviderModel?.providerId || ''
   const title = readString(form, 'title').trim()
-  const model = readString(form, 'model').trim()
+  const model = readString(form, 'model').trim() || selectedProviderModel?.model || ''
   const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
   const systemPrompt = readString(form, 'systemPrompt')
   const content = readString(form, 'content').trim()

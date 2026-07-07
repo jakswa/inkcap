@@ -89,7 +89,7 @@
       <% } else if (it.testResult.models && it.testResult.models.length > 0) { %>
         <div class="alert-danger" role="alert">
           <p class="mb-0 font-bold">Inference failed after model discovery</p>
-          <p class="mb-0">Discovered models were copied into the list so you can pick one and retry.</p>
+          <p class="mb-0">Discovered models: <%= it.testResult.models.join(', ') %></p>
         </div>
       <% } %>
     <% } %>

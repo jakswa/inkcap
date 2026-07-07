@@ -199,6 +199,49 @@ describe('providers CRUD', () => {
     }
   })
 
+  test('editing preserves the curated model list instead of replacing it with discovery', async () => {
+    const { user, headers } = await authHeadersFor()
+    const server = openAiStub({ models: ['discovered-a', 'discovered-b'] })
+
+    try {
+      const provider = await createProvider({
+        accountId: user.id,
+        name: uniqueName('curated-provider'),
+        kind: 'openai-compat',
+        baseUrl: `http://localhost:${server.port}`,
+        apiKey: 'sk-existing',
+        defaultModel: 'old-model',
+        models: ['old-model'],
+        enabled: true,
+      })
+
+      const updatedName = uniqueName('curated-provider-renamed')
+      const update = await app.request(url(`/providers/${provider.id}`), {
+        method: 'POST',
+        headers,
+        body: form({
+          name: updatedName,
+          kind: 'openai-compat',
+          base_url: `http://localhost:${server.port}`,
+          api_key: '',
+          default_model: 'custom-model',
+          models: 'custom-model\nkept-model',
+        }),
+      })
+      expect(update.status).toBe(302)
+
+      const afterUpdate = await app.request(url('/providers'), { headers })
+      const body = await afterUpdate.text()
+      expect(body).toContain(updatedName)
+      expect(body).toContain('custom-model')
+      expect(body).toContain('kept-model')
+      expect(body).not.toContain('discovered-a')
+      expect(body).not.toContain('discovered-b')
+    } finally {
+      server.stop(true)
+    }
+  })
+
   test('providers are invisible and immutable across accounts', async () => {
     const owner = await authHeadersFor()
     const stranger = await authHeadersFor()
