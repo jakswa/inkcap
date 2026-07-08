@@ -9,20 +9,30 @@
 // the fork's long-lived reference-counted connections buy us. Per-server
 // request timeouts (request_timeout_ms) bound both the handshake and each call.
 
+import { createHash } from 'node:crypto'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { assertSafeOutboundUrl } from '../utils/outbound-url'
 
 const CLIENT_INFO = { name: 'inkcap', version: '1.0.0' }
 const DEFAULT_TIMEOUT_MS = 30_000
+const TOOL_CACHE_TTL_MS = 5 * 60 * 1000
 
 // `assertSafeOutboundUrl` only vets the configured URL; a 3xx would let the
 // server redirect our request into a blocked address (loopback, link-local
 // metadata endpoints), bypassing the guard. Refuse to follow redirects — the
 // provider and codex clients do the same. A legitimate MCP JSON-RPC endpoint
 // never redirects the POST.
-const noRedirectFetch = (input: RequestInfo | URL, init?: RequestInit) =>
-  fetch(input, { ...init, redirect: 'manual' })
+const noRedirectFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const response = await fetch(input, { ...init, redirect: 'manual' })
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location')
+    throw new Error(
+      `MCP endpoint redirected${location ? ` to ${location}` : ''}; enter the final endpoint URL directly.`,
+    )
+  }
+  return response
+}
 
 // The subset of an mcp_servers row this service needs.
 export interface McpServerConfig {
@@ -61,6 +71,35 @@ export interface ToolCallResult {
 function timeoutMs(server: McpServerConfig): number {
   const raw = server.request_timeout_ms
   return typeof raw === 'number' && raw > 0 ? raw : DEFAULT_TIMEOUT_MS
+}
+
+const toolCache = new Map<string, { expiresAt: number; promise: Promise<McpTool[]> }>()
+
+function hashCachePart(value: unknown) {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex')
+}
+
+function toolCacheKey(server: McpServerConfig, headers: Record<string, string>) {
+  return JSON.stringify({
+    id: server.id,
+    url: server.url,
+    timeout: timeoutMs(server),
+    headers: hashCachePart(headers),
+  })
+}
+
+export function clearMcpToolCache(serverId?: string) {
+  if (!serverId) {
+    toolCache.clear()
+    return
+  }
+  for (const key of [...toolCache.keys()]) {
+    try {
+      if (JSON.parse(key).id === serverId) toolCache.delete(key)
+    } catch {
+      toolCache.delete(key)
+    }
+  }
 }
 
 // Parse the stored headers jsonb into a plain string map. Tolerates the value
@@ -144,9 +183,7 @@ function extractResultText(result: {
   return { content, isError: result.isError === true }
 }
 
-// List one server's tools (used by the test-connection button and for building
-// a name→server routing index).
-export async function listServerTools(server: McpServerConfig): Promise<McpTool[]> {
+async function fetchServerTools(server: McpServerConfig): Promise<McpTool[]> {
   return withClient(server, async (client) => {
     const { tools } = await client.listTools()
     return tools.map((tool) => ({
@@ -157,6 +194,29 @@ export async function listServerTools(server: McpServerConfig): Promise<McpTool[
   })
 }
 
+// List one server's tools (used by the test-connection button and for building
+// a name→server routing index). Discovery is cached briefly per configured
+// server signature: OpenAI-style providers still need the full `tools` array on
+// every request, but MCP servers do not need to be asked for tools every turn.
+export async function listServerTools(
+  server: McpServerConfig,
+  options: { useCache?: boolean } = {},
+): Promise<McpTool[]> {
+  if (options.useCache === false) return fetchServerTools(server)
+
+  const headers = parseHeaders(server.headers)
+  const key = toolCacheKey(server, headers)
+  const cached = toolCache.get(key)
+  if (cached && cached.expiresAt > Date.now()) return cached.promise
+
+  const promise = fetchServerTools(server).catch((error) => {
+    toolCache.delete(key)
+    throw error
+  })
+  toolCache.set(key, { expiresAt: Date.now() + TOOL_CACHE_TTL_MS, promise })
+  return promise
+}
+
 export type McpTestResult =
   | { ok: true; tools: McpTool[] }
   | { ok: false; error: string }
@@ -164,7 +224,7 @@ export type McpTestResult =
 // Server-side "test connection": connect + list tools, never throwing.
 export async function testMcpConnection(server: McpServerConfig): Promise<McpTestResult> {
   try {
-    const tools = await listServerTools(server)
+    const tools = await listServerTools(server, { useCache: false })
     return { ok: true, tools }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }

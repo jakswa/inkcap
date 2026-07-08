@@ -64,12 +64,16 @@ export async function setConversationCurrNode(input: { id: string; currNode: str
 
 export async function updateConversationModelSettings(input: {
   id: string
+  providerId: string | null
   model: string | null
   reasoningEffort: string | null
 }) {
   const [conversation] = await sql.UpdateConversationModelSettings`
     UPDATE conversations
-    SET model = ${input.model}, reasoning_effort = ${input.reasoningEffort}, updated_at = now()
+    SET provider_id = ${input.providerId},
+        model = ${input.model},
+        reasoning_effort = ${input.reasoningEffort},
+        updated_at = now()
     WHERE id = ${input.id}
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
               forked_from_conversation_id, created_at, updated_at

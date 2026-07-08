@@ -7,7 +7,7 @@ import {
   setMcpServerEnabled,
   updateMcpServer,
 } from '../db/queries/mcp-servers'
-import { testMcpConnection } from '../services/mcp-client'
+import { clearMcpToolCache, testMcpConnection, type McpTestResult } from '../services/mcp-client'
 import { readString } from '../utils/validation'
 
 export const mcpServerRoutes = new Hono()
@@ -104,6 +104,14 @@ function validate(values: McpServerFormValues): string[] {
   return errors
 }
 
+function connectionErrors(result: McpTestResult): string[] {
+  if (!result.ok) return ['MCP server test must pass before saving', result.error]
+  if (result.tools.length === 0) {
+    return ['MCP server connected, but exposes no tools that inkcap can use']
+  }
+  return []
+}
+
 // Stored header values are secrets (issue 02): they are never rendered back
 // to the browser. The edit form only learns whether headers exist.
 function storedHeaderCount(headers: unknown): number {
@@ -155,6 +163,7 @@ mcpServerRoutes.get('/mcp-servers/new', async (c) => {
     title: 'Add MCP server',
     errors: [],
     values: { name: '', url: '', autoApprove: false, headers: '', requestTimeoutMs: '30000' },
+    testResult: null,
   })
 })
 
@@ -167,18 +176,42 @@ mcpServerRoutes.post('/mcp-servers', async (c) => {
   const errors = validate(values)
 
   if (errors.length > 0) {
-    return c.var.render('mcp-servers/new', { title: 'Add MCP server', errors, values })
+    return c.var.render('mcp-servers/new', {
+      title: 'Add MCP server',
+      errors,
+      values,
+      testResult: null,
+    })
   }
 
   const headers = parseHeaders(values.headers)
+  const parsedHeaders = 'headers' in headers ? headers.headers : null
+  const requestTimeoutMs = values.requestTimeoutMs ? Number(values.requestTimeoutMs) : 30000
+  const testResult = await testMcpConnection({
+    id: 'new',
+    name: values.name,
+    url: values.url,
+    headers: parsedHeaders,
+    request_timeout_ms: requestTimeoutMs,
+  })
+  const testErrors = connectionErrors(testResult)
+  if (testErrors.length > 0) {
+    return c.var.render('mcp-servers/new', {
+      title: 'Add MCP server',
+      errors: testErrors,
+      values,
+      testResult,
+    })
+  }
+
   await createMcpServer({
     // Personal account id === user id (migration 012).
     accountId: user.id,
     name: values.name,
     url: values.url,
     autoApprove: values.autoApprove,
-    headers: 'headers' in headers ? headers.headers : null,
-    requestTimeoutMs: values.requestTimeoutMs ? Number(values.requestTimeoutMs) : 30000,
+    headers: parsedHeaders,
+    requestTimeoutMs,
     enabled: true,
   })
 
@@ -204,6 +237,7 @@ mcpServerRoutes.get('/mcp-servers/:id/edit', async (c) => {
       headers: '',
       requestTimeoutMs: String(server.request_timeout_ms),
     },
+    testResult: null,
   })
 })
 
@@ -226,6 +260,7 @@ mcpServerRoutes.post('/mcp-servers/:id', async (c) => {
       server,
       storedHeaderCount: storedHeaderCount(server.headers),
       values,
+      testResult: null,
     })
   }
 
@@ -240,14 +275,35 @@ mcpServerRoutes.post('/mcp-servers/:id', async (c) => {
         ? parsed.headers
         : null
       : server.headers
+  const requestTimeoutMs = values.requestTimeoutMs ? Number(values.requestTimeoutMs) : 30000
+  const testResult = await testMcpConnection({
+    id,
+    name: values.name,
+    url: values.url,
+    headers,
+    request_timeout_ms: requestTimeoutMs,
+  })
+  const testErrors = connectionErrors(testResult)
+  if (testErrors.length > 0) {
+    return c.var.render('mcp-servers/edit', {
+      title: 'Edit MCP server',
+      errors: testErrors,
+      server,
+      storedHeaderCount: storedHeaderCount(server.headers),
+      values,
+      testResult,
+    })
+  }
+
   await updateMcpServer({
     id,
     name: values.name,
     url: values.url,
     autoApprove: values.autoApprove,
     headers,
-    requestTimeoutMs: values.requestTimeoutMs ? Number(values.requestTimeoutMs) : 30000,
+    requestTimeoutMs,
   })
+  clearMcpToolCache(id)
 
   return c.redirect('/mcp-servers')
 })
@@ -282,5 +338,6 @@ mcpServerRoutes.post('/mcp-servers/:id/delete', async (c) => {
   if (!server) return c.notFound()
 
   await deleteMcpServer(server.id)
+  clearMcpToolCache(server.id)
   return c.redirect('/mcp-servers')
 })

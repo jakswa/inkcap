@@ -46,6 +46,20 @@
     if (s) s.scrollTop = s.scrollHeight;
   }
 
+  function updateToolsCountFrom(input) {
+    var details = input && input.closest ? input.closest('details') : null;
+    if (!details) return;
+    var countEl = details.querySelector('[data-tools-count]');
+    if (!countEl) return;
+    var boxes = details.querySelectorAll('input[name="enabled_mcp_server_id"]');
+    var count = 0;
+    for (var i = 0; i < boxes.length; i++) {
+      if (boxes[i].checked && boxes[i].getAttribute('data-mcp-global-enabled') !== '0') count += 1;
+    }
+    countEl.textContent = String(count);
+    countEl.classList.toggle('hidden', count === 0);
+  }
+
   function setStatus(text) {
     var r = root();
     if (!r) return;
@@ -332,6 +346,7 @@
 
   document.addEventListener('change', function (e) {
     var el = e.target;
+    if (el && el.matches && el.matches('input[name="enabled_mcp_server_id"]')) updateToolsCountFrom(el);
     if (el && el.matches && el.matches('[data-model-select]')) syncReasoningControl(el);
     if (el && el.matches && el.matches('[data-model-radio]')) {
       syncModelState(el);

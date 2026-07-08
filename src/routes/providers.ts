@@ -15,7 +15,11 @@ import {
 import {
   codexDefaultBaseUrl,
   completeCodexLoginFromCallbackUrl,
-  startCodexLogin,
+  getCodexDeviceLogin,
+  pollCodexDeviceLogin,
+  startCodexDeviceLogin,
+  startCodexLoopbackLogin,
+  type CodexDeviceLoginView,
 } from '../services/codex-auth'
 import {
   CODEX_FALLBACK_MODELS,
@@ -323,6 +327,42 @@ function codexLoginError(c: Context, error: unknown) {
   })
 }
 
+function renderCodexDeviceLogin(
+  c: Context,
+  login: CodexDeviceLoginView,
+  message = 'Waiting for you to enter the code at OpenAI…',
+) {
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('providers/codex-device', {
+    title: 'Sign in with ChatGPT',
+    login,
+    message,
+  })
+}
+
+// POST-redirect-GET: the code page lives at a GET URL so a refresh re-renders
+// the same pending login instead of resubmitting and minting a fresh code.
+async function startCodexDeviceProviderLogin(c: Context, options: {
+  ownerUserId: string
+  returnTo: string
+  complete: (credentials: CodexOauthCredentials) => Promise<string>
+}) {
+  const login = await startCodexDeviceLogin(options)
+  return c.redirect(`/providers/codex/device/${login.id}`, 303)
+}
+
+function renderCodexDeviceFailure(c: Context, kind: 'expired' | 'failed', message?: string) {
+  const status = kind === 'expired' ? 410 : 400
+  c.status(status)
+  return c.var.render('error', {
+    title: 'ChatGPT sign-in failed',
+    status,
+    message: kind === 'expired'
+      ? 'This ChatGPT sign-in expired. Start again from Providers.'
+      : message ?? 'This ChatGPT sign-in expired or was already used. Start again from Providers.',
+  })
+}
+
 providerRoutes.post('/providers/codex/connect', async (c) => {
   const user = c.var.user
   if (!user) return c.redirect('/login')
@@ -333,7 +373,30 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
   const accountId = user.id
 
   try {
-    const { authorizeUrl } = startCodexLogin({
+    return await startCodexDeviceProviderLogin(c, {
+      ownerUserId: user.id,
+      returnTo,
+      complete: async (credentials) => {
+        await connectCodexProvider(accountId, name, credentials)
+        return returnTo
+      },
+    })
+  } catch (error) {
+    return codexLoginError(c, error)
+  }
+})
+
+providerRoutes.post('/providers/codex/connect/localhost', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const form = await c.req.formData()
+  const name = (readString(form, 'name').trim() || defaultCodexName).slice(0, maxNameLength)
+  const returnTo = `${appOrigin(c)}/providers`
+  const accountId = user.id
+
+  try {
+    const { authorizeUrl } = startCodexLoopbackLogin({
       returnTo,
       complete: async (credentials) => {
         await connectCodexProvider(accountId, name, credentials)
@@ -343,6 +406,41 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
     return c.redirect(authorizeUrl)
   } catch (error) {
     return codexLoginError(c, error)
+  }
+})
+
+// Passive render of a pending login — never touches upstream, so refreshes,
+// prefetches, and restored tabs cannot advance or destroy the sign-in.
+providerRoutes.get('/providers/codex/device/:loginId', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const result = getCodexDeviceLogin(c.req.param('loginId'), user.id)
+  if (result.status === 'pending') return renderCodexDeviceLogin(c, result.login)
+  return renderCodexDeviceFailure(c, result.status === 'expired' ? 'expired' : 'failed')
+})
+
+providerRoutes.post('/providers/codex/device/:loginId/poll', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const loginId = c.req.param('loginId')
+  try {
+    const result = await pollCodexDeviceLogin(loginId, user.id)
+    if (result.status === 'complete') return c.redirect(result.redirectTo)
+    if (result.status === 'pending') {
+      return renderCodexDeviceLogin(c, result.login, result.message)
+    }
+    return renderCodexDeviceFailure(c, result.status, result.status === 'failed' ? result.message : undefined)
+  } catch (error) {
+    // Unexpected failure mid-poll: keep the user on the code page with the
+    // error instead of dumping them on the generic 500.
+    const pending = getCodexDeviceLogin(loginId, user.id)
+    const message = error instanceof Error ? error.message : String(error)
+    if (pending.status === 'pending') {
+      return renderCodexDeviceLogin(c, pending.login, `Something went wrong (${message}). Try again in a moment.`)
+    }
+    return renderCodexDeviceFailure(c, 'failed', message)
   }
 })
 
@@ -376,7 +474,30 @@ providerRoutes.post('/providers/:id/reauth', async (c) => {
 
   const returnTo = `${appOrigin(c)}/providers`
   try {
-    const { authorizeUrl } = startCodexLogin({
+    return await startCodexDeviceProviderLogin(c, {
+      ownerUserId: user.id,
+      returnTo,
+      complete: async (credentials) => {
+        await updateProviderOauthCredentials({ id, oauthCredentials: credentials })
+        return returnTo
+      },
+    })
+  } catch (error) {
+    return codexLoginError(c, error)
+  }
+})
+
+providerRoutes.post('/providers/:id/reauth/localhost', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const id = c.req.param('id')
+  const provider = await getProviderForUser({ id, userId: user.id })
+  if (!provider || provider.kind !== 'openai-codex') return c.notFound()
+
+  const returnTo = `${appOrigin(c)}/providers`
+  try {
+    const { authorizeUrl } = startCodexLoopbackLogin({
       returnTo,
       complete: async (credentials) => {
         await updateProviderOauthCredentials({ id, oauthCredentials: credentials })

@@ -49,7 +49,14 @@
       <span>Auto-approve tool calls (skip the approval step)</span>
     </label>
 
-    <button class="btn btn-primary" type="submit">Save changes</button>
+    <% if (it.testResult && it.testResult.ok) { %>
+      <div class="alert-ok" role="status">
+        <p class="mb-0 font-bold">MCP test passed</p>
+        <p class="mb-0">Tools: <%= it.testResult.tools.map((t) => t.name).join(', ') %></p>
+      </div>
+    <% } %>
+
+    <button class="btn btn-primary" type="submit">Test and save changes</button>
     <p class="mb-0 text-ink-dim"><a class="link" href="/mcp-servers">Back to MCP servers</a></p>
   </form>
 </section>

@@ -59,12 +59,14 @@ bun src/tasks/import-llama-ui.ts <export.jsonl-or-.zip> --user you@example.com
 ```
 
 Chat on your own ChatGPT subscription (Codex): Providers → Add provider →
-"Sign in with ChatGPT". The server runs the Codex CLI's OAuth flow; OpenAI
-always redirects back to `localhost:1455`, which inkcap listens on while a
-sign-in is pending. Browsing from a different machine? The redirect lands on
-your browser's own localhost and fails — copy that failed callback URL and
-paste it into the "Finish a remote ChatGPT sign-in" form (no tunnel needed).
-Tokens stay server-side and auto-refresh; protocol details and caveats:
+"Sign in with ChatGPT". This is an experimental personal-use bridge through the
+Codex CLI path, not the official OpenAI API; prefer API providers for shared or
+production use. Sign-in uses a one-time OpenAI device code in any browser. You
+may need to enable **Allow device code login** in ChatGPT settings first; a
+legacy `localhost:1455` callback (with remote paste-to-finish support) remains
+as a fallback. Your OpenAI password stays with OpenAI, but inkcap stores
+refreshable ChatGPT tokens server-side; use only a trusted server/DB. Usage
+counts against ChatGPT limits; details:
 `docs/specs/openai-codex.md`.
 
 ## Env

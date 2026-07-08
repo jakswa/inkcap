@@ -21,7 +21,7 @@
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
     "hono": "^4.10.7",
-    "marked": "^18.0.5",
+    "md4w": "^0.2.7",
     "sanitize-html": "^2.17.5"
   },
   "devDependencies": {

@@ -9,6 +9,9 @@ Future features and post-v1 polish. Security/correctness hardening lives in
   provider/tools + cron schedule; each firing is a normal durable headless run.
   Bun.cron tick, DB as truth; pg-boss deferred until a second background
   workload exists.
+- **[Codex device-code auth](codex-device-auth.md)** — one-time device codes
+  are now the default ChatGPT sign-in path; needs real-account QA before the
+  `localhost:1455` fallback can be retired.
 - **[Artifacts](artifacts.md)** — lightweight AI-created deliverables attached
   to runs. The model calls a tiny `submit_artifact` tool; the server owns
   storage, rendering, links, and notification targeting.
@@ -62,8 +65,9 @@ None block daily use.
 
 - Usage-window surfacing (`/wham/usage`) is not built; 429s surface as run
   errors with the upstream message.
-- No device-code fallback — remote sign-in works, but via the manual
-  paste-the-callback-URL form rather than a polished device-code flow.
+- Device-code auth has an initial implementation but needs real-account QA;
+  keep the `localhost:1455` fallback (including manual callback paste for
+  remote browsers) until then.
 - `OpenAI-Beta` header deliberately not sent (HTTP-path value unverified).
 
 ## Manual QA still wanted

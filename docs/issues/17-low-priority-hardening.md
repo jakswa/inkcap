@@ -71,7 +71,7 @@ explicitly not tool-result content. Add a byte cap with truncation.
 logins but never calls `stopLoopbackIfIdle()` — that stop is only reached from
 `completeCodexLoginCallback`'s `finally`. If a user starts a Codex sign-in and
 never returns (browser closed), the pending entry is swept on the next
-`startCodexLogin`, but the `Bun.serve` on `127.0.0.1:1455` stays bound
+`startCodexLoopbackLogin`, but the `Bun.serve` on `127.0.0.1:1455` stays bound
 indefinitely with zero pending logins. Bounded to loopback, so low impact.
 Call `stopLoopbackIfIdle()` after sweeping.
 

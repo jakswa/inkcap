@@ -1,6 +1,6 @@
 // The openai-codex provider kind: chat⇄Responses translation, SSE stream
-// conversion, OAuth token refresh/rotation, and the loopback connect flow —
-// all against stub servers (no real OpenAI traffic).
+// conversion, OAuth token refresh/rotation, and the device/loopback connect
+// flows — all against stub servers (no real OpenAI traffic).
 
 import { afterAll, describe, expect, test } from 'bun:test'
 import { randomUUIDv7 } from 'bun'
@@ -189,15 +189,42 @@ function codexBackendStub(options: { rejectTokens?: Set<string> } = {}) {
   return { server, captured, baseUrl: `http://localhost:${server.port}` }
 }
 
-// Stub of auth.openai.com's token endpoint: code exchange + rotating refresh.
-function issuerStub() {
+// Stub of auth.openai.com's device auth + token endpoints: code exchange and
+// rotating refresh. `deviceToken` overrides the poll response (denials,
+// pending); `tokenDelayMs` slows the code exchange to widen race windows.
+function issuerStub(options: {
+  deviceToken?: (body: Record<string, string>) => Response | Promise<Response>
+  tokenDelayMs?: number
+} = {}) {
   const tokenRequests: Array<Record<string, string>> = []
+  const deviceTokenRequests: Array<Record<string, string>> = []
   let refreshCount = 0
   const server = Bun.serve({
     port: 0,
     async fetch(req) {
       const requestUrl = new URL(req.url)
+      if (requestUrl.pathname === '/api/accounts/deviceauth/usercode' && req.method === 'POST') {
+        const body = (await req.json()) as Record<string, unknown>
+        if (body['client_id'] !== 'app_EMoamEEZ73f0CkXaXp7hrann') {
+          return Response.json({ error: 'bad_client' }, { status: 400 })
+        }
+        return Response.json({
+          device_auth_id: 'device-auth-1',
+          user_code: 'ABCD-EFGH',
+          interval: 0,
+        })
+      }
+      if (requestUrl.pathname === '/api/accounts/deviceauth/token' && req.method === 'POST') {
+        const body = (await req.json()) as Record<string, string>
+        deviceTokenRequests.push(body)
+        if (options.deviceToken) return options.deviceToken(body)
+        return Response.json({
+          authorization_code: 'device-authorization-code',
+          code_verifier: 'device-code-verifier',
+        })
+      }
       if (requestUrl.pathname === '/oauth/token' && req.method === 'POST') {
+        if (options.tokenDelayMs) await Bun.sleep(options.tokenDelayMs)
         const params = new URLSearchParams(await req.text())
         const record = Object.fromEntries(params.entries())
         tokenRequests.push(record)
@@ -222,7 +249,7 @@ function issuerStub() {
       return new Response('not found', { status: 404 })
     },
   })
-  return { server, tokenRequests, issuer: `http://localhost:${server.port}` }
+  return { server, tokenRequests, deviceTokenRequests, issuer: `http://localhost:${server.port}` }
 }
 
 async function createCodexProvider(baseUrl: string, accessToken: string, accountId?: string) {
@@ -449,7 +476,7 @@ describe('codex streaming', () => {
 })
 
 describe('codex connect flow', () => {
-  test('sign-in redirects to the issuer; the loopback callback creates the provider', async () => {
+  test('device-code sign-in creates the provider without a loopback callback', async () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
@@ -458,6 +485,190 @@ describe('codex connect flow', () => {
     const name = `codex-connect-${randomUUIDv7()}`
     try {
       const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name }),
+      })
+      // POST-redirect-GET: the code page lives at a stable GET URL.
+      expect(start.status).toBe(303)
+      const devicePath = start.headers.get('location')!
+      expect(devicePath).toMatch(/^\/providers\/codex\/device\/[^/]+$/)
+
+      const page = await app.request(url(devicePath), { headers })
+      expect(page.status).toBe(200)
+      const startBody = await page.text()
+      expect(startBody).toContain('ABCD-EFGH')
+      expect(startBody).toContain(`${issuer.issuer}/codex/device`)
+      expect(startBody).toContain('No tunnel or localhost callback is needed')
+      const pollPath = startBody.match(/action="(\/providers\/codex\/device\/[^"/]+\/poll)"/)?.[1]
+      expect(pollPath).toBeTruthy()
+
+      // Refreshing re-renders the same pending login; the GET never polls
+      // upstream, so the completed authorization can't be consumed by it.
+      const refreshed = await app.request(url(devicePath), { headers })
+      expect(await refreshed.text()).toContain('ABCD-EFGH')
+      expect(issuer.deviceTokenRequests).toEqual([])
+
+      const finish = await app.request(url(pollPath!), {
+        method: 'POST',
+        headers,
+        redirect: 'manual',
+      })
+      expect(finish.status).toBe(302)
+      expect(finish.headers.get('location')).toBe(`${origin}/providers`)
+      expect(issuer.deviceTokenRequests).toEqual([{ device_auth_id: 'device-auth-1', user_code: 'ABCD-EFGH' }])
+
+      const exchange = issuer.tokenRequests.find((r) => r['grant_type'] === 'authorization_code')!
+      expect(exchange['code']).toBe('device-authorization-code')
+      expect(exchange['code_verifier']).toBe('device-code-verifier')
+      expect(exchange['redirect_uri']).toBe(`${issuer.issuer}/deviceauth/callback`)
+
+      const list = await app.request(url('/providers'), { headers })
+      const listBody = await list.text()
+      expect(listBody).toContain(name)
+      expect(listBody).toContain('ChatGPT OAuth: connected')
+      expect(listBody).toContain('gpt-5.5')
+      expect(listBody).not.toContain('gpt-5.2-codex')
+      expect(listBody).not.toContain('hidden-model')
+      expect(listBody).not.toContain('refresh-token-0')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      delete process.env['CODEX_BASE_URL']
+      issuer.server.stop(true)
+      backend.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('a denial at OpenAI fails fast instead of waiting out the TTL', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub({
+      deviceToken: () => Response.json({ error: { code: 'access_denied' } }, { status: 403 }),
+    })
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    try {
+      const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name: `codex-denied-${randomUUIDv7()}` }),
+      })
+      expect(start.status).toBe(303)
+      const devicePath = start.headers.get('location')!
+
+      const poll = await app.request(url(`${devicePath}/poll`), { method: 'POST', headers })
+      expect(poll.status).toBe(400)
+      expect(await poll.text()).toContain('denied at OpenAI')
+
+      // The denied login is gone; polling again reports it as used.
+      const again = await app.request(url(`${devicePath}/poll`), { method: 'POST', headers })
+      expect(again.status).toBe(400)
+      expect(await again.text()).toContain('expired or was already used')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      issuer.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('a 403 with no terminal error code still counts as pending', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub({
+      deviceToken: () => Response.json({ error: { code: 'deviceauth_authorization_pending' } }, { status: 403 }),
+    })
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    try {
+      const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name: `codex-pending-${randomUUIDv7()}` }),
+      })
+      const devicePath = start.headers.get('location')!
+      const poll = await app.request(url(`${devicePath}/poll`), { method: 'POST', headers })
+      expect(poll.status).toBe(200)
+      const body = await poll.text()
+      expect(body).toContain('Waiting for you to finish sign-in')
+      expect(body).toContain('ABCD-EFGH')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      issuer.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('double-submitting the poll completes once and creates one provider', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub({ tokenDelayMs: 250 })
+    const backend = codexBackendStub()
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const name = `codex-double-${randomUUIDv7()}`
+    try {
+      const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name }),
+      })
+      const pollUrl = url(`${start.headers.get('location')!}/poll`)
+
+      // Both submits join the same in-flight exchange and both see the result.
+      const [first, second] = await Promise.all([
+        app.request(pollUrl, { method: 'POST', headers, redirect: 'manual' }),
+        app.request(pollUrl, { method: 'POST', headers, redirect: 'manual' }),
+      ])
+      for (const res of [first, second]) {
+        expect(res.status).toBe(302)
+        expect(res.headers.get('location')).toBe(`${origin}/providers`)
+      }
+      expect(issuer.deviceTokenRequests.length).toBe(1)
+
+      const list = await app.request(url('/providers'), { headers })
+      const listBody = await list.text()
+      expect(listBody.split(name).length - 1).toBe(1)
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      delete process.env['CODEX_BASE_URL']
+      issuer.server.stop(true)
+      backend.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('a network failure while polling keeps the sign-in alive', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub()
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    try {
+      const start = await app.request(url('/providers/codex/connect'), {
+        method: 'POST',
+        headers,
+        body: form({ name: `codex-blip-${randomUUIDv7()}` }),
+      })
+      const devicePath = start.headers.get('location')!
+
+      // The issuer becomes unreachable mid-sign-in.
+      issuer.server.stop(true)
+      const poll = await app.request(url(`${devicePath}/poll`), { method: 'POST', headers })
+      expect(poll.status).toBe(200)
+      const body = await poll.text()
+      expect(body).toContain('Could not reach OpenAI')
+      // The login (and the code the user already entered) survives the blip.
+      expect(body).toContain('ABCD-EFGH')
+    } finally {
+      delete process.env['CODEX_AUTH_ISSUER']
+      issuer.server.stop(true)
+      resetCodexLoginStateForTests()
+    }
+  })
+
+  test('legacy localhost fallback redirects to the issuer; the loopback callback creates the provider', async () => {
+    const { headers } = await authHeadersFor()
+    const issuer = issuerStub()
+    const backend = codexBackendStub()
+    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const name = `codex-connect-${randomUUIDv7()}`
+    try {
+      const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
         headers,
         body: form({ name }),
@@ -472,15 +683,12 @@ describe('codex connect flow', () => {
       const state = authorizeUrl.searchParams.get('state')!
       expect(state.length).toBeGreaterThan(10)
 
-      // Simulate the browser returning from auth.openai.com to the loopback.
       const callback = await fetch(`${CALLBACK_FETCH_URL}?code=test-code&state=${encodeURIComponent(state)}`, {
         redirect: 'manual',
       })
       expect(callback.status).toBe(302)
       expect(callback.headers.get('location')).toBe(`${origin}/providers`)
 
-      // Code exchange carried PKCE, and the provider row exists with
-      // discovered models filtered to supported+visible slugs.
       const exchange = issuer.tokenRequests.find((r) => r['grant_type'] === 'authorization_code')!
       expect(exchange['code']).toBe('test-code')
       expect(exchange['code_verifier']!.length).toBeGreaterThan(20)
@@ -492,7 +700,6 @@ describe('codex connect flow', () => {
       expect(listBody).toContain('gpt-5.5')
       expect(listBody).not.toContain('gpt-5.2-codex')
       expect(listBody).not.toContain('hidden-model')
-      // Tokens never render.
       expect(listBody).not.toContain('refresh-token-0')
     } finally {
       delete process.env['CODEX_AUTH_ISSUER']
@@ -511,7 +718,7 @@ describe('codex connect flow', () => {
     process.env['CODEX_BASE_URL'] = backend.baseUrl
     const name = `codex-remote-${randomUUIDv7()}`
     try {
-      const start = await app.request(url('/providers/codex/connect'), {
+      const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
         headers,
         body: form({ name }),
@@ -576,7 +783,7 @@ describe('codex connect flow', () => {
     process.env['PUBLIC_ORIGIN'] = 'https://chat.home.jake.town/'
     try {
       const lanHeaders = { ...headers, Origin: 'http://192.168.1.160' }
-      const start = await app.request('http://192.168.1.160/providers/codex/connect', {
+      const start = await app.request('http://192.168.1.160/providers/codex/connect/localhost', {
         method: 'POST',
         headers: lanHeaders,
         body: form({ name: `codex-public-origin-${randomUUIDv7()}` }),
@@ -607,7 +814,7 @@ describe('codex connect flow', () => {
     const issuer = issuerStub()
     process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
     try {
-      const start = await app.request(url('/providers/codex/connect'), {
+      const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
         headers: (await authHeadersFor()).headers,
         body: form({ name: `codex-badstate-${randomUUIDv7()}` }),

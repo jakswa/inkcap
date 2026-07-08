@@ -16,6 +16,25 @@ describe('buildChatRequest streaming flag', () => {
       buildChatRequest(provider, null, messages, { stream: true }).body['stream'],
     ).toBe(true)
   })
+
+  test('non-empty tools opt the request into automatic tool choice', () => {
+    const provider = { base_url: 'http://x', api_key: null }
+    const messages = [{ role: 'user' as const, content: 'hi' }]
+    const tools = [
+      {
+        type: 'function',
+        function: { name: 'search', parameters: { type: 'object', properties: {} } },
+      },
+    ]
+
+    const body = buildChatRequest(provider, null, messages, { tools }).body
+    expect(body['tools']).toBe(tools)
+    expect(body['tool_choice']).toBe('auto')
+
+    const emptyBody = buildChatRequest(provider, null, messages, { tools: [] }).body
+    expect(emptyBody['tools']).toBeUndefined()
+    expect(emptyBody['tool_choice']).toBeUndefined()
+  })
 })
 
 describe('mergeToolCallDeltas (spec §2.3)', () => {

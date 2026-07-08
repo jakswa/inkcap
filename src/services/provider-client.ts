@@ -103,6 +103,10 @@ export function buildChatRequest(
   // Only sent when non-empty, never as `[]` (spec §1.4).
   if (options.tools && options.tools.length > 0) {
     body.tools = options.tools
+    // Some OpenAI-compatible backends (notably llama-server builds) treat an
+    // omitted tool_choice as "none"; be explicit that advertised tools are
+    // available for this turn.
+    body.tool_choice = 'auto'
   }
   if (options.reasoningEffort) {
     const enabled = options.reasoningEffort !== 'off'

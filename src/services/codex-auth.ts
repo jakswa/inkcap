@@ -1,11 +1,12 @@
 // ChatGPT-subscription OAuth for the `openai-codex` provider kind.
 //
-// This is the Codex CLI's own login flow, reproduced server-side: OAuth 2.0
-// authorization-code + PKCE against auth.openai.com using the CLI's public
-// client id, with the registered loopback redirect http://localhost:1455/
-// auth/callback. inkcap binds that port only while a login is pending; the
-// loopback handler validates state, exchanges the code, and hands the token
-// bundle to a completion callback registered by the initiating route.
+// This reproduces the Codex CLI's ChatGPT sign-in paths server-side. The
+// default is the device-code flow: inkcap shows a one-time code, the user enters
+// it at auth.openai.com/codex/device, then inkcap polls for an authorization
+// code and exchanges it for tokens. The legacy authorization-code + PKCE
+// loopback flow remains as a fallback; it uses the CLI client's fixed
+// http://localhost:1455/auth/callback redirect and binds that port only while a
+// login is pending.
 //
 // Tokens are JWTs stored on the provider row (oauth_credentials jsonb) in the
 // ~/.codex/auth.json `tokens` shape. Two operational rules from the spec:
@@ -42,6 +43,13 @@ const REFRESH_LEEWAY_MS = 5 * 60 * 1000
 
 // A pending browser login is abandoned after this long.
 const LOGIN_TTL_MS = 10 * 60 * 1000
+
+const DEVICE_USER_CODE_PATH = '/api/accounts/deviceauth/usercode'
+const DEVICE_TOKEN_PATH = '/api/accounts/deviceauth/token'
+const DEVICE_VERIFICATION_PATH = '/codex/device'
+const DEVICE_REDIRECT_PATH = '/deviceauth/callback'
+const DEVICE_LOGIN_TTL_MS = 15 * 60 * 1000
+const DEVICE_SLOW_DOWN_INCREMENT_MS = 5 * 1000
 
 // Issuer/port are constants of the registered OAuth client; the env overrides
 // exist so tests (and captive QA setups) can point at a stub.
@@ -200,10 +208,59 @@ interface PendingLogin {
 const pendingLogins = new Map<string, PendingLogin>()
 let loopbackServer: ReturnType<typeof Bun.serve> | null = null
 
+interface PendingDeviceLogin {
+  id: string
+  ownerUserId: string
+  deviceAuthId: string
+  userCode: string
+  verificationUri: string
+  intervalMs: number
+  nextPollAt: number
+  createdAt: number
+  expiresAt: number
+  returnTo: string
+  complete: (credentials: CodexOauthCredentials) => Promise<string>
+  // Set while an upstream poll (and possibly the token exchange + complete())
+  // is running, so a double-submit joins the same attempt instead of racing a
+  // second exchange into duplicate providers or a code-reuse failure.
+  inFlight?: Promise<CodexDevicePollResult>
+}
+
+export interface CodexDeviceLoginView {
+  id: string
+  userCode: string
+  verificationUri: string
+  intervalSeconds: number
+  expiresAt: string
+  returnTo: string
+}
+
+export type CodexDevicePollResult =
+  | { status: 'pending'; login: CodexDeviceLoginView; message?: string }
+  | { status: 'complete'; redirectTo: string }
+  | { status: 'expired'; returnTo: string }
+  | { status: 'failed'; returnTo: string; message: string }
+
+const pendingDeviceLogins = new Map<string, PendingDeviceLogin>()
+
+function deviceLoginView(login: PendingDeviceLogin): CodexDeviceLoginView {
+  return {
+    id: login.id,
+    userCode: login.userCode,
+    verificationUri: login.verificationUri,
+    intervalSeconds: Math.max(1, Math.ceil(login.intervalMs / 1000)),
+    expiresAt: new Date(login.expiresAt).toISOString(),
+    returnTo: login.returnTo,
+  }
+}
+
 function sweepExpiredLogins() {
   const now = Date.now()
   for (const [state, pending] of pendingLogins) {
     if (now - pending.createdAt > LOGIN_TTL_MS) pendingLogins.delete(state)
+  }
+  for (const [id, pending] of pendingDeviceLogins) {
+    if (now > pending.expiresAt) pendingDeviceLogins.delete(id)
   }
 }
 
@@ -310,7 +367,7 @@ function ensureLoopbackServer() {
 // browsers, registers the pending login either way, and returns the
 // auth.openai.com authorize URL to redirect the user's browser to. Deployed
 // servers can finish by accepting a pasted localhost callback URL.
-export function startCodexLogin(options: {
+export function startCodexLoopbackLogin(options: {
   returnTo: string
   complete: (credentials: CodexOauthCredentials) => Promise<string>
 }): { authorizeUrl: string } {
@@ -352,6 +409,213 @@ export function startCodexLogin(options: {
     originator: 'codex_cli_rs',
   })
   return { authorizeUrl: `${issuer()}/oauth/authorize?${params.toString()}` }
+}
+
+interface DeviceUserCodeResponse {
+  device_auth_id?: string
+  user_code?: string
+  interval?: number | string
+}
+
+interface DeviceTokenResponse {
+  authorization_code?: string
+  code_verifier?: string
+  error?: unknown
+}
+
+function deviceVerificationUri() {
+  return `${issuer()}${DEVICE_VERIFICATION_PATH}`
+}
+
+function deviceRedirectUri() {
+  return `${issuer()}${DEVICE_REDIRECT_PATH}`
+}
+
+async function postDeviceUserCode(): Promise<{ deviceAuthId: string; userCode: string; intervalMs: number }> {
+  const response = await fetch(`${issuer()}${DEVICE_USER_CODE_PATH}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: CODEX_CLIENT_ID }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    const hint = response.status === 404
+      ? 'Device-code login may be disabled for this ChatGPT account/workspace. Enable "Allow device code login" or use the legacy localhost fallback.'
+      : text || `HTTP ${response.status}`
+    throw new Error(`ChatGPT device-code request failed: ${hint}`)
+  }
+
+  let data: DeviceUserCodeResponse
+  try {
+    data = JSON.parse(text) as DeviceUserCodeResponse
+  } catch {
+    throw new Error('ChatGPT device-code request returned invalid JSON')
+  }
+  const interval = typeof data.interval === 'string' ? Number(data.interval.trim()) : data.interval
+  if (!data.device_auth_id || !data.user_code || typeof interval !== 'number' || !Number.isFinite(interval) || interval < 0) {
+    throw new Error(`ChatGPT device-code request returned invalid fields: ${text}`)
+  }
+  return {
+    deviceAuthId: data.device_auth_id,
+    userCode: data.user_code,
+    intervalMs: Math.max(1000, Math.floor(interval * 1000)),
+  }
+}
+
+export async function startCodexDeviceLogin(options: {
+  ownerUserId: string
+  returnTo: string
+  complete: (credentials: CodexOauthCredentials) => Promise<string>
+}): Promise<CodexDeviceLoginView> {
+  sweepExpiredLogins()
+  const device = await postDeviceUserCode()
+  const id = base64url(randomBytes(24))
+  const now = Date.now()
+  const login: PendingDeviceLogin = {
+    id,
+    ownerUserId: options.ownerUserId,
+    deviceAuthId: device.deviceAuthId,
+    userCode: device.userCode,
+    verificationUri: deviceVerificationUri(),
+    intervalMs: device.intervalMs,
+    nextPollAt: now,
+    createdAt: now,
+    expiresAt: now + DEVICE_LOGIN_TTL_MS,
+    returnTo: options.returnTo,
+    complete: options.complete,
+  }
+  pendingDeviceLogins.set(id, login)
+  return deviceLoginView(login)
+}
+
+function deviceErrorCode(data: DeviceTokenResponse): string | null {
+  const error = data.error
+  if (typeof error === 'string') return error
+  if (error && typeof error === 'object') {
+    const code = (error as Record<string, unknown>)['code']
+    if (typeof code === 'string') return code
+  }
+  return null
+}
+
+// Passive lookup for rendering the device page (GET): no upstream call, no
+// nextPollAt bump — safe against refreshes, prefetches, and restored tabs.
+export function getCodexDeviceLogin(
+  id: string,
+  ownerUserId: string,
+): { status: 'pending'; login: CodexDeviceLoginView } | { status: 'expired' } | { status: 'missing' } {
+  const login = pendingDeviceLogins.get(id)
+  sweepExpiredLogins()
+  if (!login || login.ownerUserId !== ownerUserId) return { status: 'missing' }
+  if (Date.now() > login.expiresAt) {
+    pendingDeviceLogins.delete(id)
+    return { status: 'expired' }
+  }
+  return { status: 'pending', login: deviceLoginView(login) }
+}
+
+export async function pollCodexDeviceLogin(id: string, ownerUserId: string): Promise<CodexDevicePollResult> {
+  // Grab the entry before sweeping so a just-expired login reports 'expired'
+  // instead of vanishing into the generic 'already used' failure.
+  const login = pendingDeviceLogins.get(id)
+  sweepExpiredLogins()
+  if (!login || login.ownerUserId !== ownerUserId) {
+    return { status: 'failed', returnTo: '/providers', message: 'This ChatGPT sign-in expired or was already used. Start again from Providers.' }
+  }
+  if (Date.now() > login.expiresAt) {
+    pendingDeviceLogins.delete(id)
+    return { status: 'expired', returnTo: login.returnTo }
+  }
+  if (login.inFlight) return login.inFlight
+  if (Date.now() < login.nextPollAt) {
+    return { status: 'pending', login: deviceLoginView(login) }
+  }
+
+  const task = pollDeviceLoginUpstream(login).finally(() => {
+    login.inFlight = undefined
+  })
+  login.inFlight = task
+  return task
+}
+
+async function pollDeviceLoginUpstream(login: PendingDeviceLogin): Promise<CodexDevicePollResult> {
+  login.nextPollAt = Date.now() + login.intervalMs
+  let response: Response
+  let text: string
+  try {
+    response = await fetch(`${issuer()}${DEVICE_TOKEN_PATH}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_auth_id: login.deviceAuthId, user_code: login.userCode }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    text = await response.text()
+  } catch (error) {
+    // Transient network failure: keep the login (and the entered code) alive
+    // so the user can simply try again.
+    return {
+      status: 'pending',
+      login: deviceLoginView(login),
+      message: `Could not reach OpenAI (${error instanceof Error ? error.message : String(error)}). Try again in a moment.`,
+    }
+  }
+
+  let data: DeviceTokenResponse = {}
+  if (text) {
+    try {
+      data = JSON.parse(text) as DeviceTokenResponse
+    } catch {
+      // Non-JSON error body — fall through to status handling below.
+    }
+  }
+
+  if (response.ok) {
+    if (!data.authorization_code || !data.code_verifier) {
+      pendingDeviceLogins.delete(login.id)
+      return { status: 'failed', returnTo: login.returnTo, message: `ChatGPT device-code response was missing fields: ${text}` }
+    }
+    try {
+      const tokens = await postTokenEndpoint(
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: data.authorization_code,
+          redirect_uri: deviceRedirectUri(),
+          client_id: CODEX_CLIENT_ID,
+          code_verifier: data.code_verifier,
+        }),
+      )
+      const redirectTo = await login.complete(credentialsFromTokenResponse(tokens))
+      pendingDeviceLogins.delete(login.id)
+      return { status: 'complete', redirectTo }
+    } catch (error) {
+      pendingDeviceLogins.delete(login.id)
+      return { status: 'failed', returnTo: login.returnTo, message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  // Trust the body's error code over the HTTP status: OpenAI signals both
+  // "still pending" and terminal denials through 403s, so a bare status check
+  // would leave a denied user staring at the waiting page until the TTL.
+  const errorCode = deviceErrorCode(data)
+  const pendingCode = errorCode === 'deviceauth_authorization_pending' || errorCode === 'authorization_pending'
+  if (pendingCode || (errorCode === null && (response.status === 403 || response.status === 404))) {
+    return { status: 'pending', login: deviceLoginView(login), message: 'Waiting for you to finish sign-in at OpenAI…' }
+  }
+  if (errorCode === 'slow_down') {
+    login.intervalMs += DEVICE_SLOW_DOWN_INCREMENT_MS
+    login.nextPollAt = Date.now() + login.intervalMs
+    return { status: 'pending', login: deviceLoginView(login), message: 'OpenAI asked inkcap to slow down polling; still waiting.' }
+  }
+
+  pendingDeviceLogins.delete(login.id)
+  return {
+    status: 'failed',
+    returnTo: login.returnTo,
+    message: errorCode === 'access_denied'
+      ? 'The sign-in request was denied at OpenAI. Start again from Providers, or use the legacy localhost fallback.'
+      : `ChatGPT device-code login failed (${response.status}): ${errorCode ?? (text || response.statusText)}`,
+  }
 }
 
 // --- Access-token retrieval with proactive refresh ---
@@ -443,5 +707,6 @@ export async function getCodexAccess(
 // Test hook: tear down the loopback listener between test files.
 export function resetCodexLoginStateForTests() {
   pendingLogins.clear()
+  pendingDeviceLogins.clear()
   stopLoopbackIfIdle({ force: true })
 }

@@ -69,9 +69,7 @@
             <summary class="chip cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink">
               <%~ include('../partials/icon', { name: 'sliders', class: 'size-3.5' }) %>
               Tools
-              <% if (it.enabledMcpServerCount > 0) { %>
-                <span class="rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.6875rem] font-bold text-accent"><%= it.enabledMcpServerCount %></span>
-              <% } %>
+              <span class="rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.6875rem] font-bold text-accent <%= it.enabledMcpServerCount > 0 ? '' : 'hidden' %>" data-tools-count><%= it.enabledMcpServerCount %></span>
             </summary>
             <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10" data-menu-panel>
               <%~ include('./mcp-picker', { servers: it.mcpServers, formId: 'mcp-tools-form' }) %>

@@ -12,14 +12,14 @@ security pass + an ops-readiness audit; see issues 19–22 and 17h–17j).
 
 ## Post-M7: openai-codex provider (ChatGPT subscription OAuth)
 
-Provider kind speaking the Codex CLI's protocol: PKCE OAuth against
-auth.openai.com with a loopback callback bound on `localhost:1455` only
-during sign-in, tokens in `providers.oauth_credentials` (migration 011) with
-mutex-serialized rotation-safe refresh, and a Responses-API translation layer
+Provider kind speaking the Codex CLI's protocol: device-code auth by default
+(with the old `localhost:1455` PKCE loopback as an advanced fallback), tokens
+in `providers.oauth_credentials` (migration 011) with mutex-serialized
+rotation-safe refresh, and a Responses-API translation layer
 (`src/services/codex-auth.ts` + `codex-client.ts`, dispatched by kind from
-`provider-client.ts`). Spec + caveats: `docs/specs/openai-codex.md`; tested
-by `tests/integration/codex.test.ts` (stub issuer/backend, no real OpenAI
-traffic). Known gaps tracked in `docs/roadmap/README.md`.
+`provider-client.ts`). Spec + caveats: `docs/specs/openai-codex.md`; tested by
+`tests/integration/codex.test.ts` (stub issuer/backend, no real OpenAI traffic).
+Known gaps tracked in `docs/roadmap/README.md`.
 
 ## Post-M8: accounts, ownership scoping, registration gate
 

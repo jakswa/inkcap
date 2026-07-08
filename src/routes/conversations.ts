@@ -120,6 +120,15 @@ function currentReasoningEffort(
   return normalizeReasoningEffort(value ?? 'medium')
 }
 
+function uniqueProviders<T extends { id: string }>(providers: T[]): T[] {
+  const seen = new Set<string>()
+  return providers.filter((provider) => {
+    if (seen.has(provider.id)) return false
+    seen.add(provider.id)
+    return true
+  })
+}
+
 function providerModelCapabilities(provider: { model_metadata?: unknown } | null) {
   const metadata = provider?.model_metadata
   if (!metadata || typeof metadata !== 'object') return {}
@@ -250,12 +259,13 @@ async function renderShow(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const [provider, activeRun, sidebar, latestRun, mcpServers] = await Promise.all([
+  const [provider, providers, activeRun, sidebar, latestRun, mcpServers] = await Promise.all([
     // Scoped by the conversation owner: a provider the owner's accounts can
     // no longer see renders as "no provider" instead of leaking its details.
     conversation.provider_id
       ? getProviderForUser({ id: conversation.provider_id, userId: conversation.user_id })
       : Promise.resolve(null),
+    listProvidersForUser(conversation.user_id),
     getRunningRunForConversation(conversation.id),
     listConversationsForUser(conversation.user_id),
     getLatestRunForConversation(conversation.id),
@@ -313,11 +323,14 @@ async function renderShow(
     conversation,
     provider,
     modelControls: modelControlData({
-      providers: provider ? [provider] : [],
+      providers: uniqueProviders([
+        ...(provider ? [provider] : []),
+        ...providers.filter((p) => p.enabled),
+      ]),
       selectedProviderId: provider?.id,
       selectedModel,
       selectedReasoning: conversation.reasoning_effort,
-      allowProviderSelect: false,
+      allowProviderSelect: true,
     }),
     selectedModel,
     // Settled messages carry rendered-markdown HTML; the streaming leaf keeps
@@ -364,6 +377,10 @@ async function renderLanding(
     options.selectedMcpServerIds ?? settings.defaultMcpServerIds,
   )
 
+  const enabledMcpServerCount = mcpServers.filter(
+    (server) => server.enabled && selectedMcpServerIds.has(server.id),
+  ).length
+
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('conversations/list', {
     title: 'Chats',
@@ -379,6 +396,7 @@ async function renderLanding(
       ...server,
       override_enabled: selectedMcpServerIds.has(server.id),
     })),
+    enabledMcpServerCount,
     modelControls: modelControlData({
       providers: providers.filter((p) => p.enabled),
       selectedProviderId: options.values?.providerId,
@@ -559,8 +577,10 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
   if (!conversation) return c.notFound()
 
   const form = await c.req.formData()
+  const selectedProviderModel = parseProviderModel(readString(form, 'providerModel'))
+  const submittedProviderId = readString(form, 'providerId').trim() || selectedProviderModel?.providerId || conversation.provider_id || ''
   const content = readString(form, 'content').trim()
-  const model = readString(form, 'model').trim()
+  const model = readString(form, 'model').trim() || selectedProviderModel?.model || ''
   const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
 
   if (content.length === 0) {
@@ -594,29 +614,30 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
     })
   }
 
-  // Pre-flight: the provider must exist, be enabled, and be visible to the
-  // conversation owner's accounts. provider_id is ON DELETE SET NULL, so a
-  // deleted provider surfaces as a friendly prompt to pick another rather
-  // than a crash. Nothing is saved when we can't send.
-  const provider = conversation.provider_id
-    ? await getProviderForUser({ id: conversation.provider_id, userId: conversation.user_id })
+  // Pre-flight: the selected provider must exist, be enabled, and be visible to
+  // the conversation owner's accounts. A conversation's previous provider may
+  // be disabled/deleted; choosing a different enabled provider in the composer
+  // is allowed and updates the conversation before the run starts.
+  const provider = submittedProviderId
+    ? await getProviderForUser({ id: submittedProviderId, userId: conversation.user_id })
     : null
   if (!provider) {
     return renderShow(c, conversation, {
       draft: content,
-      error: 'This conversation has no provider. Assign one before sending.',
+      error: 'Choose an enabled provider before sending.',
     })
   }
   if (!provider.enabled) {
     return renderShow(c, conversation, {
       draft: content,
-      error: `Provider "${provider.name}" is disabled. Enable it before sending.`,
+      error: `Provider "${provider.name}" is disabled. Choose an enabled provider before sending.`,
     })
   }
 
   const selectedModel = model || provider.default_model || null
   const updatedConversation = await updateConversationModelSettings({
     id: conversation.id,
+    providerId: provider.id,
     model: selectedModel,
     reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,
   })

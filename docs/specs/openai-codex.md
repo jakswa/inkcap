@@ -11,20 +11,28 @@ Implementation: `src/services/codex-auth.ts` (OAuth + refresh),
 `src/services/codex-client.ts` (Responses translation), dispatched from
 `provider-client.ts` on `kind === 'openai-codex'`.
 
-## OAuth (authorization code + PKCE)
+## OAuth
 
 - Issuer: `https://auth.openai.com` (`CODEX_AUTH_ISSUER` overrides for tests)
 - Client id: `app_EMoamEEZ73f0CkXaXp7hrann` (the Codex CLI's public client)
-- Redirect: `http://localhost:1455/auth/callback` — fixed by the client
-  registration. inkcap tries to bind 127.0.0.1:1455 only while a login is
-  pending (`CODEX_OAUTH_PORT` overrides for tests). If the browser is on a
-  different machine from the server, the redirect lands on the browser's own
-  localhost; copy that failed callback URL and paste it into inkcap's
+- Default sign-in: Codex device-code auth. inkcap calls
+  `POST /api/accounts/deviceauth/usercode`, shows the user
+  `https://auth.openai.com/codex/device` plus the one-time code, then polls
+  `POST /api/accounts/deviceauth/token`. A completed device flow returns an
+  authorization code + verifier, exchanged at `/oauth/token` with redirect
+  `https://auth.openai.com/deviceauth/callback`. Device-code login may require
+  enabling **Allow device code login** in ChatGPT settings/workspace policy.
+- Fallback sign-in: authorization code + PKCE with redirect
+  `http://localhost:1455/auth/callback` — fixed by the client registration.
+  inkcap tries to bind 127.0.0.1:1455 only while a fallback login is pending
+  (`CODEX_OAUTH_PORT` overrides for tests). If the browser is on a different
+  machine from the server, the redirect lands on the browser's own localhost;
+  copy that failed callback URL and paste it into inkcap's
   `/providers/codex/callback` form. The server can still exchange the code
   because it owns the pending PKCE verifier and uses the registered localhost
   redirect URI at the token endpoint.
-- Scope: `openid profile email offline_access`
-- Extra authorize params: `id_token_add_organizations=true`,
+- Browser-flow scope: `openid profile email offline_access`
+- Browser-flow extra authorize params: `id_token_add_organizations=true`,
   `codex_cli_simplified_flow=true`, `originator=codex_cli_rs`
 - Token endpoint: `POST /oauth/token` (form-encoded). Code exchange returns
   `access_token` + `refresh_token` + `id_token`, all JWTs. Expiry comes from

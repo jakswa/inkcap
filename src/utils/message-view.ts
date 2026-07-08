@@ -21,6 +21,7 @@ import { renderMarkdown } from './markdown'
 // Loose structural shape (no index signature) so the generated, concrete
 // message-row types from bun-sqlgen satisfy the constraint without a cast.
 interface MessageFields {
+  role?: string | null
   content?: string | null
   status?: string | null
   timings?: unknown
@@ -104,12 +105,18 @@ export function toRenderable<T extends MessageFields>(
   message: T,
 ): T & RenderableExtras {
   const status = message.status ?? 'complete'
+  const role = message.role ?? null
+  const rendersMarkdown = role === 'assistant' || role === 'user'
+  const hasActions = rendersMarkdown
   const stats = statsFor(message.timings)
   return {
     ...message,
-    contentHtml: status === 'streaming' ? null : renderMarkdown(message.content ?? ''),
+    contentHtml:
+      status === 'streaming' || !rendersMarkdown
+        ? null
+        : renderMarkdown(message.content ?? ''),
     stats,
     timingLabel: timingLabelFor(stats),
-    clipContent: clipContentFor(message.content),
+    clipContent: hasActions ? clipContentFor(message.content) : '',
   }
 }

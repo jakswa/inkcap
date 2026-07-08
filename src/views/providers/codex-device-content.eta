@@ -1,0 +1,42 @@
+<section class="grid gap-4">
+  <div>
+    <p class="eyebrow mb-3">ChatGPT sign-in</p>
+    <h1 class="max-w-[16ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Enter this code at OpenAI</h1>
+    <p class="mt-4 max-w-[42rem] text-ink-dim">
+      Open the official OpenAI device page in any browser, enter the code below,
+      then return here. No tunnel or localhost callback is needed.
+    </p>
+  </div>
+
+  <article class="card grid max-w-[42rem] gap-4">
+    <div class="alert-warn" role="note">
+      <p class="mb-1">
+        <strong>Security note:</strong> never share this code. OpenAI handles
+        your password; inkcap stores refreshable ChatGPT tokens server-side.
+      </p>
+      <p class="mb-0">
+        If OpenAI rejects the code, enable <strong>Allow device code login</strong>
+        in ChatGPT security settings or ask your workspace admin.
+      </p>
+    </div>
+
+    <div class="grid gap-2">
+      <p class="mb-0 text-sm font-bold uppercase tracking-wide text-ink-dim">One-time code</p>
+      <code class="rounded-2xl border border-edge-strong bg-ink/5 px-4 py-3 text-center text-2xl font-extrabold tracking-[0.2em]"><%= it.login.userCode %></code>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <a class="btn btn-primary" href="<%= it.login.verificationUri %>" target="_blank" rel="noreferrer">Open OpenAI device page</a>
+      <form method="post" action="/providers/codex/device/<%= it.login.id %>/poll">
+        <button class="btn btn-ghost" type="submit">I've entered the code</button>
+      </form>
+      <a class="btn btn-ghost" href="/providers">Cancel</a>
+    </div>
+
+    <p class="mb-0 text-sm text-ink-dim"><%= it.message %></p>
+    <p class="mb-0 text-xs text-ink-faint">
+      Verification URL: <code><%= it.login.verificationUri %></code> · expires at
+      <%= it.login.expiresAt %>
+    </p>
+  </article>
+</section>

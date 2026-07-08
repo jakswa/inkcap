@@ -28,6 +28,7 @@ if (!result.success) {
 
 await cp(join(root, 'src/views'), join(buildDir, 'views'), { recursive: true })
 await cp(join(root, 'src/static'), join(buildDir, 'static'), { recursive: true })
+await cp(join(root, 'node_modules/md4w/js/md4w-small.wasm'), join(buildDir, 'md4w-small.wasm'))
 await cp(join(root, 'src/db/migrations'), join(buildDir, 'db/migrations'), {
   recursive: true,
 })

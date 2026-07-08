@@ -7,10 +7,8 @@
     <form class="card mt-6 grid max-w-[25rem] gap-3" method="post" action="/providers/codex/connect">
       <p class="mb-0 font-bold">ChatGPT subscription (Codex)</p>
       <p class="mb-0 text-sm text-ink-dim">
-        Use your own ChatGPT plan via the Codex CLI's OAuth flow. OpenAI always
-        redirects to <code>localhost:1455</code>. If inkcap is running on a
-        different machine, the browser may show a connection error after sign-in;
-        copy that localhost URL and paste it below to finish.
+        Chat on your ChatGPT plan via a one-time device code — experimental,
+        personal-use, not the official OpenAI API.
       </p>
       <label class="grid gap-1.5">
         <span>Name</span>
@@ -18,24 +16,38 @@
       </label>
       <button class="btn btn-primary" type="submit">Sign in with ChatGPT</button>
       <p class="mb-0 text-xs text-ink-faint">
-        Personal-use tooling: this talks to an undocumented ChatGPT backend
-        that may change without notice. Usage counts against your plan's
-        rolling limits.
+        OpenAI handles your password; inkcap stores refreshable ChatGPT tokens
+        server-side. Usage counts against ChatGPT limits.
       </p>
+      <details class="text-sm">
+        <summary class="link cursor-pointer select-none">Trouble signing in?</summary>
+        <div class="mt-2 grid gap-2 text-ink-dim">
+          <p class="mb-0">
+            If OpenAI rejects the code, enable <strong>Allow device code login</strong>
+            in ChatGPT security settings.
+          </p>
+          <p class="mb-0">
+            Device code unavailable?
+            <button class="link" type="submit" formaction="/providers/codex/connect/localhost">Use the legacy localhost callback.</button>
+          </p>
+        </div>
+      </details>
     </form>
 
-    <form class="card mt-4 grid max-w-[25rem] gap-3" method="post" action="/providers/codex/callback">
-      <p class="mb-0 font-bold">Finish a remote ChatGPT sign-in</p>
-      <p class="mb-0 text-sm text-ink-dim">
-        Paste the failed <code>http://localhost:1455/auth/callback?...</code>
-        address from your browser after approving the login.
-      </p>
-      <label class="grid gap-1.5">
-        <span>Callback URL</span>
-        <input class="input" name="callback_url" placeholder="http://localhost:1455/auth/callback?code=...&amp;state=..." autocomplete="off">
-      </label>
-      <button class="btn btn-ghost" type="submit">Finish ChatGPT sign-in</button>
-    </form>
+    <details class="mt-3 max-w-[25rem] text-sm">
+      <summary class="link cursor-pointer select-none">Finish a remote ChatGPT sign-in</summary>
+      <form class="mt-2 grid gap-3" method="post" action="/providers/codex/callback">
+        <p class="mb-0 text-ink-dim">
+          Paste the failed <code>http://localhost:1455/auth/callback?...</code>
+          address from your browser after approving the login.
+        </p>
+        <label class="grid gap-1.5">
+          <span>Callback URL</span>
+          <input class="input" name="callback_url" placeholder="http://localhost:1455/auth/callback?code=...&amp;state=..." autocomplete="off">
+        </label>
+        <button class="btn btn-ghost justify-self-start" type="submit">Finish ChatGPT sign-in</button>
+      </form>
+    </details>
   </div>
 
   <form class="card grid gap-4" method="post" action="/providers">

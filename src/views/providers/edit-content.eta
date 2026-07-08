@@ -9,8 +9,18 @@
           &middot; account <code class="text-sm"><%= it.provider.oauthAccountId %></code>
         <% } %>
       </p>
+      <div class="alert-warn mt-4" role="note">
+        <p class="mb-0">
+          <strong>Codex caveat:</strong> not the official API; may break or hit
+          ChatGPT limits. Re-auth uses a one-time OpenAI device code. OpenAI
+          handles your password; inkcap stores refreshable tokens server-side.
+        </p>
+      </div>
       <form class="mt-4" method="post" action="/providers/<%= it.provider.id %>/reauth">
         <button class="btn btn-ghost" type="submit">Re-authenticate with ChatGPT</button>
+      </form>
+      <form class="mt-3" method="post" action="/providers/<%= it.provider.id %>/reauth/localhost">
+        <button class="link text-sm" type="submit">Device code unavailable? Use legacy localhost callback.</button>
       </form>
     <% } else { %>
       <p class="mt-4 text-ink-dim">Stored API key: <strong><%= it.provider.maskedApiKey %></strong></p>

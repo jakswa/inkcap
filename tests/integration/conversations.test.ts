@@ -186,6 +186,56 @@ describe('conversations chat loop', () => {
     expect(conversation?.model).toBe('second-model')
   })
 
+  test('existing-chat composer can switch to another provider model', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const first = await createProvider({
+      accountId: user.id,
+      name: `first-chat-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'first-model',
+      models: ['first-model'],
+      enabled: true,
+    })
+    const second = await createProvider({
+      accountId: user.id,
+      name: `second-chat-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'second-model',
+      models: ['second-model'],
+      enabled: true,
+    })
+    const conversationId = await createConversationViaForm(cookie, first.id, {
+      model: 'first-model',
+    })
+
+    const show = await app.request(url(`/conversations/${conversationId}`), {
+      headers: { Cookie: cookie },
+    })
+    const html = await show.text()
+    expect(html).toContain('first-model')
+    expect(html).toContain('second-model')
+    expect(html).toContain(second.name)
+
+    const send = await app.request(url(`/conversations/${conversationId}/messages`), {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: origin },
+      body: form({
+        content: 'switch providers',
+        providerModel: `${second.id}:${encodeURIComponent('second-model')}`,
+      }),
+    })
+    expect(send.status).toBe(302)
+    await waitForRunSettled(conversationId)
+
+    const conversation = await getConversationById(conversationId)
+    expect(conversation?.provider_id).toBe(second.id)
+    expect(conversation?.model).toBe('second-model')
+    expect((lastRequestBody as { model?: string }).model).toBe('second-model')
+  })
+
   test('send delivers a reply, advances curr_node, and renders the transcript', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
