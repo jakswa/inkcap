@@ -12,6 +12,8 @@ export interface ICreateArtifactResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
     created_at: Date;
 }
 
@@ -26,8 +28,50 @@ export interface IGetArtifactForUserResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
     created_at: Date;
     conversation_title: string | null;
+}
+
+/** Result of query `GetPublicArtifactById`. */
+export interface IGetPublicArtifactByIdResult {
+    id: string;
+    account_id: string;
+    conversation_id: string;
+    run_id: string;
+    message_id: string | null;
+    kind: string;
+    title: string;
+    summary: string | null;
+    body_markdown: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
+    created_at: Date;
+    conversation_title: string | null;
+}
+
+/** Result of query `SetArtifactPublicShare`. */
+export interface ISetArtifactPublicShareResult {
+    id: string;
+    account_id: string;
+    conversation_id: string;
+    run_id: string;
+    message_id: string | null;
+    kind: string;
+    title: string;
+    summary: string | null;
+    body_markdown: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
+    created_at: Date;
+}
+
+/** Result of query `DisableArtifactPublicShare`. */
+export interface IDisableArtifactPublicShareResult {
+    id: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
 }
 
 /** Result of query `ListArtifactsForConversation`. */
@@ -41,6 +85,8 @@ export interface IListArtifactsForConversationResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    public_shared_at: Date | null;
+    public_share_expires_at: Date | null;
     created_at: Date;
 }
 
@@ -1065,6 +1111,9 @@ export interface ICreateUserResult {
 export interface Queries {
     CreateArtifact: ICreateArtifactResult;
     GetArtifactForUser: IGetArtifactForUserResult;
+    GetPublicArtifactById: IGetPublicArtifactByIdResult;
+    SetArtifactPublicShare: ISetArtifactPublicShareResult;
+    DisableArtifactPublicShare: IDisableArtifactPublicShareResult;
     ListArtifactsForConversation: IListArtifactsForConversationResult;
     GetLatestArtifactForConversation: IGetLatestArtifactForConversationResult;
     CreateAttachment: ICreateAttachmentResult;

@@ -1,7 +1,13 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { getArtifactForUser } from '../db/queries/artifacts'
+import {
+  disableArtifactPublicShare,
+  getArtifactForUser,
+  getPublicArtifactById,
+  setArtifactPublicShare,
+} from '../db/queries/artifacts'
 import { renderMarkdown } from '../utils/markdown'
+import { publicOrigin } from '../utils/public-origin'
 
 export const artifactRoutes = new Hono()
 
@@ -21,20 +27,54 @@ function artifactIdFromParam(value: string | undefined) {
   return uuidPattern.test(id) ? id : null
 }
 
-async function artifactForRequest(c: Context) {
-  const user = c.var.user
-  if (!user) return { redirect: c.redirect('/login') }
-
-  const id = artifactIdFromParam(c.req.param('id'))
-  if (!id) return { notFound: true }
-
-  const artifact = await getArtifactForUser({ id, userId: user.id })
-  if (!artifact) return { notFound: true }
-  return { artifact }
-}
-
 function contentDispositionAttachment(filename: string) {
   return `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
+function shareUrl(c: Context, id: string) {
+  const origin = publicOrigin() ?? new URL(c.req.url).origin
+  return `${origin}/artifacts/${id}`
+}
+
+function shareExpiresAt(choice: string) {
+  if (choice === 'forever') return null
+  const now = Date.now()
+  const hours: Record<string, number> = {
+    '1h': 1,
+    '24h': 24,
+    '7d': 24 * 7,
+    '30d': 24 * 30,
+  }
+  const selected = hours[choice]
+  if (!selected) return null
+  return new Date(now + selected * 60 * 60 * 1000)
+}
+
+function publicShareActive(artifact: {
+  public_shared_at?: Date | null
+  public_share_expires_at?: Date | null
+}) {
+  return Boolean(
+    artifact.public_shared_at &&
+      (!artifact.public_share_expires_at || artifact.public_share_expires_at > new Date()),
+  )
+}
+
+async function artifactForRequest(c: Context) {
+  const id = artifactIdFromParam(c.req.param('id'))
+  if (!id) return { notFound: true as const }
+
+  const user = c.var.user
+  if (user) {
+    const owned = await getArtifactForUser({ id, userId: user.id })
+    if (owned) return { artifact: owned, owner: true as const, id }
+  }
+
+  const shared = await getPublicArtifactById(id)
+  if (shared) return { artifact: shared, owner: false as const, id }
+
+  if (!user) return { redirect: c.redirect('/login') }
+  return { notFound: true as const }
 }
 
 async function renderMarkdownDownload(c: Context) {
@@ -57,6 +97,32 @@ async function renderMarkdownDownload(c: Context) {
 
 artifactRoutes.get('/artifacts/:id/download', renderMarkdownDownload)
 
+artifactRoutes.post('/artifacts/:id/share', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const id = artifactIdFromParam(c.req.param('id'))
+  if (!id) return c.notFound()
+
+  const form = await c.req.formData()
+  const expires = shareExpiresAt(String(form.get('expires') ?? 'forever'))
+  const artifact = await setArtifactPublicShare({ id, userId: user.id, expiresAt: expires })
+  if (!artifact) return c.notFound()
+
+  return c.redirect(`/artifacts/${id}?shared=1`)
+})
+
+artifactRoutes.post('/artifacts/:id/unshare', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const id = artifactIdFromParam(c.req.param('id'))
+  if (!id) return c.notFound()
+
+  await disableArtifactPublicShare({ id, userId: user.id })
+  return c.redirect(`/artifacts/${id}?unshared=1`)
+})
+
 artifactRoutes.get('/artifacts/:id', async (c) => {
   const result = await artifactForRequest(c)
   if ('redirect' in result) return result.redirect
@@ -66,8 +132,13 @@ artifactRoutes.get('/artifacts/:id', async (c) => {
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('artifacts/show', {
     title: artifact.title,
+    owner: result.owner,
+    shareUrl: shareUrl(c, artifact.id),
+    sharedNotice: c.req.query('shared') === '1',
+    unsharedNotice: c.req.query('unshared') === '1',
     artifact: {
       ...artifact,
+      publicShareActive: publicShareActive(artifact),
       downloadFilename: downloadName(artifact.title),
       bodyHtml: renderMarkdown(artifact.body_markdown),
     },

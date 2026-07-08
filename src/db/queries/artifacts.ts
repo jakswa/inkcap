@@ -22,7 +22,8 @@ export async function createArtifact(input: {
       ${input.summary ?? null}, ${input.bodyMarkdown}
     )
     RETURNING id, account_id, conversation_id, run_id, message_id,
-              kind, title, summary, body_markdown, created_at
+              kind, title, summary, body_markdown,
+              public_shared_at, public_share_expires_at, created_at
   `
   return artifact
 }
@@ -30,11 +31,61 @@ export async function createArtifact(input: {
 export async function getArtifactForUser(input: { id: string; userId: string }) {
   const [artifact] = await sql.GetArtifactForUser`
     SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-           a.kind, a.title, a.summary, a.body_markdown, a.created_at,
+           a.kind, a.title, a.summary, a.body_markdown,
+           a.public_shared_at, a.public_share_expires_at, a.created_at,
            c.title AS conversation_title
     FROM artifacts a
     JOIN conversations c ON c.id = a.conversation_id
     WHERE a.id = ${input.id} AND c.user_id = ${input.userId}
+  `
+  return artifact
+}
+
+export async function getPublicArtifactById(id: string) {
+  const [artifact] = await sql.GetPublicArtifactById`
+    SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
+           a.kind, a.title, a.summary, a.body_markdown,
+           a.public_shared_at, a.public_share_expires_at, a.created_at,
+           c.title AS conversation_title
+    FROM artifacts a
+    JOIN conversations c ON c.id = a.conversation_id
+    WHERE a.id = ${id}
+      AND a.public_shared_at IS NOT NULL
+      AND (a.public_share_expires_at IS NULL OR a.public_share_expires_at > now())
+  `
+  return artifact
+}
+
+export async function setArtifactPublicShare(input: {
+  id: string
+  userId: string
+  expiresAt?: Date | null
+}) {
+  const [artifact] = await sql.SetArtifactPublicShare`
+    UPDATE artifacts a
+    SET public_shared_at = coalesce(a.public_shared_at, now()),
+        public_share_expires_at = ${input.expiresAt ?? null}
+    FROM conversations c
+    WHERE c.id = a.conversation_id
+      AND a.id = ${input.id}
+      AND c.user_id = ${input.userId}
+    RETURNING a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
+              a.kind, a.title, a.summary, a.body_markdown,
+              a.public_shared_at, a.public_share_expires_at, a.created_at
+  `
+  return artifact
+}
+
+export async function disableArtifactPublicShare(input: { id: string; userId: string }) {
+  const [artifact] = await sql.DisableArtifactPublicShare`
+    UPDATE artifacts a
+    SET public_shared_at = NULL,
+        public_share_expires_at = NULL
+    FROM conversations c
+    WHERE c.id = a.conversation_id
+      AND a.id = ${input.id}
+      AND c.user_id = ${input.userId}
+    RETURNING a.id, a.public_shared_at, a.public_share_expires_at
   `
   return artifact
 }
@@ -45,7 +96,8 @@ export async function listArtifactsForConversation(input: {
 }) {
   return sql.ListArtifactsForConversation`
     SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-           a.kind, a.title, a.summary, a.body_markdown, a.created_at
+           a.kind, a.title, a.summary, a.body_markdown,
+           a.public_shared_at, a.public_share_expires_at, a.created_at
     FROM artifacts a
     JOIN conversations c ON c.id = a.conversation_id
     WHERE a.conversation_id = ${input.conversationId} AND c.user_id = ${input.userId}
