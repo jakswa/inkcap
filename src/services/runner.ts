@@ -841,8 +841,7 @@ async function buildToolContext(conversationId: string): Promise<{
   tools: OpenAiTool[]
   toolIndex: Map<string, string>
 }> {
-  const conversation = await getConversationById(conversationId)
-  const internalTools = conversation?.routine_id ? [SUBMIT_ARTIFACT_TOOL] : []
+  const internalTools = [SUBMIT_ARTIFACT_TOOL]
   const rows = await listEnabledMcpServersForConversation(conversationId)
   const servers: McpServerConfig[] = rows.map((row) => ({
     id: row.id!,
