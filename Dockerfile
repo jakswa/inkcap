@@ -23,6 +23,11 @@ RUN find build/static -type f \( -name '*.css' -o -name '*.js' -o -name '*.svg' 
 
 FROM base
 COPY --from=verify --chown=bun:bun /app/build ./build
+RUN ln -s build/views views \
+  && ln -s build/static static \
+  && ln -s build/db db \
+  && ln -s build/md4w-small.wasm md4w-small.wasm \
+  && NODE_ENV=development bun build/tasks/smoke-runtime.js
 USER bun
 EXPOSE 3000
 CMD ["bun", "build/index.js"]

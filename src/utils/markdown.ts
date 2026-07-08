@@ -26,16 +26,30 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function md4wWasmPath() {
-  // Source/dev/test run from src/utils. Production runs from build/index.js and
-  // src/build.ts copies the wasm next to the bundle. Passing bytes to md4w
-  // avoids relying on package-relative paths after bundling without node_modules.
-  return process.env['NODE_ENV'] === 'production'
-    ? resolve(import.meta.dir, 'md4w-small.wasm')
-    : resolve(import.meta.dir, '../../node_modules/md4w/js/md4w-small.wasm')
+async function readMd4wWasm() {
+  // Source/dev/test run from src/utils and can read from node_modules. Bundled
+  // images run from build/index.js without node_modules, so src/build.ts copies
+  // the wasm next to the bundle. Prefer the co-located build copy regardless of
+  // NODE_ENV; this lets a built image run with .env.development for local smoke
+  // tests without trying to open /node_modules/md4w/...
+  const candidates = [
+    resolve(import.meta.dir, 'md4w-small.wasm'),
+    resolve(import.meta.dir, '../md4w-small.wasm'),
+    resolve(import.meta.dir, '../../node_modules/md4w/js/md4w-small.wasm'),
+  ]
+
+  for (const path of candidates) {
+    try {
+      return await readFile(path)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+  }
+
+  throw new Error(`Unable to find md4w-small.wasm; searched ${candidates.join(', ')}`)
 }
 
-await init(await readFile(md4wWasmPath()))
+await init(await readMd4wWasm())
 
 // Disable md4c's raw HTML *block* handling so a malicious/accidental block
 // like `<script>...</script>` does not swallow following markdown as literal
