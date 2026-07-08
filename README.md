@@ -35,7 +35,22 @@ polish backlog), `docs/issues/` (hardening work; resolved ones in
 
 ## Quick Start
 
-Needs local PostgreSQL with `inkcap` and `inkcap_test` databases.
+Needs PostgreSQL with an `inkcap` database (`inkcap_test` too if running tests).
+The published image is `ghcr.io/jakswa/inkcap:latest`:
+
+```sh
+docker run -d --name inkcap --restart unless-stopped \
+  -p 3000:3000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap \
+  -e SESSION_SECRET="$(openssl rand -base64 32)" \
+  -e REGISTRATION=open \
+  -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal \
+  ghcr.io/jakswa/inkcap:latest \
+  sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
+```
+
+Source checkout:
 
 ```sh
 bun install
@@ -50,7 +65,7 @@ bun src/tasks/seed-provider.ts --user you@example.com
 No provider handy? `bun src/tasks/seed-demo.ts` creates a demo account
 (`demo@inkcap.dev` / `inkcap-demo`) with realistic conversations — markdown,
 reasoning, tool calls, a parked approval — for kicking the tires or taking
-screenshots (the ones on the site and this landing page come from it).
+screenshots (the ones on the marketing site and this landing page come from it).
 
 Import llama-ui history (idempotent; JSONL or zip, attachments, branch trees):
 
@@ -167,11 +182,19 @@ src/
 ## Production
 
 - `bun run app:build` → `build/`; Docker copies only `build/` (no `src/`,
-  no `node_modules/`). Migrate inside the image: `bun build/tasks/migrate.js`.
+  no `node_modules/`). GHCR publishes `ghcr.io/jakswa/inkcap:latest` plus SHA
+  tags on pushes to master. Migrate inside the image with
+  `bun build/tasks/migrate.js` (examples below run it before the app starts).
 - The app is a single stateful process (web server + runner) by design;
   restart is always safe — boot recovery finalizes interrupted runs.
 
 ```sh
+docker pull ghcr.io/jakswa/inkcap:latest
+docker run -p 3000:3000 --env-file .env.production ghcr.io/jakswa/inkcap:latest \
+  sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
+
+# self-build instead:
 docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t inkcap .
-docker run -p 3000:3000 --env-file .env.production inkcap
+docker run -p 3000:3000 --env-file .env.production inkcap \
+  sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
 ```

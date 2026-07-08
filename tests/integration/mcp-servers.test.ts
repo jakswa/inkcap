@@ -96,7 +96,7 @@ describe('MCP servers CRUD', () => {
   })
 
   test('create, list, edit, disable, enable, delete', async () => {
-    const stub = startStubMcpServer()
+    const stub = startStubMcpServer({ tools: [{ name: 'echo' }, { name: 'ping' }] })
     const user = await makeUser()
     const cookie = sessionFor(user)
     const headers = { Cookie: cookie, Origin: origin }
@@ -126,6 +126,12 @@ describe('MCP servers CRUD', () => {
       const id = created!.id
       const page = await app.request(url('/mcp-servers'), { headers: { Cookie: cookie } })
       expect(await page.text()).toContain(name)
+
+      const testResult = await app.request(url(`/mcp-servers/${id}/test`), { method: 'POST', headers })
+      const testBody = await testResult.text()
+      expect(testBody).toContain('Connection ok')
+      expect(testBody).toContain('echo')
+      expect(testBody).toContain('ping')
 
       // Edit: rename + drop auto-approve.
       const edited = await app.request(url(`/mcp-servers/${id}`), {
@@ -342,29 +348,6 @@ describe('MCP servers CRUD', () => {
     }
   })
 
-  test('test-connection button connects to a live server and lists tools', async () => {
-    const stub = startStubMcpServer({ tools: [{ name: 'echo' }, { name: 'ping' }] })
-    try {
-      const user = await makeUser()
-      const headers = { Cookie: sessionFor(user), Origin: origin }
-      const name = `live-${randomUUIDv7()}`
-      await app.request(url('/mcp-servers'), {
-        method: 'POST',
-        headers,
-        body: form({ name, url: stub.url, headers: '', request_timeout_ms: '5000' }),
-      })
-      const id = (await listMcpServersForUser(user.id)).find((s) => s.name === name)!.id
-
-      const res = await app.request(url(`/mcp-servers/${id}/test`), { method: 'POST', headers })
-      const html = await res.text()
-      expect(html).toContain('Connection ok')
-      expect(html).toContain('echo')
-      expect(html).toContain('ping')
-    } finally {
-      stub.stop()
-    }
-  }, 15_000)
-
   test('per-conversation override gates which servers are enabled', async () => {
     const stub = startStubMcpServer()
     const user = await makeUser()
@@ -425,45 +408,6 @@ describe('MCP servers CRUD', () => {
     stub.stop()
   })
 
-  test('new-chat options can enable MCP before the first run', async () => {
-    const user = await makeUser()
-    const cookie = sessionFor(user)
-    const headers = { Cookie: cookie, Origin: origin }
-    const provider = await createProvider({
-      accountId: user.id,
-      name: `provider-${randomUUIDv7()}`,
-      kind: 'openai-compat',
-      baseUrl: 'http://127.0.0.1:1',
-      defaultModel: 'stub-model',
-      enabled: true,
-    })
-
-    const mcp = startStubMcpServer()
-    const name = `new-chat-mcp-${randomUUIDv7()}`
-    await app.request(url('/mcp-servers'), {
-      method: 'POST',
-      headers,
-      body: form({ name, url: mcp.url, headers: '', request_timeout_ms: '30000' }),
-    })
-    const id = (await listMcpServersForUser(user.id)).find((s) => s.name === name)!.id
-
-    const create = await app.request(url('/conversations'), {
-      method: 'POST',
-      headers,
-      body: form({
-        providerId: provider.id,
-        model: 'stub-model',
-        enabled_mcp_server_id: [id],
-      }),
-    })
-    expect(create.status).toBe(302)
-    const conversationId = (create.headers.get('location') ?? '').slice('/conversations/'.length)
-
-    const enabled = await listEnabledMcpServersForConversation(conversationId)
-    expect(enabled.map((s) => s.id)).toContain(id)
-    mcp.stop()
-  })
-
   test('new-chat first run sends selected MCP tool definitions to the provider', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
@@ -505,6 +449,8 @@ describe('MCP servers CRUD', () => {
         }),
       })
       expect(create.status).toBe(302)
+      const conversationId = (create.headers.get('location') ?? '').slice('/conversations/'.length)
+      expect((await listEnabledMcpServersForConversation(conversationId)).map((s) => s.id)).toContain(server.id)
 
       const body = await waitForProviderBody(providerServer)
       expect(body['tool_choice']).toBe('auto')

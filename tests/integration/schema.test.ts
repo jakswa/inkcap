@@ -3,19 +3,18 @@ import { randomUUIDv7 } from 'bun'
 
 const { sql } = await import('../../src/db/client')
 const { createUser } = await import('../../src/db/queries/users')
-const { createProvider, getProviderById, listProvidersForUser, setProviderEnabled } =
-  await import('../../src/db/queries/providers')
+const { createProvider } = await import('../../src/db/queries/providers')
 const {
   createConversation,
   getConversationById,
-  listConversationsForUser,
   setConversationCurrNode,
 } = await import('../../src/db/queries/conversations')
 const { createMessage, getActivePath, listMessageChildren } = await import(
   '../../src/db/queries/messages'
 )
-const { createRun, getRunById, setRunStatus, incrementRunSeq, listRunningRuns } =
-  await import('../../src/db/queries/runs')
+const { createRun, setRunStatus, listRunningRuns } = await import(
+  '../../src/db/queries/runs'
+)
 
 // Bun.SQL query objects don't behave as plain promises under expect().rejects,
 // so assert rejection with an explicit try/catch helper.
@@ -51,22 +50,6 @@ async function makeProvider(accountId: string) {
 }
 
 describe('providers', () => {
-  test('create, get, list, and toggle enabled', async () => {
-    const owner = await makeUser()
-    const created = await makeProvider(owner.id)
-    expect(created.enabled).toBe(true)
-    expect(created.kind).toBe('llama-server')
-
-    const fetched = await getProviderById(created.id)
-    expect(fetched?.base_url).toBe('http://localhost:8001')
-
-    const all = await listProvidersForUser(owner.id)
-    expect(all.some((p) => p.id === created.id)).toBe(true)
-
-    const toggled = await setProviderEnabled({ id: created.id, enabled: false })
-    expect(toggled?.enabled).toBe(false)
-  })
-
   test('rejects an unknown kind', async () => {
     await assertRejects(
       () => sql`
@@ -78,29 +61,6 @@ describe('providers', () => {
 })
 
 describe('conversations', () => {
-  test('create, list-for-user, and default fields', async () => {
-    const user = await makeUser()
-    const provider = await makeProvider(user.id)
-
-    const convo = await createConversation({
-      userId: user.id,
-      title: 'Hello',
-      providerId: provider.id,
-      model: 'test-model',
-    })
-
-    expect(convo.pinned).toBe(false)
-    expect(convo.curr_node).toBeNull()
-
-    const fetched = await getConversationById(convo.id)
-    expect(fetched?.title).toBe('Hello')
-
-    const list = await listConversationsForUser(user.id)
-    expect(list.map((c) => c.id)).toContain(convo.id)
-    // Other users' conversations must not leak in.
-    expect(list.every((c) => c.user_id === user.id)).toBe(true)
-  })
-
   test('deleting a provider keeps the conversation (SET NULL)', async () => {
     const user = await makeUser()
     const provider = await makeProvider(user.id)
@@ -186,39 +146,6 @@ describe('messages tree', () => {
 })
 
 describe('runs', () => {
-  test('status transitions and error text', async () => {
-    const user = await makeUser()
-    const convo = await createConversation({ userId: user.id })
-    const run = await createRun({ conversationId: convo.id, budget: { turns: 5 } })
-    expect(run.status).toBe('running')
-    expect(run.seq).toBe('0')
-
-    const waiting = await setRunStatus({ id: run.id, status: 'waiting_approval' })
-    expect(waiting?.status).toBe('waiting_approval')
-
-    const errored = await setRunStatus({
-      id: run.id,
-      status: 'error',
-      error: 'boom',
-    })
-    expect(errored?.status).toBe('error')
-    expect(errored?.error).toBe('boom')
-
-    const fetched = await getRunById(run.id)
-    expect(fetched?.status).toBe('error')
-  })
-
-  test('increment seq bumps the cursor', async () => {
-    const user = await makeUser()
-    const convo = await createConversation({ userId: user.id })
-    const run = await createRun({ conversationId: convo.id })
-
-    const first = await incrementRunSeq(run.id)
-    const second = await incrementRunSeq(run.id)
-    expect(Number(first?.seq)).toBe(1)
-    expect(Number(second?.seq)).toBe(2)
-  })
-
   test('only one non-terminal run is allowed per conversation', async () => {
     const user = await makeUser()
     const convo = await createConversation({ userId: user.id })

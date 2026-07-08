@@ -189,28 +189,9 @@ const terminal = (e: SseEvent) =>
   e.type === 'run-status' && e.payload['status'] !== 'running'
 
 describe('durable runner', () => {
-  test('run completes with zero SSE subscribers (DB is the spectator)', async () => {
-    const { cookie, conversationId } = await setupConversation('drip,tokens=12,interval=5')
-    await send(cookie, conversationId)
-
-    const run = await waitFor(async () => {
-      const r = await getLatestRunForConversation(conversationId)
-      return r && r.status !== 'running' ? r : null
-    })
-    expect(run.status).toBe('done')
-    expect(Number(run.turn_count)).toBe(1)
-    expect(run.error).toBeNull()
-
-    const message = await assistantMessageFor(conversationId)
-    expect(message?.status).toBe('complete')
-    expect(message?.content).toBe(mockContent(12))
-    expect(message?.model).toBe('mock-model')
-    expect(message?.timings).not.toBeNull()
-  }, 15_000)
-
   test('debounced persistence lands tokens mid-stream', async () => {
     const { cookie, conversationId } = await setupConversation(
-      'drip,tokens=20,interval=20,reasoning=2',
+      'drip,tokens=20,interval=18,reasoning=2',
     )
     await send(cookie, conversationId)
 
@@ -253,10 +234,18 @@ describe('durable runner', () => {
   test('SSE replay after completion, then replay from a cursor: no gaps, no dupes', async () => {
     const { cookie, conversationId } = await setupConversation('drip,tokens=20,interval=3')
     await send(cookie, conversationId)
-    await waitFor(async () => {
+    const run = await waitFor(async () => {
       const r = await getLatestRunForConversation(conversationId)
       return r && r.status === 'done' ? r : null
     })
+    expect(Number(run.turn_count)).toBe(1)
+    expect(run.error).toBeNull()
+
+    const message = await assistantMessageFor(conversationId)
+    expect(message?.status).toBe('complete')
+    expect(message?.content).toBe(mockContent(20))
+    expect(message?.model).toBe('mock-model')
+    expect(message?.timings).not.toBeNull()
 
     const full = await readSseEvents(
       await app.request(url(`/conversations/${conversationId}/events`), {
@@ -307,14 +296,14 @@ describe('durable runner', () => {
   }, 15_000)
 
   test('cancel stops the run and keeps the partial', async () => {
-    const { cookie, conversationId } = await setupConversation('hang,after=5,interval=5')
+    const { cookie, conversationId } = await setupConversation('hang,after=24,interval=0')
     await send(cookie, conversationId)
 
-    // The 300ms debounce flushes the 5 pre-hang tokens even though the
-    // provider then goes silent forever.
+    // Hitting the batch threshold flushes these pre-hang tokens immediately;
+    // this test is about cancel finalization, not debounce timing.
     await waitFor(async () => {
       const message = await assistantMessageFor(conversationId)
-      return message && message.content === mockContent(5) ? message : null
+      return message && message.content === mockContent(24) ? message : null
     })
 
     const cancel = await app.request(url(`/conversations/${conversationId}/cancel`), {
@@ -331,7 +320,7 @@ describe('durable runner', () => {
 
     const message = await assistantMessageFor(conversationId)
     expect(message?.status).toBe('interrupted')
-    expect(message?.content).toBe(mockContent(5))
+    expect(message?.content).toBe(mockContent(24))
   }, 15_000)
 
   test('provider failure mid-stream: partial kept, message interrupted, run error', async () => {
@@ -393,7 +382,7 @@ describe('durable runner', () => {
     })
     await setConversationCurrNode({ id: conversation.id, currNode: userMessage.id })
 
-    const { runId } = await startRun(conversation.id, { stallTimeoutMs: 400 })
+    const { runId } = await startRun(conversation.id, { stallTimeoutMs: 120 })
 
     const run = await waitFor(async () => {
       const r = await getLatestRunForConversation(conversation.id)

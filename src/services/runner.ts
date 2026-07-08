@@ -19,7 +19,7 @@
 // running context, opens the next streaming assistant message, and loops.
 
 import { eta } from '../middleware/render'
-import { toRenderable } from '../utils/message-view'
+import { toRenderable, toolCallViewFor } from '../utils/message-view'
 import {
   getConversationById,
   setConversationCurrNode,
@@ -434,13 +434,18 @@ function normalizeReasoningEffort(value: string | null | undefined): ReasoningEf
 }
 
 function providerSupportsReasoning(
-  provider: { default_model: string | null; model_metadata?: unknown },
+  provider: { kind?: string | null; default_model: string | null; model_metadata?: unknown },
   model: string | null,
 ): boolean {
-  const metadata = provider.model_metadata
-  if (!metadata || typeof metadata !== 'object') return false
   const selected = model || provider.default_model
   if (!selected) return false
+  // llama-server may only advertise "completion" from /v1/models even for
+  // thinking templates. Its reasoning budget fields are llama-server-specific,
+  // so enable the control path for that provider kind and keep generic
+  // OpenAI-compatible providers metadata-gated.
+  if (provider.kind === 'llama-server') return true
+  const metadata = provider.model_metadata
+  if (!metadata || typeof metadata !== 'object') return false
   const info = (metadata as Record<string, { reasoning?: unknown }>)[selected]
   return info?.reasoning === true
 }
@@ -574,7 +579,14 @@ async function executeToolBatch(
     await emitEvent(handle.runId, 'message-final', {
       messageId: toolMessage!.id,
       status: 'complete',
-      html: await renderMessageHtml(toolMessage),
+      html: await renderMessageHtml({
+        ...toolMessage,
+        toolCall: toolCallViewFor({
+          id: item.toolCallId,
+          name: item.toolName,
+          arguments: item.arguments,
+        }),
+      }),
     })
   }
 

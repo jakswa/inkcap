@@ -122,6 +122,30 @@ describe('message partial rendering', () => {
     expect(html).toContain('20.0 tok/s')
   })
 
+  test('renders assistant tool-call names and arguments in a collapsed inspector', async () => {
+    const html = await renderMessageHtml({
+      id: 'msg-tools',
+      role: 'assistant',
+      content: '',
+      reasoning_content: null,
+      model: 'test-model',
+      status: 'complete',
+      timings: null,
+      tool_calls: [
+        {
+          id: 'call_1',
+          type: 'function',
+          function: { name: 'echo', arguments: '{"text":"hi"}' },
+        },
+      ],
+    })
+
+    expect(html).toContain('Tool call')
+    expect(html).toContain('echo')
+    expect(html).toContain('call_1')
+    expect(html).toContain('&quot;text&quot;: &quot;hi&quot;')
+  })
+
   test('a streaming message stays plain text (no client-side markdown)', async () => {
     const html = await renderMessageHtml({
       id: 'msg-stream',

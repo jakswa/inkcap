@@ -145,55 +145,6 @@ async function activePath(conversationId: string) {
 }
 
 describe('M6 MCP tool loop', () => {
-  test('approve path: park → approve → execute tool → final answer', async () => {
-    const { conversation, stub } = await setupToolConversation('tools,tokens=5')
-    try {
-      await startRun(conversation.id, { stallTimeoutMs: 3000 })
-
-      // The tool-call turn seals and the run parks awaiting approval.
-      const parked = await waitFor(runReaches(conversation.id, 'waiting_approval'))
-      const approvals = await listApprovalsForRun(parked.id)
-      expect(approvals).toHaveLength(1)
-      expect(approvals[0]?.tool_name).toBe('echo')
-      expect(approvals[0]?.decision).toBe('pending')
-
-      // The sealed assistant message carries the tool_calls.
-      const path1 = await activePath(conversation.id)
-      const sealed = path1.at(-1)
-      expect(sealed?.role).toBe('assistant')
-      expect(sealed?.status).toBe('complete')
-      expect(Array.isArray(sealed?.tool_calls)).toBe(true)
-
-      // A run-status waiting_approval event was emitted for the island.
-      const events = await replayRunEvents(parked.id, 0)
-      expect(
-        events.some(
-          (e) =>
-            e.type === 'run-status' &&
-            (e.payload as { status?: string }).status === 'waiting_approval',
-        ),
-      ).toBe(true)
-
-      // Approve → tool executes and the loop finishes with a final answer.
-      await resumeParkedRun(conversation.id, 'approve', { stallTimeoutMs: 3000 })
-      await waitFor(runReaches(conversation.id, 'done'))
-
-      expect(stub.calls).toHaveLength(1)
-      expect(stub.calls[0]?.name).toBe('echo')
-
-      const path2 = await activePath(conversation.id)
-      const roles = path2.map((m) => m.role)
-      expect(roles).toEqual(['user', 'assistant', 'tool', 'assistant'])
-      const toolMessage = path2[2]
-      expect(toolMessage?.tool_call_id).toBe(approvals[0]?.tool_call_id)
-      expect(toolMessage?.content).toContain('echo:')
-      expect(path2.at(-1)?.content).toBe(mockContent(5))
-      expect(path2.at(-1)?.status).toBe('complete')
-    } finally {
-      stub.stop()
-    }
-  }, 20_000)
-
   test('deny path: denial tool message, tool never runs, loop continues', async () => {
     const { conversation, stub } = await setupToolConversation('tools,tokens=3')
     try {
@@ -307,7 +258,28 @@ describe('M6 MCP tool loop', () => {
     try {
       const cookie = sessionFor(user)
       await startRun(conversation.id, { stallTimeoutMs: 3000 })
-      await waitFor(runReaches(conversation.id, 'waiting_approval'))
+      const parked = await waitFor(runReaches(conversation.id, 'waiting_approval'))
+      const approvals = await listApprovalsForRun(parked.id)
+      expect(approvals).toHaveLength(1)
+      expect(approvals[0]?.tool_name).toBe('echo')
+      expect(approvals[0]?.decision).toBe('pending')
+
+      // The sealed assistant message carries the tool_calls.
+      const path1 = await activePath(conversation.id)
+      const sealed = path1.at(-1)
+      expect(sealed?.role).toBe('assistant')
+      expect(sealed?.status).toBe('complete')
+      expect(Array.isArray(sealed?.tool_calls)).toBe(true)
+
+      // A run-status waiting_approval event was emitted for the island.
+      const events = await replayRunEvents(parked.id, 0)
+      expect(
+        events.some(
+          (e) =>
+            e.type === 'run-status' &&
+            (e.payload as { status?: string }).status === 'waiting_approval',
+        ),
+      ).toBe(true)
 
       // The show page renders the approval card.
       const show = await app.request(`${origin}/conversations/${conversation.id}`, {
@@ -327,6 +299,15 @@ describe('M6 MCP tool loop', () => {
 
       await waitFor(runReaches(conversation.id, 'done'))
       expect(stub.calls).toHaveLength(1)
+      expect(stub.calls[0]?.name).toBe('echo')
+
+      const path2 = await activePath(conversation.id)
+      expect(path2.map((m) => m.role)).toEqual(['user', 'assistant', 'tool', 'assistant'])
+      const toolMessage = path2[2]
+      expect(toolMessage?.tool_call_id).toBe(approvals[0]?.tool_call_id)
+      expect(toolMessage?.content).toContain('echo:')
+      expect(path2.at(-1)?.content).toBe(mockContent(2))
+      expect(path2.at(-1)?.status).toBe('complete')
     } finally {
       stub.stop()
     }

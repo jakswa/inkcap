@@ -111,8 +111,8 @@ describe('streamChat stall watchdog', () => {
     const mock = startMockProvider()
     try {
       const { received, error } = await collect(
-        `http://localhost:${mock.port}/hang,after=3,interval=5`,
-        250,
+        `http://localhost:${mock.port}/hang,after=3,interval=3`,
+        80,
       )
       expect(error?.message).toContain('stopped responding')
       // A stall is a terminal provider failure, not a cancellation.
@@ -126,11 +126,11 @@ describe('streamChat stall watchdog', () => {
   test('a slow drip inside the per-chunk deadline never trips the watchdog', async () => {
     const mock = startMockProvider()
     try {
-      // Six 100ms gaps: total (~600ms) exceeds the 300ms deadline but each
+      // Six 25ms gaps: total (~150ms) exceeds the 75ms deadline but each
       // individual gap stays inside it — the watchdog must re-arm per chunk.
       const { received, error } = await collect(
-        `http://localhost:${mock.port}/drip,tokens=6,interval=100`,
-        300,
+        `http://localhost:${mock.port}/drip,tokens=6,interval=25`,
+        75,
       )
       expect(error).toBeNull()
       expect(received.join('')).toBe('t0 t1 t2 t3 t4 t5 ')
@@ -143,7 +143,7 @@ describe('streamChat stall watchdog', () => {
     const mock = startMockProvider()
     try {
       const abort = new AbortController()
-      setTimeout(() => abort.abort(), 100)
+      setTimeout(() => abort.abort(), 25)
       const { error } = await collect(
         `http://localhost:${mock.port}/hang,after=2,interval=5`,
         5_000,

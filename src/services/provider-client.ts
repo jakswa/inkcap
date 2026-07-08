@@ -9,7 +9,7 @@
 // Request/response shapes follow docs/specs/completions.md. We intentionally
 // stay on the generic OpenAI-compatible subset by default. llama-server
 // reasoning knobs are only sent when the caller explicitly passes a reasoning
-// effort for a model discovered as reasoning-capable.
+// effort for a model the route/runner decided should expose thinking controls.
 
 import { assertSafeOutboundUrl } from '../utils/outbound-url'
 

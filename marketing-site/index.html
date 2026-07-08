@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>inkcap — a small, server-driven LLM chat web UI</title>
-  <meta name="description" content="inkcap is a self-hosted LLM chat web UI where the server owns the conversation: durable runs, SSE spectators, bring-your-own providers, and a message tree.">
+  <title>inkcap — server-driven LLM chat</title>
+  <meta name="description" content="inkcap is a self-hosted LLM chat UI where the server owns the conversation: durable runs, SSE spectators, server-side providers, MCP tools, and message branches.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -70,7 +70,7 @@
           </article>
           <article class="card">
             <h3>Bring your own providers</h3>
-            <p>llama-server, OpenAI-compatible endpoints, or your ChatGPT subscription via Codex sign-in. Keys live server-side and never reach the browser.</p>
+            <p>llama-server, OpenAI-compatible endpoints, or your ChatGPT subscription via Codex device-code sign-in. Keys live server-side and never reach the browser.</p>
           </article>
           <article class="card">
             <h3>Messages are a tree</h3>
@@ -104,13 +104,18 @@
 
       <section aria-label="Quick start">
         <p class="eyebrow">quick start</p>
-        <h2 class="section-title">Postgres, Bun, four commands.</h2>
+        <h2 class="section-title">A Docker image, your Postgres, then register.</h2>
         <div class="prose">
-          <pre><code>bun install
-cp .env.example .env.local   <span class="cmt"># DATABASE_URL, SESSION_SECRET</span>
-bun run db:migrate
-bun run dev                  <span class="cmt"># http://localhost:3000 — register first</span></code></pre>
-          <p>Then add a provider and start chatting. The full walkthrough — providers, ChatGPT sign-in, importing llama.cpp web UI history, and production Docker deploys — lives in <a href="getting-started.html">Getting started</a>.</p>
+          <pre><code>docker run -d --name inkcap --restart unless-stopped \
+  -p 3000:3000 \
+  --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap \
+  -e SESSION_SECRET="$(openssl rand -base64 32)" \
+  -e REGISTRATION=open \
+  -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal \
+  ghcr.io/jakswa/inkcap:latest \
+  sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
+          <p>Open <code>http://localhost:3000</code>, register, add a provider, and chat. Prefer source checkout, Docker Compose-ish setup, or production-hardening notes? See <a href="getting-started.html">Getting started</a>.</p>
         </div>
       </section>
     </main>

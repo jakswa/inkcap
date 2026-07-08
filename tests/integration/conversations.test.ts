@@ -131,10 +131,10 @@ describe('conversations chat loop', () => {
       models: [model],
       modelMetadata: {
         [model]: {
-          capabilities: ['text', 'reasoning'],
-          reasoning: true,
+          capabilities: ['completion'],
+          reasoning: false,
           contextSize: null,
-          source: 'test',
+          source: 'llama-server /v1/models',
         },
       },
       enabled: true,

@@ -28,12 +28,6 @@ describe('mcp-client', () => {
     expect(tools.map((t) => t.name).sort()).toEqual(['echo', 'ping'])
   })
 
-  test('testMcpConnection succeeds and reports tools', async () => {
-    const result = await testMcpConnection(config(stub.url))
-    expect(result.ok).toBe(true)
-    if (result.ok) expect(result.tools.length).toBe(2)
-  })
-
   test('testMcpConnection reports a failure for an unreachable server', async () => {
     const result = await testMcpConnection(
       config('http://127.0.0.1:1/mcp', { request_timeout_ms: 1000 }),

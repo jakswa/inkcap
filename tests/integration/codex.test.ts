@@ -597,7 +597,7 @@ describe('codex connect flow', () => {
 
   test('double-submitting the poll completes once and creates one provider', async () => {
     const { headers } = await authHeadersFor()
-    const issuer = issuerStub({ tokenDelayMs: 250 })
+    const issuer = issuerStub({ tokenDelayMs: 100 })
     const backend = codexBackendStub()
     const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
     const name = `codex-double-${randomUUIDv7()}`

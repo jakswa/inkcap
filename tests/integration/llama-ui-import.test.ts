@@ -106,6 +106,18 @@ describe('import-llama-ui CLI: tree shape lands correctly in Postgres', () => {
       const contents = children.map((c) => c.content).sort()
       expect(contents[0]).toContain('borrow checker rejects this at compile time')
       expect(contents[1]).toContain('E0515')
+
+      // Re-importing the same UUID-id conversation is skipped, not duplicated.
+      const second = await runImportTask([path, '--user', user.email])
+      expect(second.exitCode).toBe(0)
+      const [{ count: conversationCount }] = await sql`
+        SELECT count(*)::int AS count FROM conversations WHERE id = ${id}
+      `
+      expect(conversationCount).toBe(1)
+      const [{ count: messageCount }] = await sql`
+        SELECT count(*)::int AS count FROM messages WHERE conversation_id = ${id}
+      `
+      expect(messageCount).toBe(4)
     } finally {
       rmSync(path, { force: true })
     }
@@ -177,31 +189,6 @@ describe('import-llama-ui CLI: lenient parsing', () => {
 })
 
 describe('import-llama-ui CLI: idempotency', () => {
-  test('re-importing the same UUID-id conversation is skipped, not duplicated', async () => {
-    const user = await makeUser()
-    const { path, id } = materializeWithFreshId('rust-ownership.jsonl')
-
-    try {
-      const first = await runImportTask([path, '--user', user.email])
-      expect(first.exitCode).toBe(0)
-
-      const second = await runImportTask([path, '--user', user.email])
-      expect(second.exitCode).toBe(0)
-
-      const [{ count }] = await sql`
-        SELECT count(*)::int AS count FROM conversations WHERE id = ${id}
-      `
-      expect(count).toBe(1)
-
-      const [{ count: messageCount }] = await sql`
-        SELECT count(*)::int AS count FROM messages WHERE conversation_id = ${id}
-      `
-      expect(messageCount).toBe(4) // not doubled by the second (skipped) import
-    } finally {
-      rmSync(path, { force: true })
-    }
-  })
-
   test('a non-UUID-shaped source id falls back to (user, title, created_at) matching', async () => {
     const user = await makeUser()
     const title = `Fallback dedupe ${randomUUIDv7()}`

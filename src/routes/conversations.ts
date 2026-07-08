@@ -43,7 +43,7 @@ import {
 } from '../services/runner'
 import { readString } from '../utils/validation'
 import { uniqueModels } from '../utils/providers'
-import { toRenderable } from '../utils/message-view'
+import { toRenderable, toolCallsFor } from '../utils/message-view'
 import { relativeTime } from '../utils/relative-time'
 import {
   findLeafByLastChild,
@@ -69,6 +69,8 @@ type PathMessage = {
   reasoning_content: string | null
   model: string | null
   status: string | null
+  tool_calls: unknown
+  tool_call_id: string | null
   created_at: Date | null
 }
 
@@ -101,13 +103,18 @@ async function filterOwnedMcpServerIds(userId: string, ids: string[]) {
 }
 
 function modelSupportsReasoning(
-  provider: { default_model: string | null; model_metadata?: unknown } | null,
+  provider: { kind?: string | null; default_model: string | null; model_metadata?: unknown } | null,
   model: string | null,
 ): boolean {
-  const metadata = provider?.model_metadata
-  if (!metadata || typeof metadata !== 'object') return false
   const selected = model || provider?.default_model
   if (!selected) return false
+  // llama-server's /v1/models often reports only "completion" even when the
+  // chat template accepts enable_thinking/thinking_budget_tokens. For that
+  // provider kind, show the control and let the explicit budget keep Qwen-style
+  // thinking bounded. Keep generic OpenAI-compatible endpoints metadata-gated.
+  if (provider?.kind === 'llama-server') return true
+  const metadata = provider?.model_metadata
+  if (!metadata || typeof metadata !== 'object') return false
   const info = (metadata as Record<string, { reasoning?: unknown }>)[selected]
   return info?.reasoning === true
 }
@@ -128,15 +135,6 @@ function uniqueProviders<T extends { id: string }>(providers: T[]): T[] {
     seen.add(provider.id)
     return true
   })
-}
-
-function providerModelCapabilities(provider: { model_metadata?: unknown } | null) {
-  const metadata = provider?.model_metadata
-  if (!metadata || typeof metadata !== 'object') return {}
-  return metadata as Record<
-    string,
-    { capabilities?: string[]; reasoning?: boolean; contextSize?: number | null }
-  >
 }
 
 const providerModelSeparator = ':'
@@ -164,6 +162,7 @@ function modelControlData(input: {
     name: string
     default_model: string | null
     models: string[] | null
+    kind?: string | null
     model_metadata?: unknown
   }>
   selectedProviderId?: string | null
@@ -184,14 +183,13 @@ function modelControlData(input: {
       ...(provider.default_model ? [provider.default_model] : []),
       ...(provider.models ?? []),
     ])
-    const capabilities = providerModelCapabilities(provider)
     return {
       id: provider.id,
       name: provider.name,
       defaultModel: provider.default_model,
       models: models.map((model) => ({
         name: model,
-        reasoning: capabilities[model]?.reasoning === true,
+        reasoning: modelSupportsReasoning(provider, model),
       })),
     }
   })
@@ -303,21 +301,49 @@ async function renderShow(
     }
   }
 
+  // Tool calls are stored on the assistant turn; tool results are separate
+  // role='tool' messages keyed by tool_call_id. For the transcript, decorate
+  // each result with its call name/args and only show assistant-side call chips
+  // for calls that are still waiting on a result (transient live feedback).
+  const resolvedToolCallIds = new Set(
+    path
+      .filter((message) => message.role === 'tool' && message.tool_call_id)
+      .map((message) => message.tool_call_id!),
+  )
+  const toolCallById = new Map(
+    path
+      .flatMap((message) => toolCallsFor(message).filter((call) => call.id))
+      .map((call) => [call.id!, call] as const),
+  )
+
   // Attach sibling-navigation metadata (M7) to each message on the active
   // path: where a message has siblings (siblingNav.total > 1) the transcript
   // renders a "‹ i/n ›" switcher. Computed here (not in toRenderable) because
   // it needs a DB lookup the runner's message-final render doesn't do.
   const messages = await Promise.all(
-    path.map(async (message) => ({
-      ...toRenderable(message),
-      siblingNav: message.id
-        ? await siblingNavFor({
-            conversationId: conversation.id,
-            parentId: message.parent_id,
-            messageId: message.id,
-          })
-        : null,
-    })),
+    path.map(async (message) => {
+      const pendingToolCalls =
+        message.role === 'assistant'
+          ? toolCallsFor(message).filter((call) => !call.id || !resolvedToolCallIds.has(call.id))
+          : undefined
+      return {
+        ...toRenderable({
+          ...message,
+          ...(pendingToolCalls ? { toolCalls: pendingToolCalls } : {}),
+          toolCall:
+            message.role === 'tool' && message.tool_call_id
+              ? toolCallById.get(message.tool_call_id) ?? null
+              : null,
+        }),
+        siblingNav: message.id
+          ? await siblingNavFor({
+              conversationId: conversation.id,
+              parentId: message.parent_id,
+              messageId: message.id,
+            })
+          : null,
+      }
+    }),
   )
 
   c.header('Cache-Control', 'private, no-store')

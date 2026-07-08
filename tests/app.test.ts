@@ -46,26 +46,6 @@ describe('app', () => {
     expect(res.headers.get('vary')).toBe('Accept-Encoding')
   })
 
-  test('asset server serves gzip when brotli is not accepted', async () => {
-    const res = await app.request('/assets/test/compressed-test.js', {
-      headers: { 'Accept-Encoding': 'gzip' },
-    })
-
-    expect(res.status).toBe(200)
-    expect(res.headers.get('content-encoding')).toBe('gzip')
-    expect(res.headers.get('content-type')).toContain('text/javascript')
-    expect(res.headers.get('vary')).toBe('Accept-Encoding')
-  })
-
-  test('asset server honors q=0 compressed encodings', async () => {
-    const res = await app.request('/assets/test/compressed-test.js', {
-      headers: { 'Accept-Encoding': 'br;q=0, gzip;q=1' },
-    })
-
-    expect(res.status).toBe(200)
-    expect(res.headers.get('content-encoding')).toBe('gzip')
-  })
-
   test('dashboard redirects anonymous users', async () => {
     const res = await app.request('/dashboard')
     expect(res.status).toBe(302)

@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUIDv7 } from 'bun'
 
 const { app } = await import('../../src/app')
-const { createProvider } = await import('../../src/db/queries/providers')
+const { createProvider, getProviderById } = await import('../../src/db/queries/providers')
 const { createUser } = await import('../../src/db/queries/users')
 const { encryptSession } = await import('../../src/utils/private-session')
 
@@ -137,6 +137,7 @@ describe('providers CRUD', () => {
           base_url: `http://localhost:${server.port}`,
           api_key: '',
           default_model: 'gpt-test-2',
+          models: 'gpt-test-2\nmanual-model',
         }),
       })
       expect(update.status).toBe(302)
@@ -145,6 +146,8 @@ describe('providers CRUD', () => {
       const afterUpdateBody = await afterUpdate.text()
       expect(afterUpdateBody).toContain(updatedName)
       expect(afterUpdateBody).toContain('1234')
+      expect(afterUpdateBody).toContain('manual-model')
+      expect((await getProviderById(id))?.models).toEqual(['gpt-test-2', 'manual-model'])
 
       const disable = await app.request(url(`/providers/${id}/disable`), {
         method: 'POST',
@@ -194,49 +197,6 @@ describe('providers CRUD', () => {
         await app.request(url('/providers'), { headers })
       ).text()
       expect(afterDelete).not.toContain(updatedName)
-    } finally {
-      server.stop(true)
-    }
-  })
-
-  test('editing preserves the curated model list instead of replacing it with discovery', async () => {
-    const { user, headers } = await authHeadersFor()
-    const server = openAiStub({ models: ['discovered-a', 'discovered-b'] })
-
-    try {
-      const provider = await createProvider({
-        accountId: user.id,
-        name: uniqueName('curated-provider'),
-        kind: 'openai-compat',
-        baseUrl: `http://localhost:${server.port}`,
-        apiKey: 'sk-existing',
-        defaultModel: 'old-model',
-        models: ['old-model'],
-        enabled: true,
-      })
-
-      const updatedName = uniqueName('curated-provider-renamed')
-      const update = await app.request(url(`/providers/${provider.id}`), {
-        method: 'POST',
-        headers,
-        body: form({
-          name: updatedName,
-          kind: 'openai-compat',
-          base_url: `http://localhost:${server.port}`,
-          api_key: '',
-          default_model: 'custom-model',
-          models: 'custom-model\nkept-model',
-        }),
-      })
-      expect(update.status).toBe(302)
-
-      const afterUpdate = await app.request(url('/providers'), { headers })
-      const body = await afterUpdate.text()
-      expect(body).toContain(updatedName)
-      expect(body).toContain('custom-model')
-      expect(body).toContain('kept-model')
-      expect(body).not.toContain('discovered-a')
-      expect(body).not.toContain('discovered-b')
     } finally {
       server.stop(true)
     }

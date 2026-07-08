@@ -41,13 +41,14 @@ function normalizeReasoningEffort(value: string) {
 }
 
 function modelSupportsReasoning(
-  provider: { default_model: string | null; model_metadata?: unknown } | null,
+  provider: { kind?: string | null; default_model: string | null; model_metadata?: unknown } | null,
   model: string | null,
 ) {
-  const metadata = provider?.model_metadata
-  if (!metadata || typeof metadata !== 'object') return false
   const selected = model || provider?.default_model
   if (!selected) return false
+  if (provider?.kind === 'llama-server') return true
+  const metadata = provider?.model_metadata
+  if (!metadata || typeof metadata !== 'object') return false
   const info = (metadata as Record<string, { reasoning?: unknown }>)[selected]
   return info?.reasoning === true
 }

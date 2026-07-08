@@ -23,6 +23,9 @@
   document.documentElement.classList.add('js');
 
   var es = null; // active EventSource, if any
+  var statusTimer = null;
+  var streamOpenedAt = 0;
+  var sawOutput = false;
   var pinned = true; // stick to the newest tokens unless the user scrolls up
 
   function root() {
@@ -69,7 +72,35 @@
     if (strip) strip.classList.toggle('hidden', !text);
   }
 
+  function stopStatusTimer() {
+    if (statusTimer) {
+      clearInterval(statusTimer);
+      statusTimer = null;
+    }
+  }
+
+  function startWaitingStatus() {
+    stopStatusTimer();
+    streamOpenedAt = Date.now();
+    sawOutput = false;
+    var update = function () {
+      if (sawOutput) return;
+      var seconds = Math.floor((Date.now() - streamOpenedAt) / 1000);
+      setStatus(seconds > 0 ? 'Waiting for model… ' + seconds + 's' : 'Waiting for model…');
+    };
+    update();
+    statusTimer = setInterval(update, 1000);
+  }
+
+  function markOutputStarted() {
+    if (sawOutput) return;
+    sawOutput = true;
+    stopStatusTimer();
+    setStatus('Generating…');
+  }
+
   function closeStream() {
+    stopStatusTimer();
     if (es) {
       es.close();
       es = null;
@@ -78,12 +109,35 @@
 
   var seen = {}; // messageId -> already cleared the SSR partial before rebuild
 
+  function collapseResolvedToolCall(finalNode) {
+    if (!finalNode || finalNode.getAttribute('data-role') !== 'tool') return;
+    var id = finalNode.getAttribute('data-tool-call-id');
+    if (!id) return;
+    var r = root();
+    if (!r) return;
+    var allChips = r.querySelectorAll('[data-tool-call-host] [data-tool-call-id]');
+    for (var i = 0; i < allChips.length; i++) {
+      if (allChips[i].getAttribute('data-tool-call-id') !== id) continue;
+      var host = allChips[i].closest('[data-tool-call-host]');
+      allChips[i].remove();
+      if (!host) continue;
+      var stillPending = host.querySelector('[data-tool-call-id]');
+      var content = host.querySelector('[data-content]');
+      var reasoning = host.querySelector('[data-reasoning]');
+      var hasText =
+        (content && content.textContent.trim() !== '') ||
+        (reasoning && reasoning.textContent.trim() !== '');
+      if (!stillPending && !hasText) host.classList.add('hidden');
+    }
+  }
+
   function openStream() {
     var r = root();
     if (!r || !r.hasAttribute('data-active')) return;
     closeStream();
     seen = {};
     es = new EventSource(r.getAttribute('data-events'));
+    startWaitingStatus();
 
     // Mid-run message creation (M6 tool loop): tool results and follow-up
     // assistant turns are born while we watch. Drop a streaming placeholder
@@ -122,6 +176,7 @@
       }
       var c = node.querySelector('[data-content]');
       var rz = node.querySelector('[data-reasoning]');
+      if (d.content || d.reasoning) markOutputStarted();
       if (d.content && c) c.textContent += d.content;
       if (d.reasoning && rz) rz.textContent += d.reasoning;
       if (pinned) scrollToBottom();
@@ -137,6 +192,7 @@
         var t = root() && root().querySelector('[data-transcript]');
         if (t) t.insertAdjacentHTML('beforeend', d.html);
       }
+      collapseResolvedToolCall(find(d.messageId));
       if (pinned) scrollToBottom();
     });
 
@@ -155,7 +211,7 @@
           return res.text();
         })
         .then(function (html) {
-          swap(html);
+          swap(html, { preserveComposer: true });
           if (after) setStatus(after);
         })
         .catch(function () {
@@ -179,7 +235,9 @@
       .then(function (res) {
         return res.text();
       })
-      .then(swap)
+      .then(function (html) {
+        swap(html, { preserveComposer: false });
+      })
       .catch(function () {
         if (btn) btn.disabled = false;
       });
@@ -247,6 +305,52 @@
     menu.open = false;
   }
 
+  function snapshotComposerState(container) {
+    var state = [];
+    if (!container) return state;
+    var fields = container.querySelectorAll('textarea[name], select[name], input[name]');
+    for (var i = 0; i < fields.length; i++) {
+      var field = fields[i];
+      var type = (field.getAttribute('type') || field.tagName || '').toLowerCase();
+      if (type === 'hidden' || type === 'submit' || type === 'button') continue;
+      if (type === 'radio') {
+        if (field.checked) state.push({ kind: 'radio', name: field.name, value: field.value });
+      } else if (type === 'checkbox') {
+        state.push({ kind: 'checkbox', name: field.name, value: field.value, checked: field.checked });
+      } else {
+        state.push({ kind: 'value', name: field.name, value: field.value });
+      }
+    }
+    return state;
+  }
+
+  function restoreComposerState(container, state) {
+    if (!container || !state || state.length === 0) return;
+    var fields = container.querySelectorAll('textarea[name], select[name], input[name]');
+    for (var i = 0; i < state.length; i++) {
+      var item = state[i];
+      for (var j = 0; j < fields.length; j++) {
+        var field = fields[j];
+        var type = (field.getAttribute('type') || field.tagName || '').toLowerCase();
+        if (field.name !== item.name) continue;
+        if (item.kind === 'radio' && type === 'radio' && field.value === item.value) {
+          field.checked = true;
+          break;
+        }
+        if (item.kind === 'checkbox' && type === 'checkbox' && field.value === item.value) {
+          field.checked = !!item.checked;
+          break;
+        }
+        if (item.kind === 'value' && type !== 'hidden' && type !== 'radio' && type !== 'checkbox') {
+          field.value = item.value;
+          break;
+        }
+      }
+    }
+    var box = container.querySelector('input[name="enabled_mcp_server_id"]');
+    if (box) updateToolsCountFrom(box);
+  }
+
   function syncStatsToggle(button) {
     var root = button.closest('[data-stats-toggle]');
     if (!root) return;
@@ -309,7 +413,7 @@
 
   // Replace #chat with the server's fresh render, then re-attach behavior and
   // re-open the live tail if a run is now active.
-  function swap(html) {
+  function swap(html, options) {
     var doc = new DOMParser().parseFromString(html, 'text/html');
     var fresh = doc.getElementById('chat');
     var cur = root();
@@ -317,8 +421,13 @@
       location.reload();
       return;
     }
+    var shouldPreserveComposer = !options || options.preserveComposer !== false;
+    var oldState = shouldPreserveComposer
+      ? snapshotComposerState(cur.querySelector('[data-controls]'))
+      : [];
     closeStream();
     cur.replaceWith(fresh);
+    if (shouldPreserveComposer) restoreComposerState(fresh.querySelector('[data-controls]'), oldState);
     init();
     pinned = true;
     scrollToBottom();
@@ -467,7 +576,12 @@
     var input = r.querySelector('[data-composer-input]');
     if (input) autosize(input);
     var model = r.querySelector('[data-model-radio]:checked, [data-model-select]:not([data-model-radio])');
-    if (model) syncReasoningControl(model);
+    if (model) {
+      syncModelState(model);
+      syncReasoningControl(model);
+    }
+    var reasoning = r.querySelector('[data-reasoning-radio]:checked');
+    if (reasoning) syncReasoningState(reasoning);
     openStream();
   }
 

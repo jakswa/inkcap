@@ -23,8 +23,13 @@ import { renderMarkdown } from './markdown'
 interface MessageFields {
   role?: string | null
   content?: string | null
+  reasoning_content?: string | null
   status?: string | null
   timings?: unknown
+  tool_calls?: unknown
+  toolCall?: ToolCallView | null
+  toolCalls?: ToolCallView[]
+  hideMessage?: boolean
 }
 
 export interface MessageStats {
@@ -45,12 +50,23 @@ export interface ArtifactLink {
   downloadHref: string
 }
 
+export interface ToolCallView {
+  id: string | null
+  name: string
+  arguments: string
+  icon: string
+  tone: 'artifact' | 'search' | 'file' | 'shell' | 'database' | 'web' | 'generic'
+}
+
 export interface RenderableExtras {
   contentHtml: string | null
   stats: MessageStats | null
   timingLabel: string | null
   clipContent: string
   artifactLinks: ArtifactLink[]
+  toolCalls: ToolCallView[]
+  toolCall: ToolCallView | null
+  hideMessage: boolean
 }
 
 // llama.cpp / OpenAI-compatible timings block (see mock-provider finishChunk):
@@ -130,6 +146,72 @@ function artifactLinksFor(message: MessageFields): ArtifactLink[] {
   ]
 }
 
+function prettyToolArguments(raw: unknown): string {
+  if (typeof raw !== 'string') return '{}'
+  try {
+    return JSON.stringify(JSON.parse(raw), null, 2)
+  } catch {
+    return raw
+  }
+}
+
+export function toolDecorationFor(name: string): Pick<ToolCallView, 'icon' | 'tone'> {
+  const normalized = name.toLowerCase().replace(/[-:.]/g, '_')
+  if (normalized.includes('artifact')) return { icon: 'sparkles', tone: 'artifact' }
+  if (/\b(search|grep|find|lookup|query_web)\b/.test(normalized)) {
+    return { icon: 'search', tone: 'search' }
+  }
+  if (/\b(file|read|write|edit|patch|list|ls|open)\b/.test(normalized)) {
+    return { icon: 'file', tone: 'file' }
+  }
+  if (/\b(bash|shell|terminal|exec|command|run)\b/.test(normalized)) {
+    return { icon: 'terminal', tone: 'shell' }
+  }
+  if (/\b(sql|db|database|postgres|sqlite)\b/.test(normalized)) {
+    return { icon: 'database', tone: 'database' }
+  }
+  if (/\b(web|url|fetch|http|browser|visit)\b/.test(normalized)) {
+    return { icon: 'globe', tone: 'web' }
+  }
+  return { icon: 'wrench', tone: 'generic' }
+}
+
+export function toolCallViewFor(input: {
+  id?: string | null
+  name: string
+  arguments?: unknown
+}): ToolCallView {
+  return {
+    id: input.id ?? null,
+    name: input.name,
+    arguments: prettyToolArguments(input.arguments),
+    ...toolDecorationFor(input.name),
+  }
+}
+
+export function toolCallsFor(message: MessageFields): ToolCallView[] {
+  if (message.role !== 'assistant' || !Array.isArray(message.tool_calls)) return []
+  return message.tool_calls
+    .map((call): ToolCallView | null => {
+      if (!call || typeof call !== 'object') return null
+      const record = call as Record<string, unknown>
+      const fn = record['function']
+      const functionRecord =
+        fn && typeof fn === 'object' ? (fn as Record<string, unknown>) : null
+      const name =
+        functionRecord && typeof functionRecord['name'] === 'string'
+          ? functionRecord['name'].trim()
+          : ''
+      if (!name) return null
+      return toolCallViewFor({
+        id: typeof record['id'] === 'string' ? record['id'] : null,
+        name,
+        arguments: functionRecord?.['arguments'],
+      })
+    })
+    .filter((call): call is ToolCallView => call !== null)
+}
+
 export function toRenderable<T extends MessageFields>(
   message: T,
 ): T & RenderableExtras {
@@ -138,6 +220,16 @@ export function toRenderable<T extends MessageFields>(
   const rendersMarkdown = role === 'assistant' || role === 'user'
   const hasActions = rendersMarkdown
   const stats = statsFor(message.timings)
+  const toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : toolCallsFor(message)
+  const hideMessage =
+    message.hideMessage === true ||
+    (role === 'assistant' &&
+      status !== 'streaming' &&
+      toolCalls.length === 0 &&
+      Array.isArray(message.tool_calls) &&
+      message.tool_calls.length > 0 &&
+      (message.content ?? '').trim().length === 0 &&
+      !message.reasoning_content)
   return {
     ...message,
     contentHtml:
@@ -148,5 +240,8 @@ export function toRenderable<T extends MessageFields>(
     timingLabel: timingLabelFor(stats),
     clipContent: hasActions ? clipContentFor(message.content) : '',
     artifactLinks: artifactLinksFor(message),
+    toolCalls,
+    toolCall: message.toolCall ?? null,
+    hideMessage,
   }
 }
