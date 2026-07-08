@@ -84,12 +84,65 @@ export async function listLoopsForUser(userId: string) {
            l.enabled, l.last_fired_at, l.next_fire_at, l.last_conversation_id,
            l.created_at, l.updated_at,
            p.name AS provider_name,
-           c.title AS last_conversation_title
+           c.title AS last_conversation_title,
+           last_run.status AS last_run_status,
+           last_run.error AS last_run_error,
+           COALESCE(stats.run_count, 0)::int AS run_count,
+           COALESCE(stats.artifact_count, 0)::int AS artifact_count
     FROM loops l
     JOIN account_memberships m ON m.account_id = l.account_id AND m.user_id = ${userId}
     LEFT JOIN providers p ON p.id = l.provider_id
     LEFT JOIN conversations c ON c.id = l.last_conversation_id
+    LEFT JOIN LATERAL (
+      SELECT r.status, r.error
+      FROM runs r
+      WHERE r.conversation_id = l.last_conversation_id
+      ORDER BY r.created_at DESC
+      LIMIT 1
+    ) last_run ON true
+    LEFT JOIN LATERAL (
+      SELECT count(DISTINCT lc.id) AS run_count,
+             count(DISTINCT a.id) AS artifact_count
+      FROM conversations lc
+      LEFT JOIN artifacts a ON a.conversation_id = lc.id
+      WHERE lc.routine_id = l.id
+    ) stats ON true
     ORDER BY l.created_at DESC
+  `
+}
+
+export async function listLoopRunHistory(input: {
+  loopId: string
+  userId: string
+  limit?: number
+}) {
+  return sql.ListLoopRunHistory`
+    SELECT c.id, c.title, c.created_at, c.updated_at,
+           r.id AS run_id, r.status AS run_status, r.error AS run_error,
+           r.created_at AS run_created_at, r.updated_at AS run_updated_at,
+           COALESCE(artifact_stats.artifact_count, 0)::int AS artifact_count,
+           artifact_stats.latest_artifact_id,
+           artifact_stats.latest_artifact_title
+    FROM conversations c
+    JOIN loops l ON l.id = c.routine_id
+    JOIN account_memberships m ON m.account_id = l.account_id AND m.user_id = ${input.userId}
+    LEFT JOIN LATERAL (
+      SELECT id, status, error, created_at, updated_at
+      FROM runs
+      WHERE conversation_id = c.id
+      ORDER BY created_at DESC
+      LIMIT 1
+    ) r ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS artifact_count,
+             (array_agg(id ORDER BY created_at DESC))[1] AS latest_artifact_id,
+             (array_agg(title ORDER BY created_at DESC))[1] AS latest_artifact_title
+      FROM artifacts
+      WHERE conversation_id = c.id
+    ) artifact_stats ON true
+    WHERE l.id = ${input.loopId}
+    ORDER BY c.created_at DESC
+    LIMIT ${input.limit ?? 20}
   `
 }
 

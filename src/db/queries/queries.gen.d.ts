@@ -44,6 +44,19 @@ export interface IListArtifactsForConversationResult {
     created_at: Date;
 }
 
+/** Result of query `GetLatestArtifactForConversation`. */
+export interface IGetLatestArtifactForConversationResult {
+    id: string;
+    account_id: string;
+    conversation_id: string;
+    run_id: string;
+    message_id: string | null;
+    kind: string;
+    title: string;
+    summary: string | null;
+    created_at: Date;
+}
+
 /** Result of query `CreateAttachment`. */
 export interface ICreateAttachmentResult {
     id: string;
@@ -273,6 +286,26 @@ export interface IListLoopsForUserResult {
     updated_at: Date;
     provider_name: string | null;
     last_conversation_title: string | null;
+    last_run_status: string | null;
+    last_run_error: string | null;
+    run_count: number | null;
+    artifact_count: number | null;
+}
+
+/** Result of query `ListLoopRunHistory`. */
+export interface IListLoopRunHistoryResult {
+    id: string;
+    title: string | null;
+    created_at: Date;
+    updated_at: Date;
+    run_id: string | null;
+    run_status: string | null;
+    run_error: string | null;
+    run_created_at: Date | null;
+    run_updated_at: Date | null;
+    artifact_count: number | null;
+    latest_artifact_id: string | null;
+    latest_artifact_title: string | null;
 }
 
 /** Result of query `SetLoopEnabled`. */
@@ -1033,6 +1066,7 @@ export interface Queries {
     CreateArtifact: ICreateArtifactResult;
     GetArtifactForUser: IGetArtifactForUserResult;
     ListArtifactsForConversation: IListArtifactsForConversationResult;
+    GetLatestArtifactForConversation: IGetLatestArtifactForConversationResult;
     CreateAttachment: ICreateAttachmentResult;
     ListAttachmentsForMessage: IListAttachmentsForMessageResult;
     CreateConversation: ICreateConversationResult;
@@ -1048,6 +1082,7 @@ export interface Queries {
     UpdateLoop: IUpdateLoopResult;
     GetLoopForUser: IGetLoopForUserResult;
     ListLoopsForUser: IListLoopsForUserResult;
+    ListLoopRunHistory: IListLoopRunHistoryResult;
     SetLoopEnabled: ISetLoopEnabledResult;
     DeleteLoop: IDeleteLoopResult;
     ListDueLoops: IListDueLoopsResult;

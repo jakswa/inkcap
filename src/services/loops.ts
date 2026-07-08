@@ -8,6 +8,7 @@ import {
   listLoopMcpServers,
   noteLoopFired,
 } from '../db/queries/loops'
+import { notifyLoopStartFailure } from './push'
 import { startRun } from './runner'
 
 export type LoopRow = NonNullable<Awaited<ReturnType<typeof claimDueLoop>>>
@@ -131,6 +132,12 @@ export async function tickLoops() {
         await fireLoop(claimed)
       } catch (error) {
         console.error(`loop ${claimed.id} failed to start`, error)
+        await notifyLoopStartFailure({
+          userId: claimed.user_id,
+          loopId: claimed.id,
+          loopName: claimed.name,
+          error,
+        })
       }
     }
   } finally {

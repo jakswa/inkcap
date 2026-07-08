@@ -1,4 +1,5 @@
 import * as webpush from 'web-push'
+import { getLatestArtifactForConversation } from '../db/queries/artifacts'
 import { getConversationById } from '../db/queries/conversations'
 import {
   deletePushSubscriptionByEndpoint,
@@ -77,23 +78,48 @@ export async function notifyLoopRunStatus(
   if (!conversation?.routine_id) return
 
   const origin = publicOrigin()
-  const path = `/conversations/${conversation.id}`
+  const latestArtifact =
+    status === 'done'
+      ? await getLatestArtifactForConversation({
+          conversationId: conversation.id,
+          userId: conversation.user_id,
+        })
+      : null
+  const path = latestArtifact ? `/artifacts/${latestArtifact.id}` : `/conversations/${conversation.id}`
   const title =
     status === 'done'
-      ? 'Loop finished'
+      ? latestArtifact
+        ? `Artifact ready: ${latestArtifact.title}`
+        : 'Loop finished'
       : status === 'waiting_approval'
         ? 'Loop needs approval'
         : 'Loop failed'
   const body =
     status === 'done'
-      ? conversation.title || 'Your scheduled loop is ready.'
+      ? latestArtifact?.summary || conversation.title || 'Your scheduled loop is ready.'
       : status === 'waiting_approval'
         ? 'A tool call is waiting for your approval.'
         : errorMessage || 'Open the chat to inspect the failed loop run.'
 
   await sendPushToUser(conversation.user_id, {
-    title,
-    body,
+    title: title.slice(0, 140),
+    body: body.slice(0, 240),
+    url: origin ? `${origin}${path}` : path,
+  })
+}
+
+export async function notifyLoopStartFailure(input: {
+  userId: string
+  loopId: string
+  loopName: string
+  error: unknown
+}) {
+  const origin = publicOrigin()
+  const path = `/loops/${input.loopId}`
+  const message = input.error instanceof Error ? input.error.message : String(input.error)
+  await sendPushToUser(input.userId, {
+    title: `Loop failed to start: ${input.loopName}`.slice(0, 140),
+    body: message.slice(0, 240),
     url: origin ? `${origin}${path}` : path,
   })
 }

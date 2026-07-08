@@ -50,7 +50,7 @@
     </div>
   </div>
 
-  <section class="card grid gap-4" data-push-settings data-vapid-public-key="<%= it.vapidPublicKey || '' %>">
+  <section id="notifications" class="card grid gap-4 scroll-mt-24" data-push-settings data-vapid-public-key="<%= it.vapidPublicKey || '' %>">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="text-xl font-bold">Notifications</h2>
@@ -58,6 +58,12 @@
       </div>
       <span class="chip"><%= it.pushSubscriptionCount %> device<%= it.pushSubscriptionCount === 1 ? '' : 's' %></span>
     </div>
+
+    <% if (it.pushTestSent) { %>
+      <div class="rounded-2xl border border-accent/30 bg-accent/10 p-4 text-sm text-accent" role="status">
+        <p class="mb-0">Test notification sent to every subscribed device.</p>
+      </div>
+    <% } %>
 
     <% if (!it.pushConfigured) { %>
       <div class="alert-danger" role="alert">
@@ -85,6 +91,11 @@
       <button class="btn btn-primary" type="button" data-push-enable <%= it.pushConfigured ? '' : 'disabled' %>>Enable notifications on this device</button>
       <button class="btn btn-ghost" type="button" data-push-disable>Disable on this device</button>
     </div>
+
+    <form method="post" action="/push/test" class="flex flex-wrap items-center gap-3 border-t border-edge pt-4">
+      <button class="btn btn-ghost" type="submit" <%= it.pushConfigured && it.pushSubscriptionCount > 0 ? '' : 'disabled' %>>Send test notification</button>
+      <p class="mb-0 text-xs text-ink-faint">Useful after installing to Home Screen or changing browser permissions.</p>
+    </form>
   </section>
 </section>
 

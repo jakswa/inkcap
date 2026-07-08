@@ -17,5 +17,6 @@ settingsRoutes.get('/settings', async (c) => {
     pushConfigured: pushConfigured(),
     vapidPublicKey: vapidPublicKey(),
     pushSubscriptionCount,
+    pushTestSent: c.req.query('push_test') === 'sent',
   })
 })

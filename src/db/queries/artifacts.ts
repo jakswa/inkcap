@@ -52,3 +52,19 @@ export async function listArtifactsForConversation(input: {
     ORDER BY a.created_at DESC
   `
 }
+
+export async function getLatestArtifactForConversation(input: {
+  conversationId: string
+  userId: string
+}) {
+  const [artifact] = await sql.GetLatestArtifactForConversation`
+    SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
+           a.kind, a.title, a.summary, a.created_at
+    FROM artifacts a
+    JOIN conversations c ON c.id = a.conversation_id
+    WHERE a.conversation_id = ${input.conversationId} AND c.user_id = ${input.userId}
+    ORDER BY a.created_at DESC
+    LIMIT 1
+  `
+  return artifact
+}

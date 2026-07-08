@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { deletePushSubscriptionByEndpoint, upsertPushSubscription } from '../db/queries/push-subscriptions'
+import { sendPushToUser } from '../services/push'
 
 export const pushRoutes = new Hono()
 
@@ -36,4 +37,16 @@ pushRoutes.post('/push/unsubscribe', async (c) => {
   const endpoint = typeof body?.endpoint === 'string' ? body.endpoint : ''
   if (endpoint) await deletePushSubscriptionByEndpoint({ userId: user.id, endpoint })
   return c.json({ ok: true })
+})
+
+pushRoutes.post('/push/test', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  await sendPushToUser(user.id, {
+    title: 'inkcap notifications are ready',
+    body: 'Loop updates will open the relevant chat or artifact.',
+    url: '/settings',
+  })
+  return c.redirect('/settings?push_test=sent')
 })

@@ -4,12 +4,14 @@ import {
   createLoop,
   deleteLoop,
   getLoopForUser,
+  listLoopRunHistory,
   listLoopsForUser,
   listMcpServersWithLoopSelection,
   replaceLoopMcpServers,
   setLoopEnabled,
   updateLoop,
 } from '../db/queries/loops'
+import { countPushSubscriptionsForUser } from '../db/queries/push-subscriptions'
 import { listMcpServersForUser } from '../db/queries/mcp-servers'
 import { getProviderForUser, listProvidersForUser } from '../db/queries/providers'
 import { fireLoop, defaultLoopTimezone, normalizeSchedule, validateLoopSchedule } from '../services/loops'
@@ -57,10 +59,18 @@ async function filterOwnedMcpServerIds(userId: string, ids: string[]) {
 
 async function renderList(c: Context) {
   const user = requireUser(c)!
-  const loops = await listLoopsForUser(user.id)
+  const [loops, pushSubscriptionCount] = await Promise.all([
+    listLoopsForUser(user.id),
+    countPushSubscriptionsForUser(user.id),
+  ])
+  const error = c.req.query('error') ?? null
+  const notice = c.req.query('notice') ?? null
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('loops/index', {
     title: 'Loops',
+    error,
+    notice,
+    pushSubscriptionCount,
     loops: loops.map((loop) => ({
       ...loop,
       lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
@@ -222,6 +232,33 @@ loopRoutes.get('/loops/:id/edit', async (c) => {
   return renderForm(c, { mode: 'edit', loop })
 })
 
+loopRoutes.get('/loops/:id', async (c) => {
+  const user = requireUser(c)
+  if (!user) return c.redirect('/login')
+  const loop = await getLoopForUser({ id: c.req.param('id'), userId: user.id })
+  if (!loop) return c.notFound()
+  const [history, pushSubscriptionCount] = await Promise.all([
+    listLoopRunHistory({ loopId: loop.id, userId: user.id, limit: 30 }),
+    countPushSubscriptionsForUser(user.id),
+  ])
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('loops/show', {
+    title: loop.name,
+    error: c.req.query('error') ?? null,
+    loop: {
+      ...loop,
+      lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
+      nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+    },
+    history: history.map((run) => ({
+      ...run,
+      createdLabel: relativeTime(run.created_at),
+      updatedLabel: run.run_updated_at ? relativeTime(run.run_updated_at) : relativeTime(run.updated_at),
+    })),
+    pushSubscriptionCount,
+  })
+})
+
 loopRoutes.post('/loops/:id', async (c) => {
   const user = requireUser(c)
   if (!user) return c.redirect('/login')
@@ -255,8 +292,12 @@ loopRoutes.post('/loops/:id/toggle', async (c) => {
   } catch {
     nextFireAt = null
   }
+  if (enabled && !nextFireAt) {
+    const message = encodeURIComponent('This loop needs a valid schedule before it can be enabled.')
+    return c.redirect(`/loops?error=${message}`)
+  }
   await setLoopEnabled({ id: loop.id, userId: user.id, enabled, nextFireAt })
-  return c.redirect('/loops')
+  return c.redirect(`/loops?notice=${encodeURIComponent(enabled ? 'Loop enabled.' : 'Loop disabled.')}`)
 })
 
 loopRoutes.post('/loops/:id/run', async (c) => {
@@ -269,7 +310,7 @@ loopRoutes.post('/loops/:id/run', async (c) => {
     return c.redirect(`/conversations/${conversation.id}`)
   } catch (error) {
     const message = encodeURIComponent(error instanceof Error ? error.message : String(error))
-    return c.redirect(`/loops?error=${message}`)
+    return c.redirect(`/loops/${loop.id}?error=${message}`)
   }
 })
 
