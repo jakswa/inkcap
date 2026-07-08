@@ -7,7 +7,7 @@
     <% } %>
     <div class="flex flex-wrap gap-2 text-sm">
       <a class="btn btn-ghost" href="/conversations/<%= it.artifact.conversation_id %>">Open source chat</a>
-      <a class="btn btn-ghost" href="/artifacts/<%= it.artifact.id %>.md">Download Markdown</a>
+      <a class="btn btn-ghost" href="/artifacts/<%= it.artifact.id %>/download">Download Markdown</a>
     </div>
   </header>
 
