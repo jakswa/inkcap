@@ -269,8 +269,12 @@ providerRoutes.post('/providers', async (c) => {
 
 const defaultCodexName = 'ChatGPT Codex'
 
+function testOnlyHeader(c: Context, name: string) {
+  return process.env['NODE_ENV'] === 'test' ? c.req.header(name) : undefined
+}
+
 function appOrigin(c: Context) {
-  return publicOrigin() ?? new URL(c.req.url).origin
+  return testOnlyHeader(c, 'x-inkcap-test-public-origin') ?? publicOrigin() ?? new URL(c.req.url).origin
 }
 
 // Login completion for a NEW codex provider: persist the token bundle first
@@ -282,12 +286,13 @@ async function connectCodexProvider(
   accountId: string,
   name: string,
   credentials: CodexOauthCredentials,
+  baseUrl = codexDefaultBaseUrl(),
 ) {
   const provider = await createProvider({
     accountId,
     name,
     kind: 'openai-codex',
-    baseUrl: codexDefaultBaseUrl(),
+    baseUrl,
     oauthCredentials: credentials,
     enabled: true,
   })
@@ -345,6 +350,7 @@ function renderCodexDeviceLogin(
 async function startCodexDeviceProviderLogin(c: Context, options: {
   ownerUserId: string
   returnTo: string
+  authIssuer?: string
   complete: (credentials: CodexOauthCredentials) => Promise<string>
 }) {
   const login = await startCodexDeviceLogin(options)
@@ -371,13 +377,16 @@ providerRoutes.post('/providers/codex/connect', async (c) => {
   const name = (readString(form, 'name').trim() || defaultCodexName).slice(0, maxNameLength)
   const returnTo = `${appOrigin(c)}/providers`
   const accountId = user.id
+  const baseUrl = testOnlyHeader(c, 'x-inkcap-test-codex-base-url') ?? codexDefaultBaseUrl()
+  const authIssuer = testOnlyHeader(c, 'x-inkcap-test-codex-auth-issuer')
 
   try {
     return await startCodexDeviceProviderLogin(c, {
       ownerUserId: user.id,
       returnTo,
+      authIssuer,
       complete: async (credentials) => {
-        await connectCodexProvider(accountId, name, credentials)
+        await connectCodexProvider(accountId, name, credentials, baseUrl)
         return returnTo
       },
     })
@@ -394,12 +403,15 @@ providerRoutes.post('/providers/codex/connect/localhost', async (c) => {
   const name = (readString(form, 'name').trim() || defaultCodexName).slice(0, maxNameLength)
   const returnTo = `${appOrigin(c)}/providers`
   const accountId = user.id
+  const baseUrl = testOnlyHeader(c, 'x-inkcap-test-codex-base-url') ?? codexDefaultBaseUrl()
+  const authIssuer = testOnlyHeader(c, 'x-inkcap-test-codex-auth-issuer')
 
   try {
     const { authorizeUrl } = startCodexLoopbackLogin({
       returnTo,
+      authIssuer,
       complete: async (credentials) => {
-        await connectCodexProvider(accountId, name, credentials)
+        await connectCodexProvider(accountId, name, credentials, baseUrl)
         return returnTo
       },
     })

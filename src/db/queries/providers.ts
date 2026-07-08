@@ -35,6 +35,9 @@ export interface CodexOauthCredentials {
   refresh_token: string
   account_id: string | null
   last_refresh: string
+  // Captured when a provider is connected. Production defaults to OpenAI;
+  // tests/captive QA can use a stub issuer without racing process.env.
+  auth_issuer?: string
 }
 
 export type ModelCapability = string

@@ -49,13 +49,13 @@ function sessionFor(user: { id: string; name: string; email: string; created_at:
 // A minimal OpenAI-compatible stub that streams one fixed reply (M3 rewired
 // send to the durable runner, which always requests `stream: true`).
 const stubReply = 'Hello from the stub assistant.'
-let lastRequestBody: unknown = null
+const capturedRequestBodies: unknown[] = []
 const stub = Bun.serve({
   port: 0,
   async fetch(req) {
     const path = new URL(req.url).pathname
     if (path === '/v1/chat/completions') {
-      lastRequestBody = await req.json()
+      capturedRequestBodies.push(await req.json())
       const body = [
         `data: ${JSON.stringify({ model: 'stub-model', choices: [{ delta: { content: stubReply } }] })}\n\n`,
         `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`,
@@ -93,6 +93,12 @@ async function waitForRunSettled(conversationId: string) {
     const run = await getLatestRunForConversation(conversationId)
     return run && run.status !== 'running' ? run : null
   })
+}
+
+function lastRequestBodyForModel(model: string) {
+  return [...capturedRequestBodies]
+    .reverse()
+    .find((body) => (body as { model?: string }).model === model)
 }
 
 async function createConversationViaForm(
@@ -189,13 +195,15 @@ describe('conversations chat loop', () => {
   test('existing-chat composer can switch to another provider model', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
+    const firstModel = `first-model-${randomUUIDv7()}`
+    const secondModel = `second-model-${randomUUIDv7()}`
     const first = await createProvider({
       accountId: user.id,
       name: `first-chat-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
-      defaultModel: 'first-model',
-      models: ['first-model'],
+      defaultModel: firstModel,
+      models: [firstModel],
       enabled: true,
     })
     const second = await createProvider({
@@ -203,20 +211,20 @@ describe('conversations chat loop', () => {
       name: `second-chat-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
-      defaultModel: 'second-model',
-      models: ['second-model'],
+      defaultModel: secondModel,
+      models: [secondModel],
       enabled: true,
     })
     const conversationId = await createConversationViaForm(cookie, first.id, {
-      model: 'first-model',
+      model: firstModel,
     })
 
     const show = await app.request(url(`/conversations/${conversationId}`), {
       headers: { Cookie: cookie },
     })
     const html = await show.text()
-    expect(html).toContain('first-model')
-    expect(html).toContain('second-model')
+    expect(html).toContain(firstModel)
+    expect(html).toContain(secondModel)
     expect(html).toContain(second.name)
 
     const send = await app.request(url(`/conversations/${conversationId}/messages`), {
@@ -224,7 +232,7 @@ describe('conversations chat loop', () => {
       headers: { Cookie: cookie, Origin: origin },
       body: form({
         content: 'switch providers',
-        providerModel: `${second.id}:${encodeURIComponent('second-model')}`,
+        providerModel: `${second.id}:${encodeURIComponent(secondModel)}`,
       }),
     })
     expect(send.status).toBe(302)
@@ -232,24 +240,28 @@ describe('conversations chat loop', () => {
 
     const conversation = await getConversationById(conversationId)
     expect(conversation?.provider_id).toBe(second.id)
-    expect(conversation?.model).toBe('second-model')
-    expect((lastRequestBody as { model?: string }).model).toBe('second-model')
+    expect(conversation?.model).toBe(secondModel)
+    expect((lastRequestBodyForModel(secondModel) as { model?: string }).model).toBe(secondModel)
   })
 
   test('send delivers a reply, advances curr_node, and renders the transcript', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)
+    const model = `stub-model-${randomUUIDv7()}`
+    const systemPrompt = `You are a terse assistant (${randomUUIDv7()}).`
     const provider = await createProvider({
       accountId: user.id,
       name: `stub-${randomUUIDv7()}`,
       kind: 'openai-compat',
       baseUrl: stubBaseUrl,
-      defaultModel: 'stub-model',
+      defaultModel: model,
+      models: [model],
       enabled: true,
     })
 
     const conversationId = await createConversationViaForm(cookie, provider.id, {
-      systemPrompt: 'You are a terse assistant.',
+      model,
+      systemPrompt,
     })
 
     const send = await app.request(url(`/conversations/${conversationId}/messages`), {
@@ -277,8 +289,15 @@ describe('conversations chat loop', () => {
     expect(conversation?.curr_node).toBe(path[2]?.id ?? null)
 
     // Request the stub received carried the mapped active-path messages.
-    expect((lastRequestBody as { stream?: boolean }).stream).toBe(true)
-    expect((lastRequestBody as { messages?: Array<{ role: string }> }).messages?.map((m) => m.role)).toEqual([
+    const requestBody = [...capturedRequestBodies]
+      .reverse()
+      .find((body) =>
+        (body as { messages?: Array<{ content: string }> }).messages?.some(
+          (message) => message.content === systemPrompt,
+        ),
+      ) as { stream?: boolean; messages?: Array<{ role: string }> }
+    expect(requestBody.stream).toBe(true)
+    expect(requestBody.messages?.map((m) => m.role)).toEqual([
       'system',
       'user',
     ])

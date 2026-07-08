@@ -57,6 +57,10 @@ function issuer() {
   return process.env['CODEX_AUTH_ISSUER'] ?? 'https://auth.openai.com'
 }
 
+function issuerFromCredentials(credentials: CodexOauthCredentials) {
+  return credentials.auth_issuer ?? issuer()
+}
+
 function callbackPort() {
   const raw = process.env['CODEX_OAUTH_PORT']
   const port = Number(raw)
@@ -153,8 +157,8 @@ interface TokenResponse {
   error_description?: string
 }
 
-async function postTokenEndpoint(body: URLSearchParams): Promise<TokenResponse> {
-  const response = await fetch(`${issuer()}/oauth/token`, {
+async function postTokenEndpoint(body: URLSearchParams, authIssuer = issuer()): Promise<TokenResponse> {
+  const response = await fetch(`${authIssuer}/oauth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: body.toString(),
@@ -177,6 +181,7 @@ async function postTokenEndpoint(body: URLSearchParams): Promise<TokenResponse> 
 function credentialsFromTokenResponse(
   data: TokenResponse,
   previous?: CodexOauthCredentials | null,
+  authIssuer = previous?.auth_issuer ?? issuer(),
 ): CodexOauthCredentials {
   const idToken = data.id_token ?? previous?.id_token ?? null
   return {
@@ -189,6 +194,7 @@ function credentialsFromTokenResponse(
       previous?.account_id ??
       null,
     last_refresh: new Date().toISOString(),
+    auth_issuer: authIssuer,
   }
 }
 
@@ -197,6 +203,7 @@ function credentialsFromTokenResponse(
 interface PendingLogin {
   state: string
   verifier: string
+  authIssuer: string
   createdAt: number
   // Where to send the browser when something goes wrong (the app's /providers).
   returnTo: string
@@ -211,6 +218,7 @@ let loopbackServer: ReturnType<typeof Bun.serve> | null = null
 interface PendingDeviceLogin {
   id: string
   ownerUserId: string
+  authIssuer: string
   deviceAuthId: string
   userCode: string
   verificationUri: string
@@ -323,8 +331,9 @@ async function completeCodexLoginCallback(url: URL): Promise<string> {
           client_id: CODEX_CLIENT_ID,
           code_verifier: pending.verifier,
         }),
+        pending.authIssuer,
       )
-      return await pending.complete(credentialsFromTokenResponse(tokens))
+      return await pending.complete(credentialsFromTokenResponse(tokens, undefined, pending.authIssuer))
     } catch (error) {
       throw new CodexCallbackError(error instanceof Error ? error.message : String(error), pending.returnTo)
     }
@@ -369,6 +378,7 @@ function ensureLoopbackServer() {
 // servers can finish by accepting a pasted localhost callback URL.
 export function startCodexLoopbackLogin(options: {
   returnTo: string
+  authIssuer?: string
   complete: (credentials: CodexOauthCredentials) => Promise<string>
 }): { authorizeUrl: string } {
   sweepExpiredLogins()
@@ -385,10 +395,12 @@ export function startCodexLoopbackLogin(options: {
   const verifier = base64url(randomBytes(32))
   const challenge = base64url(createHash('sha256').update(verifier).digest())
   const state = base64url(randomBytes(24))
+  const authIssuer = options.authIssuer ?? issuer()
 
   pendingLogins.set(state, {
     state,
     verifier,
+    authIssuer,
     createdAt: Date.now(),
     returnTo: options.returnTo,
     complete: options.complete,
@@ -408,7 +420,7 @@ export function startCodexLoopbackLogin(options: {
     codex_cli_simplified_flow: 'true',
     originator: 'codex_cli_rs',
   })
-  return { authorizeUrl: `${issuer()}/oauth/authorize?${params.toString()}` }
+  return { authorizeUrl: `${authIssuer}/oauth/authorize?${params.toString()}` }
 }
 
 interface DeviceUserCodeResponse {
@@ -423,16 +435,16 @@ interface DeviceTokenResponse {
   error?: unknown
 }
 
-function deviceVerificationUri() {
-  return `${issuer()}${DEVICE_VERIFICATION_PATH}`
+function deviceVerificationUri(authIssuer: string) {
+  return `${authIssuer}${DEVICE_VERIFICATION_PATH}`
 }
 
-function deviceRedirectUri() {
-  return `${issuer()}${DEVICE_REDIRECT_PATH}`
+function deviceRedirectUri(authIssuer: string) {
+  return `${authIssuer}${DEVICE_REDIRECT_PATH}`
 }
 
-async function postDeviceUserCode(): Promise<{ deviceAuthId: string; userCode: string; intervalMs: number }> {
-  const response = await fetch(`${issuer()}${DEVICE_USER_CODE_PATH}`, {
+async function postDeviceUserCode(authIssuer: string): Promise<{ deviceAuthId: string; userCode: string; intervalMs: number }> {
+  const response = await fetch(`${authIssuer}${DEVICE_USER_CODE_PATH}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: CODEX_CLIENT_ID }),
@@ -466,18 +478,21 @@ async function postDeviceUserCode(): Promise<{ deviceAuthId: string; userCode: s
 export async function startCodexDeviceLogin(options: {
   ownerUserId: string
   returnTo: string
+  authIssuer?: string
   complete: (credentials: CodexOauthCredentials) => Promise<string>
 }): Promise<CodexDeviceLoginView> {
   sweepExpiredLogins()
-  const device = await postDeviceUserCode()
+  const authIssuer = options.authIssuer ?? issuer()
+  const device = await postDeviceUserCode(authIssuer)
   const id = base64url(randomBytes(24))
   const now = Date.now()
   const login: PendingDeviceLogin = {
     id,
     ownerUserId: options.ownerUserId,
+    authIssuer,
     deviceAuthId: device.deviceAuthId,
     userCode: device.userCode,
-    verificationUri: deviceVerificationUri(),
+    verificationUri: deviceVerificationUri(authIssuer),
     intervalMs: device.intervalMs,
     nextPollAt: now,
     createdAt: now,
@@ -544,7 +559,7 @@ async function pollDeviceLoginUpstream(login: PendingDeviceLogin): Promise<Codex
   let response: Response
   let text: string
   try {
-    response = await fetch(`${issuer()}${DEVICE_TOKEN_PATH}`, {
+    response = await fetch(`${login.authIssuer}${DEVICE_TOKEN_PATH}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_auth_id: login.deviceAuthId, user_code: login.userCode }),
@@ -580,12 +595,13 @@ async function pollDeviceLoginUpstream(login: PendingDeviceLogin): Promise<Codex
         new URLSearchParams({
           grant_type: 'authorization_code',
           code: data.authorization_code,
-          redirect_uri: deviceRedirectUri(),
+          redirect_uri: deviceRedirectUri(login.authIssuer),
           client_id: CODEX_CLIENT_ID,
           code_verifier: data.code_verifier,
         }),
+        login.authIssuer,
       )
-      const redirectTo = await login.complete(credentialsFromTokenResponse(tokens))
+      const redirectTo = await login.complete(credentialsFromTokenResponse(tokens, undefined, login.authIssuer))
       pendingDeviceLogins.delete(login.id)
       return { status: 'complete', redirectTo }
     } catch (error) {
@@ -659,6 +675,7 @@ async function refreshCredentials(
           refresh_token: credentials.refresh_token,
           client_id: CODEX_CLIENT_ID,
         }),
+        issuerFromCredentials(credentials),
       )
     } catch (error) {
       throw new Error(
@@ -667,7 +684,7 @@ async function refreshCredentials(
         })`,
       )
     }
-    const rotated = credentialsFromTokenResponse(tokens, credentials)
+    const rotated = credentialsFromTokenResponse(tokens, credentials, issuerFromCredentials(credentials))
     await updateProviderOauthCredentials({ id: providerId, oauthCredentials: rotated })
     return rotated
   })()

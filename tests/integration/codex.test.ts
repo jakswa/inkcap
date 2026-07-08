@@ -71,6 +71,17 @@ async function authHeadersFor() {
   return { user, headers: { Cookie: sessionFor(user), Origin: origin } }
 }
 
+function codexStubHeaders(
+  headers: Record<string, string>,
+  options: { issuer?: string; baseUrl?: string },
+) {
+  return {
+    ...headers,
+    ...(options.issuer ? { 'x-inkcap-test-codex-auth-issuer': options.issuer } : {}),
+    ...(options.baseUrl ? { 'x-inkcap-test-codex-base-url': options.baseUrl } : {}),
+  }
+}
+
 // Unsigned JWT with the claim block the account-id extraction reads. Only the
 // payload is ever decoded — no signature verification happens client-side.
 function fakeJwt(claims: Record<string, unknown>) {
@@ -252,7 +263,7 @@ function issuerStub(options: {
   return { server, tokenRequests, deviceTokenRequests, issuer: `http://localhost:${server.port}` }
 }
 
-async function createCodexProvider(baseUrl: string, accessToken: string, accountId?: string) {
+async function createCodexProvider(baseUrl: string, accessToken: string, accountId?: string, authIssuer?: string) {
   return createProvider({
     accountId: accountId ?? (await makeUser()).id,
     name: `codex-${randomUUIDv7()}`,
@@ -266,6 +277,7 @@ async function createCodexProvider(baseUrl: string, accessToken: string, account
       refresh_token: 'refresh-token-0',
       account_id: 'acct-test-123',
       last_refresh: new Date().toISOString(),
+      ...(authIssuer ? { auth_issuer: authIssuer } : {}),
     },
     enabled: true,
   })
@@ -421,9 +433,8 @@ describe('codex streaming', () => {
   test('refreshes an expired token proactively and persists the rotation', async () => {
     const issuer = issuerStub()
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
     try {
-      const provider = await createCodexProvider(backend.baseUrl, fakeAccessToken(-60 * 1000))
+      const provider = await createCodexProvider(backend.baseUrl, fakeAccessToken(-60 * 1000), undefined, issuer.issuer)
       const deltas = await collect(
         streamChat(
           { id: provider.id, kind: provider.kind, base_url: provider.base_url, api_key: null },
@@ -442,7 +453,6 @@ describe('codex streaming', () => {
       expect(credentials.access_token).not.toBe(provider.oauth_credentials!.access_token)
       expect(issuer.tokenRequests[0]!['grant_type']).toBe('refresh_token')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
       backend.server.stop(true)
     }
@@ -455,9 +465,8 @@ describe('codex streaming', () => {
     // never collide with this rejected one.
     const badToken = fakeAccessToken(45 * 60 * 1000)
     const backend = codexBackendStub({ rejectTokens: new Set([badToken]) })
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
     try {
-      const provider = await createCodexProvider(backend.baseUrl, badToken)
+      const provider = await createCodexProvider(backend.baseUrl, badToken, undefined, issuer.issuer)
       const deltas = await collect(
         streamChat(
           { id: provider.id, kind: provider.kind, base_url: provider.base_url, api_key: null },
@@ -468,7 +477,6 @@ describe('codex streaming', () => {
       expect(contentOf(deltas)).toBe('Hello from codex!')
       expect(issuer.tokenRequests.length).toBe(1)
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
       backend.server.stop(true)
     }
@@ -480,13 +488,12 @@ describe('codex connect flow', () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
-    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
     const name = `codex-connect-${randomUUIDv7()}`
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name }),
       })
       // POST-redirect-GET: the code page lives at a stable GET URL.
@@ -532,11 +539,8 @@ describe('codex connect flow', () => {
       expect(listBody).not.toContain('hidden-model')
       expect(listBody).not.toContain('refresh-token-0')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
-      delete process.env['CODEX_BASE_URL']
       issuer.server.stop(true)
       backend.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -545,11 +549,11 @@ describe('codex connect flow', () => {
     const issuer = issuerStub({
       deviceToken: () => Response.json({ error: { code: 'access_denied' } }, { status: 403 }),
     })
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer })
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name: `codex-denied-${randomUUIDv7()}` }),
       })
       expect(start.status).toBe(303)
@@ -564,9 +568,7 @@ describe('codex connect flow', () => {
       expect(again.status).toBe(400)
       expect(await again.text()).toContain('expired or was already used')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -575,11 +577,11 @@ describe('codex connect flow', () => {
     const issuer = issuerStub({
       deviceToken: () => Response.json({ error: { code: 'deviceauth_authorization_pending' } }, { status: 403 }),
     })
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer })
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name: `codex-pending-${randomUUIDv7()}` }),
       })
       const devicePath = start.headers.get('location')!
@@ -589,9 +591,7 @@ describe('codex connect flow', () => {
       expect(body).toContain('Waiting for you to finish sign-in')
       expect(body).toContain('ABCD-EFGH')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -599,13 +599,12 @@ describe('codex connect flow', () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub({ tokenDelayMs: 250 })
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
-    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
     const name = `codex-double-${randomUUIDv7()}`
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name }),
       })
       const pollUrl = url(`${start.headers.get('location')!}/poll`)
@@ -625,22 +624,19 @@ describe('codex connect flow', () => {
       const listBody = await list.text()
       expect(listBody.split(name).length - 1).toBe(1)
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
-      delete process.env['CODEX_BASE_URL']
       issuer.server.stop(true)
       backend.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
   test('a network failure while polling keeps the sign-in alive', async () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer })
     try {
       const start = await app.request(url('/providers/codex/connect'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name: `codex-blip-${randomUUIDv7()}` }),
       })
       const devicePath = start.headers.get('location')!
@@ -654,9 +650,7 @@ describe('codex connect flow', () => {
       // The login (and the code the user already entered) survives the blip.
       expect(body).toContain('ABCD-EFGH')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -664,13 +658,12 @@ describe('codex connect flow', () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
-    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
     const name = `codex-connect-${randomUUIDv7()}`
     try {
       const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name }),
       })
       expect(start.status).toBe(302)
@@ -702,11 +695,8 @@ describe('codex connect flow', () => {
       expect(listBody).not.toContain('hidden-model')
       expect(listBody).not.toContain('refresh-token-0')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
-      delete process.env['CODEX_BASE_URL']
       issuer.server.stop(true)
       backend.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -714,13 +704,12 @@ describe('codex connect flow', () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
-    process.env['CODEX_BASE_URL'] = backend.baseUrl
+    const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
     const name = `codex-remote-${randomUUIDv7()}`
     try {
       const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
-        headers,
+        headers: startHeaders,
         body: form({ name }),
       })
       expect(start.status).toBe(302)
@@ -750,11 +739,8 @@ describe('codex connect flow', () => {
       expect(listBody).toContain(name)
       expect(listBody).toContain('ChatGPT OAuth: connected')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
-      delete process.env['CODEX_BASE_URL']
       issuer.server.stop(true)
       backend.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
@@ -778,11 +764,11 @@ describe('codex connect flow', () => {
     const { headers } = await authHeadersFor()
     const issuer = issuerStub()
     const backend = codexBackendStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
-    process.env['CODEX_BASE_URL'] = backend.baseUrl
-    process.env['PUBLIC_ORIGIN'] = 'https://chat.home.jake.town/'
     try {
-      const lanHeaders = { ...headers, Origin: 'http://192.168.1.160' }
+      const lanHeaders = codexStubHeaders(
+        { ...headers, Origin: 'http://192.168.1.160', 'x-inkcap-test-public-origin': 'https://chat.home.jake.town' },
+        { issuer: issuer.issuer, baseUrl: backend.baseUrl },
+      )
       const start = await app.request('http://192.168.1.160/providers/codex/connect/localhost', {
         method: 'POST',
         headers: lanHeaders,
@@ -801,22 +787,18 @@ describe('codex connect flow', () => {
       expect(pasted.status).toBe(302)
       expect(pasted.headers.get('location')).toBe('https://chat.home.jake.town/providers')
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
-      delete process.env['CODEX_BASE_URL']
-      delete process.env['PUBLIC_ORIGIN']
       issuer.server.stop(true)
       backend.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 
   test('a callback with an unknown state fails without creating anything', async () => {
     const issuer = issuerStub()
-    process.env['CODEX_AUTH_ISSUER'] = issuer.issuer
     try {
+      const { headers } = await authHeadersFor()
       const start = await app.request(url('/providers/codex/connect/localhost'), {
         method: 'POST',
-        headers: (await authHeadersFor()).headers,
+        headers: codexStubHeaders(headers, { issuer: issuer.issuer }),
         body: form({ name: `codex-badstate-${randomUUIDv7()}` }),
       })
       expect(start.status).toBe(302)
@@ -828,9 +810,7 @@ describe('codex connect flow', () => {
       expect(await callback.text()).toContain('expired or was already used')
       expect(issuer.tokenRequests.length).toBe(0)
     } finally {
-      delete process.env['CODEX_AUTH_ISSUER']
       issuer.server.stop(true)
-      resetCodexLoginStateForTests()
     }
   })
 

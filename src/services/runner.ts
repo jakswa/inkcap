@@ -804,7 +804,11 @@ export async function startRun(
     // Gather the tools exposed to the model for this conversation (connecting to
     // each enabled MCP server, best-effort). Empty when no server is enabled —
     // the request then carries no `tools` and the run behaves exactly as M3.
-    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
+    // Loop-created conversations also get inkcap's private artifact tool.
+    const { servers, tools, toolIndex } = await buildToolContext(
+      conversationId,
+      conversation.routine_id != null,
+    )
 
     const ctx: RunContext = {
       provider: {
@@ -836,12 +840,12 @@ export async function startRun(
 // Connect to the conversation's enabled MCP servers and collect the OpenAI
 // tool definitions + a name→server routing index. Best-effort (one dead server
 // never blocks the others); returns empty when nothing is enabled.
-async function buildToolContext(conversationId: string): Promise<{
+async function buildToolContext(conversationId: string, includeInternalTools = false): Promise<{
   servers: McpServerConfig[]
   tools: OpenAiTool[]
   toolIndex: Map<string, string>
 }> {
-  const internalTools = [SUBMIT_ARTIFACT_TOOL]
+  const internalTools = includeInternalTools ? [SUBMIT_ARTIFACT_TOOL] : []
   const rows = await listEnabledMcpServersForConversation(conversationId)
   const servers: McpServerConfig[] = rows.map((row) => ({
     id: row.id!,
@@ -871,7 +875,19 @@ export async function resumeParkedRun(
   options: { stallTimeoutMs?: number; maxTurns?: number } = {},
 ) {
   if (activeRuns.has(conversationId)) {
-    throw new Error('A reply is already streaming for this conversation.')
+    // The detached driver flips the durable row to waiting_approval just
+    // before its finally{} removes the in-memory handle. A form submit can hit
+    // that tiny window; trust the durable parked state and clear the stale
+    // reservation instead of surfacing a spurious "already streaming" error.
+    const run = await getLatestRunForConversation(conversationId)
+    if (run?.status === 'waiting_approval') {
+      for (let i = 0; i < 20 && activeRuns.has(conversationId); i += 1) {
+        await Bun.sleep(1)
+      }
+      if (activeRuns.has(conversationId)) activeRuns.delete(conversationId)
+    } else {
+      throw new Error('A reply is already streaming for this conversation.')
+    }
   }
   const handle: RunHandle = {
     runId: '',
@@ -922,7 +938,10 @@ export async function resumeParkedRun(
     // fresh process after a restart.
     const path = await getActivePath(run.leaf_message_id)
     const history = toChatMessages(path as PathRow[])
-    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
+    const { servers, tools, toolIndex } = await buildToolContext(
+      conversationId,
+      conversation.routine_id != null,
+    )
 
     await setRunStatus({ id: run.id, status: 'running', error: null })
     await emitEvent(run.id, 'run-status', { status: 'running', error: null })

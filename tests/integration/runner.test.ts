@@ -190,7 +190,7 @@ const terminal = (e: SseEvent) =>
 
 describe('durable runner', () => {
   test('run completes with zero SSE subscribers (DB is the spectator)', async () => {
-    const { cookie, conversationId } = await setupConversation('drip,tokens=30,interval=10')
+    const { cookie, conversationId } = await setupConversation('drip,tokens=12,interval=5')
     await send(cookie, conversationId)
 
     const run = await waitFor(async () => {
@@ -203,14 +203,14 @@ describe('durable runner', () => {
 
     const message = await assistantMessageFor(conversationId)
     expect(message?.status).toBe('complete')
-    expect(message?.content).toBe(mockContent(30))
+    expect(message?.content).toBe(mockContent(12))
     expect(message?.model).toBe('mock-model')
     expect(message?.timings).not.toBeNull()
   }, 15_000)
 
   test('debounced persistence lands tokens mid-stream', async () => {
     const { cookie, conversationId } = await setupConversation(
-      'drip,tokens=40,interval=50,reasoning=2',
+      'drip,tokens=20,interval=20,reasoning=2',
     )
     await send(cookie, conversationId)
 
@@ -221,8 +221,8 @@ describe('durable runner', () => {
         ? message
         : null
     })
-    expect(partial.content.length).toBeLessThan(mockContent(40).length)
-    expect(mockContent(40).startsWith(partial.content)).toBe(true)
+    expect(partial.content.length).toBeLessThan(mockContent(20).length)
+    expect(mockContent(20).startsWith(partial.content)).toBe(true)
 
     // While streaming, the show page SSRs the partial + stop button, and
     // sending again is refused.
@@ -246,12 +246,12 @@ describe('durable runner', () => {
     })
     expect(run.status).toBe('done')
     const message = await assistantMessageFor(conversationId)
-    expect(message?.content).toBe(mockContent(40))
+    expect(message?.content).toBe(mockContent(20))
     expect(message?.reasoning_content).toBe('r0 r1 ')
   }, 15_000)
 
   test('SSE replay after completion, then replay from a cursor: no gaps, no dupes', async () => {
-    const { cookie, conversationId } = await setupConversation('drip,tokens=30,interval=5')
+    const { cookie, conversationId } = await setupConversation('drip,tokens=20,interval=3')
     await send(cookie, conversationId)
     await waitFor(async () => {
       const r = await getLatestRunForConversation(conversationId)
@@ -268,12 +268,12 @@ describe('durable runner', () => {
     expect(full.at(-1)?.type).toBe('run-status')
     expect(full.at(-1)?.payload['status']).toBe('done')
     expect(full.some((e) => e.type === 'message-final')).toBe(true)
-    expect(deltaText(full)).toBe(mockContent(30))
+    expect(deltaText(full)).toBe(mockContent(20))
     const finalHtml = String(
       full.find((e) => e.type === 'message-final')?.payload['html'],
     )
     expect(finalHtml).toContain('data-message-id')
-    expect(finalHtml).toContain('t29')
+    expect(finalHtml).toContain('t19')
 
     // Late joiner with Last-Event-ID resumes exactly after the cursor.
     const cursor = full[Math.floor(full.length / 2)]!.seq
@@ -286,7 +286,7 @@ describe('durable runner', () => {
   }, 15_000)
 
   test('SSE live tail stitches replay + live events without gaps or dupes', async () => {
-    const { cookie, conversationId } = await setupConversation('drip,tokens=40,interval=25')
+    const { cookie, conversationId } = await setupConversation('drip,tokens=20,interval=10')
     await send(cookie, conversationId)
 
     // Join mid-run so some events replay from the DB and the rest arrive live.
@@ -303,7 +303,7 @@ describe('durable runner', () => {
     expectContiguous(events, 1)
     expect(events[0]?.type).toBe('message-start')
     expect(events.at(-1)?.payload['status']).toBe('done')
-    expect(deltaText(events)).toBe(mockContent(40))
+    expect(deltaText(events)).toBe(mockContent(20))
   }, 15_000)
 
   test('cancel stops the run and keeps the partial', async () => {

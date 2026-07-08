@@ -1,4 +1,4 @@
 [test]
 onlyFailures = true
-concurrentTestGlob = "*"
+concurrentTestGlob = "**/*"
 preload = ["./tests/setup.ts"]
