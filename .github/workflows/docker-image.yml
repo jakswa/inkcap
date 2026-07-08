@@ -1,0 +1,32 @@
+name: Docker image
+
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          build-args: |
+            ASSET_VERSION=${{ github.sha }}
+          tags: inkcap:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
