@@ -22,7 +22,7 @@ export async function createArtifact(input: {
       ${input.summary ?? null}, ${input.bodyMarkdown}
     )
     RETURNING id, account_id, conversation_id, run_id, message_id,
-              kind, title, summary, body_markdown,
+              kind, title, summary, body_markdown, share_description,
               public_shared_at, public_share_expires_at, created_at
   `
   return artifact
@@ -31,7 +31,7 @@ export async function createArtifact(input: {
 export async function getArtifactForUser(input: { id: string; userId: string }) {
   const [artifact] = await sql.GetArtifactForUser`
     SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-           a.kind, a.title, a.summary, a.body_markdown,
+           a.kind, a.title, a.summary, a.body_markdown, a.share_description,
            a.public_shared_at, a.public_share_expires_at, a.created_at,
            c.title AS conversation_title
     FROM artifacts a
@@ -44,7 +44,7 @@ export async function getArtifactForUser(input: { id: string; userId: string }) 
 export async function getPublicArtifactById(id: string) {
   const [artifact] = await sql.GetPublicArtifactById`
     SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-           a.kind, a.title, a.summary, a.body_markdown,
+           a.kind, a.title, a.summary, a.body_markdown, a.share_description,
            a.public_shared_at, a.public_share_expires_at, a.created_at,
            c.title AS conversation_title
     FROM artifacts a
@@ -70,7 +70,7 @@ export async function setArtifactPublicShare(input: {
       AND a.id = ${input.id}
       AND c.user_id = ${input.userId}
     RETURNING a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-              a.kind, a.title, a.summary, a.body_markdown,
+              a.kind, a.title, a.summary, a.body_markdown, a.share_description,
               a.public_shared_at, a.public_share_expires_at, a.created_at
   `
   return artifact
@@ -96,7 +96,7 @@ export async function listArtifactsForConversation(input: {
 }) {
   return sql.ListArtifactsForConversation`
     SELECT a.id, a.account_id, a.conversation_id, a.run_id, a.message_id,
-           a.kind, a.title, a.summary, a.body_markdown,
+           a.kind, a.title, a.summary, a.body_markdown, a.share_description,
            a.public_shared_at, a.public_share_expires_at, a.created_at
     FROM artifacts a
     JOIN conversations c ON c.id = a.conversation_id

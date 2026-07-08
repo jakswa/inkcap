@@ -60,6 +60,25 @@ function publicShareActive(artifact: {
   )
 }
 
+function artifactKindLabel(kind: string | null | undefined) {
+  const label = (kind || 'artifact').trim().toLowerCase()
+  return label || 'artifact'
+}
+
+function shareTitle(artifact: { title: string; kind?: string | null }) {
+  return `inkcap ${artifactKindLabel(artifact.kind)}: ${artifact.title}`.slice(0, 160)
+}
+
+function shareDescription(artifact: {
+  share_description?: string | null
+  kind?: string | null
+}) {
+  const decorated = artifact.share_description?.trim()
+  if (decorated) return decorated.slice(0, 300)
+  const kind = artifactKindLabel(artifact.kind)
+  return `A ${kind} artifact shared from inkcap.`
+}
+
 async function artifactForRequest(c: Context) {
   const id = artifactIdFromParam(c.req.param('id'))
   if (!id) return { notFound: true as const }
@@ -130,10 +149,18 @@ artifactRoutes.get('/artifacts/:id', async (c) => {
 
   const artifact = result.artifact
   c.header('Cache-Control', 'private, no-store')
+  const canonicalUrl = shareUrl(c, artifact.id)
+  const description = shareDescription(artifact)
   return c.var.render('artifacts/show', {
     title: artifact.title,
+    metaDescription: description,
+    ogTitle: shareTitle(artifact),
+    ogDescription: description,
+    ogUrl: canonicalUrl,
+    ogType: 'article',
+    twitterCard: 'summary',
     owner: result.owner,
-    shareUrl: shareUrl(c, artifact.id),
+    shareUrl: canonicalUrl,
     sharedNotice: c.req.query('shared') === '1',
     unsharedNotice: c.req.query('unshared') === '1',
     artifact: {

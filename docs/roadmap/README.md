@@ -43,6 +43,12 @@ a regression — they're unbuilt.
   behaviour, and sampling knobs (`src/views/settings-content.eta`); nothing
   behind it exists — runs send no system prompt and no temperature/sampling
   controls. This is the llama-ui parity gap most visible to a daily user.
+- **AI decoration toggles.** Add settings for optional, budgeted secondary
+  inference runs that make the app nicer without changing the main answer:
+  generate chat names from initial messages, draft public artifact share
+  descriptions/OpenGraph copy, maybe pick notification titles. Track the public
+  artifact slice as `public-artifact-decoration`; schema has a nullable
+  `artifacts.share_description` ready for it, but no decoration worker/UI yet.
 
 ## Polish backlog (from v1 final integration, 2026-07-06)
 

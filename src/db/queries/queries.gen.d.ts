@@ -12,6 +12,7 @@ export interface ICreateArtifactResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    share_description: string | null;
     public_shared_at: Date | null;
     public_share_expires_at: Date | null;
     created_at: Date;
@@ -28,6 +29,7 @@ export interface IGetArtifactForUserResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    share_description: string | null;
     public_shared_at: Date | null;
     public_share_expires_at: Date | null;
     created_at: Date;
@@ -45,6 +47,7 @@ export interface IGetPublicArtifactByIdResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    share_description: string | null;
     public_shared_at: Date | null;
     public_share_expires_at: Date | null;
     created_at: Date;
@@ -62,6 +65,7 @@ export interface ISetArtifactPublicShareResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    share_description: string | null;
     public_shared_at: Date | null;
     public_share_expires_at: Date | null;
     created_at: Date;
@@ -85,6 +89,7 @@ export interface IListArtifactsForConversationResult {
     title: string;
     summary: string | null;
     body_markdown: string;
+    share_description: string | null;
     public_shared_at: Date | null;
     public_share_expires_at: Date | null;
     created_at: Date;

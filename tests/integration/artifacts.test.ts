@@ -86,6 +86,8 @@ describe('artifacts routes', () => {
     expect(page.status).toBe(200)
     const html = await page.text()
     expect(html).toContain('Daily Briefing')
+    expect(html).toContain('content="A briefing artifact shared from inkcap."')
+    expect(html).toContain('content="inkcap briefing: Daily Briefing"')
     expect(html).toContain(`/artifacts/${artifact.id}/download`)
     expect(html).toContain('download="daily-briefing.md"')
 

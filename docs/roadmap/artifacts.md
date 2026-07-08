@@ -63,8 +63,14 @@ Initial storage can be simple:
 ```
 artifacts  id, account_id, conversation_id, run_id, message_id nullable,
            kind, title, summary, body_markdown,
+           share_description nullable,
+           public_shared_at nullable, public_share_expires_at nullable,
            created_at
 ```
+
+`share_description` is intentionally decoration-only: future optional AI jobs
+can spend a few extra tokens to draft OpenGraph/meta copy for public artifacts
+without mutating the artifact summary/body that users read.
 
 Rendering:
 
