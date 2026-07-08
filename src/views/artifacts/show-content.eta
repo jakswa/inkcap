@@ -1,0 +1,16 @@
+<article class="mx-auto grid max-w-3xl gap-6">
+  <header class="grid gap-3 border-b border-edge pb-6">
+    <p class="eyebrow mb-0"><%= it.artifact.kind %> artifact</p>
+    <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight"><%= it.artifact.title %></h1>
+    <% if (it.artifact.summary) { %>
+      <p class="mb-0 text-lg text-ink-dim"><%= it.artifact.summary %></p>
+    <% } %>
+    <div class="flex flex-wrap gap-2 text-sm">
+      <a class="btn btn-ghost" href="/conversations/<%= it.artifact.conversation_id %>">Open source chat</a>
+    </div>
+  </header>
+
+  <div class="md">
+    <%~ it.artifact.bodyHtml %>
+  </div>
+</article>

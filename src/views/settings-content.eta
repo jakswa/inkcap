@@ -2,7 +2,7 @@
   <div class="max-w-3xl">
     <p class="eyebrow mb-3">Settings</p>
     <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">App controls live here now.</h1>
-    <p class="mt-4 text-ink-dim">Providers and MCP are still their own pages, but the top nav now treats them as settings instead of peer destinations with Chats.</p>
+    <p class="mt-4 text-ink-dim">Providers, tools, loops, and notification setup.</p>
   </div>
 
   <div class="grid gap-4 md:grid-cols-2">
@@ -23,7 +23,17 @@
         </span>
         <h2 class="text-lg font-bold">MCP servers</h2>
       </div>
-      <p class="mb-0 text-sm text-ink-dim">Register tool servers, then enable them per conversation from chat options.</p>
+      <p class="mb-0 text-sm text-ink-dim">Register tool servers, then enable them per conversation or loop.</p>
+    </a>
+
+    <a class="card grid gap-3 no-underline transition-colors hover:border-edge-strong" href="/loops">
+      <div class="flex items-center gap-3">
+        <span class="grid size-9 place-items-center rounded-xl bg-accent/15 text-accent">
+          <%~ include('./partials/icon', { name: 'clock', class: 'size-4' }) %>
+        </span>
+        <h2 class="text-lg font-bold">Loops</h2>
+      </div>
+      <p class="mb-0 text-sm text-ink-dim">Recurring prompt/tool runs with manual run, schedules, and unattended tool approvals.</p>
     </a>
 
     <div class="card grid gap-3 border-dashed opacity-80">
@@ -38,31 +48,44 @@
       </div>
       <p class="mb-0 text-sm text-ink-dim">System prompt presets, naming behavior, model knobs, and slow/local-LLM-friendly automation.</p>
     </div>
-
-    <div class="card grid gap-3 border-dashed opacity-80">
-      <div class="flex items-center gap-3">
-        <span class="grid size-9 place-items-center rounded-xl bg-ink/5 text-ink-dim">
-          <%~ include('./partials/icon', { name: 'clock', class: 'size-4' }) %>
-        </span>
-        <div class="min-w-0">
-          <h2 class="text-lg font-bold">Spells</h2>
-          <p class="mb-0 text-xs font-semibold tracking-wider text-ink-faint uppercase">Later</p>
-        </div>
-      </div>
-      <p class="mb-0 text-sm text-ink-dim">A future home for recurring prompt/tool loops alongside Chats. Name bikeshed intentionally unresolved.</p>
-    </div>
-
-    <div class="card grid gap-3 border-dashed opacity-80 md:col-span-2">
-      <div class="flex items-center gap-3">
-        <span class="grid size-9 place-items-center rounded-xl bg-ink/5 text-ink-dim">
-          <%~ include('./partials/icon', { name: 'shield', class: 'size-4' }) %>
-        </span>
-        <div class="min-w-0">
-          <h2 class="text-lg font-bold">Profile & notifications</h2>
-          <p class="mb-0 text-xs font-semibold tracking-wider text-ink-faint uppercase">Coming soon</p>
-        </div>
-      </div>
-      <p class="mb-0 text-sm text-ink-dim">Account details, notification preferences, and session/security controls can land here without crowding chat.</p>
-    </div>
   </div>
+
+  <section class="card grid gap-4" data-push-settings data-vapid-public-key="<%= it.vapidPublicKey || '' %>">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-bold">Notifications</h2>
+        <p class="mb-0 text-sm text-ink-dim">Loop notifications open the finished chat for now. Artifact-specific notification targets can come later.</p>
+      </div>
+      <span class="chip"><%= it.pushSubscriptionCount %> device<%= it.pushSubscriptionCount === 1 ? '' : 's' %></span>
+    </div>
+
+    <% if (!it.pushConfigured) { %>
+      <div class="alert-danger" role="alert">
+        <p class="mb-0">Push is not configured on this server. Set <code>VAPID_PUBLIC_KEY</code> and <code>VAPID_PRIVATE_KEY</code> (generate with <code>npx web-push generate-vapid-keys</code> or <code>bunx web-push generate-vapid-keys</code>).</p>
+      </div>
+    <% } %>
+
+    <div class="hidden rounded-2xl border border-warn/30 bg-warn/10 p-4" data-ios-install>
+      <h3 class="font-bold">iPhone/iPad setup: install inkcap first</h3>
+      <ol class="mt-2 grid list-decimal gap-1 pl-5 text-sm text-ink-dim">
+        <li>Open this page in Safari.</li>
+        <li>Tap Share.</li>
+        <li>Tap <strong>Add to Home Screen</strong>.</li>
+        <li>Open inkcap from the new Home Screen icon and log in again.</li>
+        <li>Come back here and press Enable notifications.</li>
+      </ol>
+      <p class="mb-0 mt-2 text-xs text-ink-faint">iOS only allows Web Push for installed Home Screen web apps.</p>
+    </div>
+
+    <div class="grid gap-2 text-sm text-ink-dim" data-push-status>
+      <p class="mb-0">Status: <span data-push-status-text>Checking browser support…</span></p>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="button" data-push-enable <%= it.pushConfigured ? '' : 'disabled' %>>Enable notifications on this device</button>
+      <button class="btn btn-ghost" type="button" data-push-disable>Disable on this device</button>
+    </div>
+  </section>
 </section>
+
+<script src="/assets/<%= it.assetVersion %>/notifications.js" defer></script>

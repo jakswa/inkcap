@@ -1,5 +1,6 @@
 <% const currentPath = it.currentPath || '' %>
 <% const inChats = currentPath === '/conversations' || currentPath.startsWith('/conversations/') %>
+<% const inLoops = currentPath === '/loops' || currentPath.startsWith('/loops/') %>
 <% const inSettings = currentPath === '/settings' || currentPath.startsWith('/providers') || currentPath.startsWith('/mcp-servers') %>
 <% const navClass = (active) => `rounded-lg px-3 py-1.5 text-sm font-medium no-underline transition-colors ${active ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink'}` %>
 <header class="z-10 shrink-0 border-b border-edge bg-veil backdrop-blur-xl">
@@ -11,7 +12,7 @@
     <nav class="flex shrink-0 items-center gap-1" aria-label="Primary">
       <% if (it.user) { %>
         <a class="<%= navClass(inChats) %>" href="/conversations">Chats</a>
-        <span class="hidden rounded-lg px-3 py-1.5 text-sm font-medium text-ink-faint sm:inline-flex" title="Recurring prompt/tool loops — coming later">Spells</span>
+        <a class="<%= navClass(inLoops) %>" href="/loops">Loops</a>
         <a class="<%= navClass(inSettings) %>" href="/settings">Settings</a>
         <form method="post" action="/logout">
           <button class="cursor-pointer rounded-lg border-0 bg-transparent px-2 py-1.5 text-sm font-medium text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink sm:px-3" type="submit">Logout</button>

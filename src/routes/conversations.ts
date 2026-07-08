@@ -30,6 +30,7 @@ import {
 } from '../db/queries/mcp-servers'
 import { getUserSettings, patchUserSettings } from '../db/queries/users'
 import { listPendingApprovalsForRun } from '../db/queries/tool-approvals'
+import { listArtifactsForConversation } from '../db/queries/artifacts'
 import {
   cancelRun,
   getActiveRunHandle,
@@ -259,7 +260,7 @@ async function renderShow(
   conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>,
   options: { error?: string; draft?: string } = {},
 ) {
-  const [provider, providers, activeRun, sidebar, latestRun, mcpServers] = await Promise.all([
+  const [provider, providers, activeRun, sidebar, latestRun, mcpServers, artifacts] = await Promise.all([
     // Scoped by the conversation owner: a provider the owner's accounts can
     // no longer see renders as "no provider" instead of leaking its details.
     conversation.provider_id
@@ -270,6 +271,10 @@ async function renderShow(
     listConversationsForUser(conversation.user_id),
     getLatestRunForConversation(conversation.id),
     listMcpServersWithOverride({
+      conversationId: conversation.id,
+      userId: conversation.user_id,
+    }),
+    listArtifactsForConversation({
       conversationId: conversation.id,
       userId: conversation.user_id,
     }),
@@ -344,6 +349,7 @@ async function renderShow(
     })),
     activeRun: activeRun ?? null,
     pendingApproval,
+    artifacts,
     mcpServers,
     enabledMcpServerCount: mcpServers.filter(
       (server) => server.enabled && server.override_enabled,

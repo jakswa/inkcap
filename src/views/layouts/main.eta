@@ -6,6 +6,8 @@
     <meta name="color-scheme" content="light dark">
     <title><%= it.title %></title>
     <link rel="icon" href="/assets/<%= it.assetVersion %>/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/assets/<%= it.assetVersion %>/logo.svg">
     <link rel="stylesheet" href="/assets/<%= it.assetVersion %>/app.css">
   </head>
   <% /* shell === 'chat' pins the app to the viewport (its own scroll regions);
