@@ -26,6 +26,19 @@
           <p class="mb-0 text-sm text-ink-dim">Send a message to get started.</p>
         </div>
       <% } else { %>
+        <% if (it.artifacts && it.artifacts.length > 0) { %>
+          <section class="grid gap-2 rounded-2xl border border-accent/25 bg-accent/5 p-4">
+            <h2 class="text-sm font-bold tracking-wider text-accent uppercase">Artifacts</h2>
+            <div class="grid gap-2">
+              <% it.artifacts.forEach((artifact) => { %>
+                <a class="flex items-baseline justify-between gap-3 rounded-xl bg-raised px-3 py-2 no-underline transition-colors hover:bg-ink/5" href="/artifacts/<%= artifact.id %>">
+                  <span class="min-w-0 truncate font-semibold"><%= artifact.title %></span>
+                  <span class="shrink-0 text-xs text-ink-faint"><%= artifact.kind %></span>
+                </a>
+              <% }) %>
+            </div>
+          </section>
+        <% } %>
         <% for (const message of it.messages) { %>
           <%~ await includeAsync('./message', { message: message }) %>
         <% } %>

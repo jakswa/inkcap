@@ -8,9 +8,10 @@ export async function createConversation(input: {
   model?: string | null
   reasoningEffort?: string | null
   forkedFromConversationId?: string | null
+  routineId?: string | null
 }) {
   const [conversation] = await sql.CreateConversation`
-    INSERT INTO conversations (id, user_id, title, provider_id, model, reasoning_effort, forked_from_conversation_id)
+    INSERT INTO conversations (id, user_id, title, provider_id, model, reasoning_effort, forked_from_conversation_id, routine_id)
     VALUES (
       ${randomUUIDv7()},
       ${input.userId},
@@ -18,10 +19,11 @@ export async function createConversation(input: {
       ${input.providerId ?? null},
       ${input.model ?? null},
       ${input.reasoningEffort ?? null},
-      ${input.forkedFromConversationId ?? null}
+      ${input.forkedFromConversationId ?? null},
+      ${input.routineId ?? null}
     )
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-              forked_from_conversation_id, created_at, updated_at
+              forked_from_conversation_id, routine_id, created_at, updated_at
   `
 
   return conversation
@@ -31,7 +33,7 @@ export async function getConversationById(id: string) {
   const [conversation] = await sql.GetConversationById`
     SELECT id, user_id, title, provider_id, model, curr_node, pinned,
            reasoning_effort,
-           forked_from_conversation_id, created_at, updated_at
+           forked_from_conversation_id, routine_id, created_at, updated_at
     FROM conversations
     WHERE id = ${id}
   `
@@ -43,7 +45,7 @@ export async function listConversationsForUser(userId: string) {
   return sql.ListConversationsForUser`
     SELECT id, user_id, title, provider_id, model, curr_node, pinned,
            reasoning_effort,
-           forked_from_conversation_id, created_at, updated_at
+           forked_from_conversation_id, routine_id, created_at, updated_at
     FROM conversations
     WHERE user_id = ${userId}
     ORDER BY pinned DESC, updated_at DESC
@@ -56,7 +58,7 @@ export async function setConversationCurrNode(input: { id: string; currNode: str
     SET curr_node = ${input.currNode}, updated_at = now()
     WHERE id = ${input.id}
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-              forked_from_conversation_id, created_at, updated_at
+              forked_from_conversation_id, routine_id, created_at, updated_at
   `
 
   return conversation
@@ -76,7 +78,7 @@ export async function updateConversationModelSettings(input: {
         updated_at = now()
     WHERE id = ${input.id}
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-              forked_from_conversation_id, created_at, updated_at
+              forked_from_conversation_id, routine_id, created_at, updated_at
   `
 
   return conversation
@@ -120,7 +122,7 @@ export async function createImportedConversation(input: {
       ${input.createdAt}
     )
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-              forked_from_conversation_id, created_at, updated_at
+              forked_from_conversation_id, routine_id, created_at, updated_at
   `
 
   return conversation
@@ -156,7 +158,7 @@ export async function findConversationMatch(input: {
 }) {
   const [conversation] = await sql.FindConversationMatch`
     SELECT id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-           forked_from_conversation_id, created_at, updated_at
+           forked_from_conversation_id, routine_id, created_at, updated_at
     FROM conversations
     WHERE user_id = ${input.userId}
       AND title IS NOT DISTINCT FROM ${input.title}

@@ -144,13 +144,16 @@ export async function listMcpServersWithOverride(input: {
 // server outside the conversation owner's accounts is never exposed.
 export async function listEnabledMcpServersForConversation(conversationId: string) {
   return sql.ListEnabledMcpServersForConversation`
-    SELECT s.id, s.name, s.url, s.enabled, s.auto_approve, s.headers,
-           s.request_timeout_ms, s.created_at, s.updated_at
+    SELECT s.id, s.name, s.url, s.enabled,
+           (s.auto_approve OR COALESCE(lms.auto_approve, false)) AS auto_approve,
+           s.headers, s.request_timeout_ms, s.created_at, s.updated_at
     FROM mcp_servers s
     JOIN conversation_mcp_servers cms
       ON cms.mcp_server_id = s.id AND cms.conversation_id = ${conversationId}
     JOIN conversations c ON c.id = cms.conversation_id
     JOIN account_memberships m ON m.account_id = s.account_id AND m.user_id = c.user_id
+    LEFT JOIN loop_mcp_servers lms
+      ON lms.loop_id = c.routine_id AND lms.mcp_server_id = s.id
     WHERE cms.enabled = true AND s.enabled = true
     ORDER BY s.created_at ASC
   `

@@ -4,6 +4,7 @@ import {
   cleanupExpiredRunEvents,
   recoverInterruptedRuns,
 } from './services/runner'
+import { startLoopScheduler } from './services/loops'
 
 // Boot recovery before serving: park any runs a previous process left
 // `running` (finalizing their streaming messages as interrupted, keeping every
@@ -11,6 +12,7 @@ import {
 const recovered = await recoverInterruptedRuns()
 if (recovered > 0) console.log(`recovered ${recovered} interrupted run(s)`)
 await cleanupExpiredRunEvents()
+startLoopScheduler()
 
 export default {
   port: env.PORT,

@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title><%= it.title %></title>
+    <% if (it.metaDescription) { %><meta name="description" content="<%= it.metaDescription %>"><% } %>
+    <% if (it.ogTitle) { %><meta property="og:title" content="<%= it.ogTitle %>"><% } %>
+    <% if (it.ogDescription) { %><meta property="og:description" content="<%= it.ogDescription %>"><% } %>
+    <% if (it.ogUrl) { %><meta property="og:url" content="<%= it.ogUrl %>"><% } %>
+    <% if (it.ogType) { %><meta property="og:type" content="<%= it.ogType %>"><% } %>
+    <% if (it.twitterCard) { %><meta name="twitter:card" content="<%= it.twitterCard %>"><% } %>
     <link rel="icon" href="/assets/<%= it.assetVersion %>/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/assets/<%= it.assetVersion %>/logo.svg">
     <link rel="stylesheet" href="/assets/<%= it.assetVersion %>/app.css">
   </head>
   <% /* shell === 'chat' pins the app to the viewport (its own scroll regions);

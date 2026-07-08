@@ -1,14 +1,36 @@
 <% const m = it.message %>
+<% const artifactLinks = m.artifactLinks || [] %>
 <% /* One partial for every role, shared by the SSR transcript and the
       runner's finalize-swap (action URLs use m.conversation_id, present on
       the row). Streaming keeps plain-text <pre> nodes the island appends
       into; message-final swaps in this same partial's settled render. */ %>
 <% if (m.role === 'system' || m.role === 'tool') { %>
-  <article class="group" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
-    <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm">
+  <article class="group grid gap-2" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>">
+    <% if (artifactLinks.length > 0) { %>
+      <% artifactLinks.forEach((artifact) => { %>
+        <div class="rounded-2xl border border-accent/30 bg-accent/10 p-3 shadow-sm shadow-black/5">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex min-w-0 items-center gap-3">
+              <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
+                <%~ include('../partials/icon', { name: 'sparkles', class: 'size-4' }) %>
+              </span>
+              <div class="min-w-0">
+                <p class="mb-0 text-xs font-bold tracking-wider text-accent uppercase">Artifact created</p>
+                <a class="block truncate text-sm font-bold text-ink no-underline hover:underline" href="<%= artifact.href %>"><%= artifact.title %></a>
+              </div>
+            </div>
+            <div class="flex shrink-0 gap-2">
+              <a class="btn btn-primary px-3 py-1.5 text-xs" href="<%= artifact.href %>">Open</a>
+              <a class="btn btn-ghost px-3 py-1.5 text-xs" href="<%= artifact.downloadHref %>" download>Download</a>
+            </div>
+          </div>
+        </div>
+      <% }) %>
+    <% } %>
+    <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm <%= artifactLinks.length > 0 ? 'opacity-80' : '' %>">
       <summary class="flex cursor-pointer items-center gap-2 font-semibold text-ink-dim select-none">
         <%~ include('../partials/icon', { name: m.role === 'tool' ? 'terminal' : 'sliders', class: 'size-4' }) %>
-        <%= m.role === 'tool' ? 'Tool result' : 'System prompt' %>
+        <%= m.role === 'tool' ? (artifactLinks.length > 0 ? 'Tool result: submit_artifact' : 'Tool result') : 'System prompt' %>
         <%~ include('../partials/icon', { name: 'chevronDown', class: 'ml-auto size-4 transition-transform group-open/acc:rotate-180' }) %>
       </summary>
       <pre class="m-0 mt-2 whitespace-pre-wrap break-words text-ink-dim <%= m.role === 'tool' ? 'font-mono text-xs' : 'font-body' %>" data-content><%= m.content %></pre>

@@ -48,11 +48,13 @@ import {
   listRunEventsAfter,
 } from '../db/queries/run-events'
 import { listEnabledMcpServersForConversation } from '../db/queries/mcp-servers'
+import { createArtifact } from '../db/queries/artifacts'
 import {
   createToolApproval,
   decideRunApprovals,
   listApprovalsForRun,
 } from '../db/queries/tool-approvals'
+import { notifyLoopRunStatus } from './push'
 import {
   callTool,
   gatherTools,
@@ -86,6 +88,26 @@ const DEFAULT_MAX_TURNS = 10
 // Synthetic tool-result content for a denied call (spec §A.5): fed back to the
 // model as if it were the tool's output so the loop keeps moving.
 const DENIAL_RESULT = 'Tool execution was denied by the user.'
+
+const SUBMIT_ARTIFACT_TOOL: OpenAiTool = {
+  type: 'function',
+  function: {
+    name: 'submit_artifact',
+    description:
+      'Save a user-facing result from this run. Use this when you have a finished briefing, report, or other deliverable. Markdown only; no HTML.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        kind: { type: 'string', description: 'Short kind label, e.g. briefing.' },
+        title: { type: 'string' },
+        summary: { type: 'string' },
+        body: { type: 'string', description: 'Markdown body.' },
+      },
+      required: ['title', 'body'],
+    },
+  },
+}
 
 // Stall watchdog for provider streams: a run may never wait on a silent
 // provider longer than this — the stream is torn down and the run parks as
@@ -384,6 +406,11 @@ async function finishRun(
     status,
     error: errorMessage,
   })
+  if (status === 'done' || status === 'error') {
+    void notifyLoopRunStatus(handle.conversationId, status, errorMessage).catch((error) =>
+      console.warn('loop notification failed', error),
+    )
+  }
 }
 
 // Everything the tool loop needs beyond the handle. Bundled so the loop, the
@@ -428,6 +455,7 @@ interface ToolExecution {
 }
 
 function isAutoApproved(name: string, ctx: RunContext): boolean {
+  if (name === SUBMIT_ARTIFACT_TOOL.function.name) return true
   const serverId = ctx.toolIndex.get(name)
   const server = serverId ? ctx.servers.find((s) => s.id === serverId) : undefined
   return server?.auto_approve === true
@@ -463,6 +491,30 @@ async function sealToolCallTurn(
 // still yields a tool message so the model can react and the loop continues.
 // Mutates handle.messageId to the fresh assistant message and advances the
 // run's leaf pointer + conversation curr_node.
+async function submitArtifactTool(handle: RunHandle, args: Record<string, unknown>) {
+  const conversation = await getConversationById(handle.conversationId)
+  if (!conversation) throw new Error('Conversation not found.')
+  const title = typeof args.title === 'string' ? args.title.trim() : ''
+  const body = typeof args.body === 'string' ? args.body.trim() : ''
+  const kind = typeof args.kind === 'string' && args.kind.trim() ? args.kind.trim() : 'generic'
+  const summary = typeof args.summary === 'string' ? args.summary.trim() : null
+  if (!title) throw new Error('Artifact title is required.')
+  if (!body) throw new Error('Artifact body is required.')
+
+  const artifact = await createArtifact({
+    accountId: conversation.user_id,
+    conversationId: handle.conversationId,
+    runId: handle.runId,
+    messageId: null,
+    kind: kind.slice(0, 80),
+    title: title.slice(0, 300),
+    summary: summary ? summary.slice(0, 1000) : null,
+    bodyMarkdown: body.slice(0, 200_000),
+  })
+
+  return `Artifact saved: ${artifact.title}\nOpen it at /artifacts/${artifact.id}`
+}
+
 async function executeToolBatch(
   handle: RunHandle,
   ctx: RunContext,
@@ -482,8 +534,12 @@ async function executeToolBatch(
         // Malformed arguments — call with an empty object, let the tool complain.
       }
       try {
-        const result = await callTool(ctx.servers, ctx.toolIndex, item.toolName, args)
-        resultText = result.content
+        if (item.toolName === SUBMIT_ARTIFACT_TOOL.function.name) {
+          resultText = await submitArtifactTool(handle, args)
+        } else {
+          const result = await callTool(ctx.servers, ctx.toolIndex, item.toolName, args)
+          resultText = result.content
+        }
       } catch (error) {
         resultText = `Tool execution failed: ${
           error instanceof Error ? error.message : String(error)
@@ -565,6 +621,9 @@ async function parkForApproval(
     status: 'waiting_approval',
     error: null,
   })
+  void notifyLoopRunStatus(handle.conversationId, 'waiting_approval').catch((error) =>
+    console.warn('loop approval notification failed', error),
+  )
 }
 
 // The detached completion loop. Never throws (a runner crash must not take
@@ -782,6 +841,8 @@ async function buildToolContext(conversationId: string): Promise<{
   tools: OpenAiTool[]
   toolIndex: Map<string, string>
 }> {
+  const conversation = await getConversationById(conversationId)
+  const internalTools = conversation?.routine_id ? [SUBMIT_ARTIFACT_TOOL] : []
   const rows = await listEnabledMcpServersForConversation(conversationId)
   const servers: McpServerConfig[] = rows.map((row) => ({
     id: row.id!,
@@ -792,10 +853,10 @@ async function buildToolContext(conversationId: string): Promise<{
     auto_approve: row.auto_approve,
   }))
   if (servers.length === 0) {
-    return { servers, tools: [], toolIndex: new Map() }
+    return { servers, tools: internalTools, toolIndex: new Map() }
   }
   const { tools, toolIndex } = await gatherTools(servers)
-  return { servers, tools, toolIndex }
+  return { servers, tools: [...tools, ...internalTools], toolIndex }
 }
 
 // Resume a run parked in waiting_approval after the user approves or denies the

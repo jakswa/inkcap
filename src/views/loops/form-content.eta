@@ -1,0 +1,137 @@
+<%
+  const loop = it.loop || {}
+  const values = it.values || {}
+  const field = (name, fallback = '') => values[name] !== undefined ? values[name] : (loop[name] ?? fallback)
+  const selectedProvider = field('providerId', loop.provider_id || '')
+  const selectedReasoning = field('reasoningEffort', loop.reasoning_effort || 'medium')
+  const scheduleValue = field('schedule', loop.schedule || '')
+  const timezoneValue = field('timezone', loop.timezone || 'UTC')
+  const enabledValue = values.enabled !== undefined ? values.enabled === 'on' : Boolean(loop.enabled)
+  const reasoningOptions = ['off', 'low', 'medium', 'high', 'max']
+%>
+<section class="grid gap-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <p class="eyebrow mb-3">Loops</p>
+      <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight"><%= it.mode === 'new' ? 'New loop' : 'Edit loop' %></h1>
+      <p class="mt-4 max-w-3xl text-ink-dim">Loops are unattended server-side runs. If you approve tools here, those tool calls may execute without a later click.</p>
+    </div>
+    <a class="btn btn-ghost" href="/loops">Back to loops</a>
+  </div>
+
+  <% if (it.errors.length > 0) { %>
+    <div class="alert-danger" role="alert">
+      <% it.errors.forEach((error) => { %><p class="mb-0"><%= error %></p><% }) %>
+    </div>
+  <% } %>
+
+  <form class="grid gap-5" method="post" action="<%= it.mode === 'new' ? '/loops' : `/loops/${loop.id}` %>">
+    <div class="card grid gap-4">
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="name">Name</label>
+        <input id="name" name="name" class="input" required maxlength="120" value="<%= field('name', '') %>" placeholder="Morning briefing">
+      </div>
+
+      <div class="grid gap-2">
+        <label class="text-sm font-semibold" for="prompt">Prompt</label>
+        <textarea id="prompt" name="prompt" class="input min-h-44" required placeholder="Write the thing this loop should do..."><%= field('prompt', '') %></textarea>
+        <p class="mb-0 text-xs text-ink-faint">Tip: ask the model to call <code>submit_artifact</code> when it has the finished user-facing result.</p>
+      </div>
+
+      <details class="grid gap-2">
+        <summary class="cursor-pointer text-sm font-semibold text-ink-dim">Optional system prompt</summary>
+        <textarea name="system_prompt" class="input mt-2 min-h-28"><%= field('systemPrompt', loop.system_prompt || '') %></textarea>
+      </details>
+    </div>
+
+    <div class="card grid gap-4">
+      <h2 class="text-lg font-bold">Model</h2>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="provider_id">Provider</label>
+          <select id="provider_id" name="provider_id" class="input" required>
+            <option value="">Choose provider…</option>
+            <% it.providers.forEach((provider) => { %>
+              <option value="<%= provider.id %>" <%= provider.id === selectedProvider ? 'selected' : '' %>><%= provider.name %><%= provider.enabled ? '' : ' (disabled)' %></option>
+            <% }) %>
+          </select>
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="model">Model</label>
+          <input id="model" name="model" class="input" maxlength="200" value="<%= field('model', loop.model || '') %>" placeholder="Provider default">
+        </div>
+      </div>
+      <div class="grid gap-2 sm:max-w-xs">
+        <label class="text-sm font-semibold" for="reasoning_effort">Reasoning effort</label>
+        <select id="reasoning_effort" name="reasoning_effort" class="input">
+          <% reasoningOptions.forEach((effort) => { %>
+            <option value="<%= effort %>" <%= selectedReasoning === effort ? 'selected' : '' %>><%= effort %></option>
+          <% }) %>
+        </select>
+      </div>
+    </div>
+
+    <div class="card grid gap-4">
+      <div>
+        <h2 class="text-lg font-bold">Schedule</h2>
+        <p class="mb-0 text-sm text-ink-dim">Use a 5-field cron expression. Leave blank for manual-only.</p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-[1fr_auto]">
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="schedule">Cron</label>
+          <input id="schedule" name="schedule" class="input font-mono" list="schedule-presets" value="<%= scheduleValue %>" placeholder="0 7 * * *">
+          <datalist id="schedule-presets">
+            <% it.schedulePresets.forEach((preset) => { %><option value="<%= preset.value %>"><%= preset.label %></option><% }) %>
+          </datalist>
+        </div>
+        <div class="grid gap-2">
+          <label class="text-sm font-semibold" for="timezone">Timezone</label>
+          <input id="timezone" name="timezone" class="input" value="<%= timezoneValue %>" placeholder="UTC">
+        </div>
+      </div>
+      <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="enabled" <%= enabledValue ? 'checked' : '' %>> Enabled</label>
+    </div>
+
+    <div class="card grid gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-lg font-bold">Tools and unattended approvals</h2>
+          <p class="mb-0 text-sm text-ink-dim">Select MCP servers for this loop. “Approve unattended” lets those server tool calls run headlessly.</p>
+        </div>
+        <a class="btn btn-ghost" href="/mcp-servers">Manage MCP</a>
+      </div>
+      <% if (it.servers.length === 0) { %>
+        <div class="rounded-xl border border-dashed border-edge p-4 text-sm text-ink-faint">No MCP servers configured.</div>
+      <% } else { %>
+        <div class="grid gap-2">
+          <% it.servers.forEach((server) => { %>
+            <label class="grid gap-2 rounded-xl border border-edge p-3 sm:grid-cols-[1fr_auto] sm:items-center">
+              <span class="flex min-w-0 items-start gap-3">
+                <input class="mt-1" type="checkbox" name="enabled_mcp_server_id" value="<%= server.id %>" <%= server.loop_enabled ? 'checked' : '' %> <%= server.enabled ? '' : 'disabled' %>>
+                <span class="min-w-0">
+                  <span class="block font-semibold"><%= server.name %><%= server.enabled ? '' : ' (disabled)' %></span>
+                  <span class="block truncate text-xs text-ink-faint"><%= server.url %></span>
+                </span>
+              </span>
+              <span class="flex items-center gap-2 text-sm text-ink-dim">
+                <input type="checkbox" name="auto_approve_mcp_server_id" value="<%= server.id %>" <%= server.loop_auto_approve ? 'checked' : '' %> <%= server.enabled ? '' : 'disabled' %>>
+                Approve unattended
+              </span>
+            </label>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="submit">Save loop</button>
+      <a class="btn btn-ghost" href="/loops">Cancel</a>
+    </div>
+  </form>
+
+  <% if (it.mode === 'edit') { %>
+    <form method="post" action="/loops/<%= loop.id %>/delete">
+      <button class="btn btn-ghost text-danger" type="submit">Delete loop</button>
+    </form>
+  <% } %>
+</section>
