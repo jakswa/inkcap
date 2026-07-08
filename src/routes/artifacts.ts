@@ -33,15 +33,26 @@ async function artifactForRequest(c: Context) {
   return { artifact }
 }
 
+function contentDispositionAttachment(filename: string) {
+  return `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
+
 async function renderMarkdownDownload(c: Context) {
   const result = await artifactForRequest(c)
   if ('redirect' in result) return result.redirect
   if ('notFound' in result) return c.notFound()
 
-  c.header('Content-Type', 'text/markdown; charset=utf-8')
-  c.header('Content-Disposition', `attachment; filename="${downloadName(result.artifact.title)}"`)
-  c.header('Cache-Control', 'private, no-store')
-  return c.body(result.artifact.body_markdown)
+  const filename = downloadName(result.artifact.title)
+  return new Response(result.artifact.body_markdown, {
+    headers: {
+      // application/octet-stream + attachment makes this a real download in
+      // browsers that like to inline text/markdown or text/plain navigations.
+      'Content-Type': 'application/octet-stream',
+      'Content-Disposition': contentDispositionAttachment(filename),
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    },
+  })
 }
 
 artifactRoutes.get('/artifacts/:id/download', renderMarkdownDownload)
@@ -57,6 +68,7 @@ artifactRoutes.get('/artifacts/:id', async (c) => {
     title: artifact.title,
     artifact: {
       ...artifact,
+      downloadFilename: downloadName(artifact.title),
       bodyHtml: renderMarkdown(artifact.body_markdown),
     },
   })

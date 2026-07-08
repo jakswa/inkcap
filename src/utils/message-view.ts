@@ -38,11 +38,19 @@ export interface TimingStats {
   rate: string | null
 }
 
+export interface ArtifactLink {
+  id: string
+  title: string
+  href: string
+  downloadHref: string
+}
+
 export interface RenderableExtras {
   contentHtml: string | null
   stats: MessageStats | null
   timingLabel: string | null
   clipContent: string
+  artifactLinks: ArtifactLink[]
 }
 
 // llama.cpp / OpenAI-compatible timings block (see mock-provider finishChunk):
@@ -101,6 +109,27 @@ function clipContentFor(content: string | null | undefined) {
   return Buffer.from(content ?? '', 'utf8').toString('base64')
 }
 
+function artifactLinksFor(message: MessageFields): ArtifactLink[] {
+  if (message.role !== 'tool') return []
+  const content = message.content ?? ''
+  const match = content.match(
+    /^Artifact saved:\s*(.+?)\s*\nOpen it at\s+(\/artifacts\/([0-9a-f-]{36}))\s*$/im,
+  )
+  if (!match) return []
+  const title = match[1]?.trim() || 'Artifact'
+  const href = match[2]
+  const id = match[3]
+  if (!href || !id) return []
+  return [
+    {
+      id,
+      title,
+      href,
+      downloadHref: `${href}/download`,
+    },
+  ]
+}
+
 export function toRenderable<T extends MessageFields>(
   message: T,
 ): T & RenderableExtras {
@@ -118,5 +147,6 @@ export function toRenderable<T extends MessageFields>(
     stats,
     timingLabel: timingLabelFor(stats),
     clipContent: hasActions ? clipContentFor(message.content) : '',
+    artifactLinks: artifactLinksFor(message),
   }
 }

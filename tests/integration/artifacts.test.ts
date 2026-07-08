@@ -77,13 +77,16 @@ describe('artifacts routes', () => {
     const html = await page.text()
     expect(html).toContain('Daily Briefing')
     expect(html).toContain(`/artifacts/${artifact.id}/download`)
+    expect(html).toContain('download="daily-briefing.md"')
 
     const download = await app.request(url(`/artifacts/${artifact.id}/download`), {
       headers: { Cookie: cookie },
     })
     expect(download.status).toBe(200)
-    expect(download.headers.get('content-type')).toContain('text/markdown')
+    expect(download.headers.get('content-type')).toContain('application/octet-stream')
+    expect(download.headers.get('content-disposition')).toContain('attachment')
     expect(download.headers.get('content-disposition')).toContain('daily-briefing.md')
+    expect(download.headers.get('x-content-type-options')).toBe('nosniff')
     expect(await download.text()).toBe('# Daily Briefing\n\nHello from an artifact.')
   })
 })
