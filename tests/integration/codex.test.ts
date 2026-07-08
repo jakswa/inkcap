@@ -105,7 +105,7 @@ interface CapturedRequest {
 // Emits a tool call when the request declares tools and no tool result has
 // come back yet; otherwise streams text. Includes a deliberately truncated
 // status event to prove the parser skips malformed JSON without dying.
-function codexBackendStub(options: { rejectTokens?: Set<string> } = {}) {
+function codexBackendStub(options: { rejectTokens?: Set<string>; callTools?: boolean } = {}) {
   const captured: CapturedRequest[] = []
   const server = Bun.serve({
     port: 0,
@@ -144,7 +144,7 @@ function codexBackendStub(options: { rejectTokens?: Set<string> } = {}) {
         const input = Array.isArray(body['input']) ? (body['input'] as Array<{ type?: string }>) : []
         const hasTools = Array.isArray(body['tools']) && (body['tools'] as unknown[]).length > 0
         const hasToolResult = input.some((item) => item.type === 'function_call_output')
-        const wantsToolCall = hasTools && !hasToolResult
+        const wantsToolCall = options.callTools !== false && hasTools && !hasToolResult
 
         const send = (payload: unknown) => `data: ${JSON.stringify(payload)}\n\n`
         let sse = ''
@@ -815,7 +815,7 @@ describe('codex connect flow', () => {
   })
 
   test('a full run through the durable runner streams and finalizes', async () => {
-    const backend = codexBackendStub()
+    const backend = codexBackendStub({ callTools: false })
     try {
       const suffix = randomUUIDv7()
       const user = await createUser({
@@ -876,6 +876,11 @@ describe('codex connect flow', () => {
       expect(leaf!.status).toBe('complete')
       expect(leaf!.content).toBe('Hello from codex!')
       expect(leaf!.model).toBe('gpt-5.5')
+      expect(
+        ((backend.captured[0]!.body['tools'] as Array<{ name?: string }> | undefined) ?? []).map(
+          (tool) => tool.name,
+        ),
+      ).toContain('submit_artifact')
     } finally {
       backend.server.stop(true)
     }

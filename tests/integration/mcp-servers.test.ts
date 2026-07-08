@@ -510,6 +510,7 @@ describe('MCP servers CRUD', () => {
       expect(body['tool_choice']).toBe('auto')
       expect((body['tools'] as Array<{ function?: { name?: string } }>).map((tool) => tool.function?.name)).toEqual([
         'exa_search',
+        'submit_artifact',
       ])
     } finally {
       providerServer.stop()

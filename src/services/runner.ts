@@ -802,13 +802,9 @@ export async function startRun(
     })
 
     // Gather the tools exposed to the model for this conversation (connecting to
-    // each enabled MCP server, best-effort). Empty when no server is enabled —
-    // the request then carries no `tools` and the run behaves exactly as M3.
-    // Loop-created conversations also get inkcap's private artifact tool.
-    const { servers, tools, toolIndex } = await buildToolContext(
-      conversationId,
-      conversation.routine_id != null,
-    )
+    // each enabled MCP server, best-effort). Inkcap's private artifact tool is
+    // always present, so even chats with no MCP servers can save artifacts.
+    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
 
     const ctx: RunContext = {
       provider: {
@@ -839,13 +835,13 @@ export async function startRun(
 
 // Connect to the conversation's enabled MCP servers and collect the OpenAI
 // tool definitions + a name→server routing index. Best-effort (one dead server
-// never blocks the others); returns empty when nothing is enabled.
-async function buildToolContext(conversationId: string, includeInternalTools = false): Promise<{
+// never blocks the others); always includes inkcap's private artifact tool.
+async function buildToolContext(conversationId: string): Promise<{
   servers: McpServerConfig[]
   tools: OpenAiTool[]
   toolIndex: Map<string, string>
 }> {
-  const internalTools = includeInternalTools ? [SUBMIT_ARTIFACT_TOOL] : []
+  const internalTools = [SUBMIT_ARTIFACT_TOOL]
   const rows = await listEnabledMcpServersForConversation(conversationId)
   const servers: McpServerConfig[] = rows.map((row) => ({
     id: row.id!,
@@ -938,10 +934,7 @@ export async function resumeParkedRun(
     // fresh process after a restart.
     const path = await getActivePath(run.leaf_message_id)
     const history = toChatMessages(path as PathRow[])
-    const { servers, tools, toolIndex } = await buildToolContext(
-      conversationId,
-      conversation.routine_id != null,
-    )
+    const { servers, tools, toolIndex } = await buildToolContext(conversationId)
 
     await setRunStatus({ id: run.id, status: 'running', error: null })
     await emitEvent(run.id, 'run-status', { status: 'running', error: null })
