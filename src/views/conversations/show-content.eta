@@ -19,7 +19,7 @@
   </header>
 
   <div class="scroll-thin min-h-0 flex-1 overflow-y-auto" data-scroller>
-    <div class="mx-auto grid w-full max-w-3xl gap-6 px-4 py-6" data-transcript>
+    <div class="mx-auto grid min-w-0 w-full max-w-3xl gap-6 px-4 py-6" data-transcript>
       <% if (it.messages.length === 0) { %>
         <div class="grid gap-1 py-16 text-center" data-empty>
           <p class="mb-0 text-lg font-semibold text-ink">Hello there</p>
@@ -61,11 +61,11 @@
 
   <div class="shrink-0 px-4 pt-1 pb-4">
     <div class="mx-auto grid w-full max-w-3xl gap-2" data-controls>
-      <div class="flex items-center gap-2 px-2 text-sm text-ink-dim <%= it.activeRun ? '' : 'hidden' %>" data-status role="status" aria-live="polite">
+      <div class="flex min-w-0 items-center gap-2 px-2 text-xs text-ink-dim <%= it.activeRun ? '' : 'hidden' %>" data-status role="status" aria-live="polite">
         <% if (it.activeRun) { %>
-          <span class="relative flex size-2" aria-hidden="true"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60"></span><span class="relative inline-flex size-2 rounded-full bg-accent"></span></span>
+          <span class="relative flex size-2 shrink-0" aria-hidden="true"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60"></span><span class="relative inline-flex size-2 rounded-full bg-accent"></span></span>
         <% } %>
-        <span data-status-text><%= it.activeRun ? 'Generating…' : '' %></span>
+        <span class="min-w-0 flex-1 truncate whitespace-nowrap" data-status-text title="<%= it.activeRun ? 'Generating…' : '' %>"><%= it.activeRun ? 'Generating…' : '' %></span>
       </div>
 
       <div class="alert-danger <%= it.error ? '' : 'hidden' %>" role="alert" data-composer-error>

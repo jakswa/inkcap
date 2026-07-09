@@ -65,12 +65,29 @@
     countEl.classList.toggle('hidden', count === 0);
   }
 
-  function setStatus(text) {
+  function compactNumber(value) {
+    var n = Number(value || 0);
+    if (!Number.isFinite(n)) return '0';
+    if (Math.abs(n) >= 1000000) return (n / 1000000).toFixed(n >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'm';
+    if (Math.abs(n) >= 1000) return (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace(/\.0$/, '') + 'k';
+    return String(Math.round(n));
+  }
+
+  function compactRate(value) {
+    var n = Number(value || 0);
+    if (!Number.isFinite(n) || n <= 0) return '';
+    return (n >= 10 ? Math.round(n) : Number(n.toFixed(1))) + '/s';
+  }
+
+  function setStatus(text, title) {
     var r = root();
     if (!r) return;
     var strip = r.querySelector('[data-status]');
     var textEl = r.querySelector('[data-status-text]');
-    if (textEl) textEl.textContent = text || '';
+    if (textEl) {
+      textEl.textContent = text || '';
+      textEl.title = title || text || '';
+    }
     if (strip) strip.classList.toggle('hidden', !text);
   }
 
@@ -90,7 +107,7 @@
     var update = function () {
       if (sawOutput || sawProgress) return;
       var seconds = Math.floor((Date.now() - streamOpenedAt) / 1000);
-      setStatus(seconds > 0 ? 'Waiting for model… ' + seconds + 's' : 'Waiting for model…');
+      setStatus(seconds > 0 ? 'Waiting… ' + seconds + 's' : 'Waiting…', seconds > 0 ? 'Waiting for model… ' + seconds + 's' : 'Waiting for model…');
     };
     update();
     statusTimer = setInterval(update, 1000);
@@ -109,24 +126,25 @@
     if (!stats) return;
     sawProgress = true;
     if (stats.generation && Number(stats.generation.tokens || 0) > 0) {
-      var tokens = Number(stats.generation.tokens || 0).toLocaleString();
-      var rate = Number(stats.generation.rate || 0);
+      var tokens = Number(stats.generation.tokens || 0);
+      var rate = compactRate(stats.generation.rate);
       sawOutput = true;
       stopStatusTimer();
       statusPhase = 'generation';
-      setStatus('Generating… ' + tokens + ' tokens' + (rate > 0 ? ' · ' + rate.toFixed(1) + ' tok/s' : ''));
+      setStatus('Gen ' + compactNumber(tokens) + (rate ? ' · ' + rate : ''), 'Generating… ' + tokens.toLocaleString() + ' tokens' + (stats.generation.rate ? ' · ' + Number(stats.generation.rate).toFixed(1) + ' tok/s' : ''));
       return;
     }
     if (stats.prompt) {
       stopStatusTimer();
       statusPhase = 'prompt';
-      var done = Number(stats.prompt.processed || 0).toLocaleString();
+      var done = Number(stats.prompt.processed || 0);
       var total = Number(stats.prompt.total || 0);
-      var promptRate = Number(stats.prompt.rate || 0);
-      setStatus((total > 0
-        ? 'Processing prompt… ' + done + '/' + total.toLocaleString() + ' tokens'
-        : 'Processing prompt… ' + done + ' tokens') +
-        (promptRate > 0 ? ' · ' + promptRate.toFixed(1) + ' tok/s' : '')); 
+      var promptRate = compactRate(stats.prompt.rate);
+      setStatus('Input ' + compactNumber(done) + (total > 0 ? '/' + compactNumber(total) : '') + (promptRate ? ' · ' + promptRate : ''),
+        (total > 0
+          ? 'Processing prompt… ' + done.toLocaleString() + '/' + total.toLocaleString() + ' tokens'
+          : 'Processing prompt… ' + done.toLocaleString() + ' tokens') +
+        (stats.prompt.rate ? ' · ' + Number(stats.prompt.rate).toFixed(1) + ' tok/s' : ''));
     }
   }
 
