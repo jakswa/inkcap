@@ -1,192 +1,117 @@
 # inkcap
 
-A server-driven LLM chat app: the **server owns the conversation**. A chat "run"
-is a durable server-side job — close the laptop mid-generation, open your phone
-later, and the chat reached a sensible stopping point without you. Rewrite of
-llama.cpp's web UI (the fork at `~/sandbox/llama-ui` is the living spec), built
-on the bun-hono-ssr starter: Hono routes, Eta SSR templates, HTML forms,
-PostgreSQL, raw SQL migrations, encrypted cookie sessions, Tailwind.
+Server-driven LLM chat. The server owns the conversation: a run is a durable
+job that keeps moving even if every browser disconnects. Browsers render state,
+subscribe to SSE, and submit forms; the database is truth.
 
-Docs: `docs/STATUS.md` (current state), `docs/roadmap/` (future features +
-polish backlog), `docs/issues/` (hardening work; resolved ones in
-`resolved/`), `docs/specs/` (harvested provider/export/MCP specs),
-`docs/completed/` (finished plans — THE_PLAN.md is the design record).
+This file doubles as `AGENTS.md` / `CLAUDE.md`, so keep it useful and short.
 
-## Shape
+## Docs
 
-- **Boring CRUD is boring.** Conversation list, providers, MCP servers, auth:
-  SSR templates and plain HTML forms, no client JS.
-- **JS is a budget, spent on the chat view only.** One hand-rolled island
-  (`src/static/chat.js`): SSE subscribe, token append, composer submit. Every
-  action still works as a plain form with JS off.
-- **The server is the agent runtime.** `src/services/runner.ts` streams from
-  the provider, persists deltas on a debounce (300ms/24 deltas), runs the MCP
-  tool loop, parks on `waiting_approval`, recovers interrupted runs on boot.
-  Browsers are spectators: SSE fan-out with `Last-Event-ID` replay; zero
-  subscribers changes nothing; page reload always shows DB truth.
-- **Provider and MCP keys never reach the browser.** Server-side rows; the
-  server makes all upstream calls (`src/utils/outbound-url.ts` guards targets).
-- **Messages are a tree.** `messages.parent_id` + `conversations.curr_node`
-  pick the active path; edit/regenerate create siblings; branching is schema,
-  the UI is just forms.
-- Markdown renders **server-side** (`marked` + `highlight.js` + `sanitize-html`
-  in `src/utils/markdown.ts`); streams show plain text, then finalize-swap to
-  rendered HTML.
+- Current state: `docs/STATUS.md`
+- Future work: `docs/roadmap/`
+- Security/correctness backlog: `docs/issues/`
+- Provider/export/MCP notes: `docs/specs/`
+- Design history: `docs/completed/THE_PLAN.md`
 
-## Quick Start
+## Architecture rules
 
-Needs PostgreSQL with an `inkcap` database (`inkcap_test` too if running tests).
-The published image is `ghcr.io/jakswa/inkcap:latest`:
+- CRUD pages are SSR (`src/routes`, `src/views`) with plain HTML forms.
+- Client JS is only for chat (`src/static/chat.js`): SSE, token append,
+  composer submit. Everything must still work after reload and mostly with JS
+  off.
+- The runner (`src/services/runner.ts`) streams provider output, persists
+  deltas, handles MCP tool loops/approval parking, emits replayable SSE events,
+  and recovers interrupted runs on boot.
+- Provider/MCP credentials stay server-side. Guard outbound targets with
+  `src/utils/outbound-url.ts`.
+- Messages are a tree: `messages.parent_id` plus `conversations.curr_node`.
+  Edit/regenerate/fork create or select branches; do not flatten this model.
+- Markdown is rendered server-side via `src/utils/markdown.ts`. Stream plain
+  text, then swap in sanitized rendered HTML when final.
 
-```sh
-docker run -d --name inkcap --restart unless-stopped -p 3000:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
-```
+## Setup
 
-Source checkout:
+Requires Bun and PostgreSQL. Create `inkcap`; create `inkcap_test` if running
+tests.
 
 ```sh
 bun install
-cp .env.example .env.local         # DATABASE_URL, SESSION_SECRET
+cp .env.example .env.local   # fill DATABASE_URL and SESSION_SECRET
 bun run db:migrate
-bun run dev                        # http://localhost:3000 — register first
-bun src/tasks/seed-provider.ts --user you@example.com
-                                   # llama-server provider from DEV_LLAMA_SERVER /
-                                   # DEV_LLAMA_KEY, owned by that user's account
+bun run dev                  # http://localhost:3000
 ```
 
-No provider handy? `bun src/tasks/seed-demo.ts` creates a demo account
-(`demo@inkcap.dev` / `inkcap-demo`) with realistic conversations — markdown,
-reasoning, tool calls, a parked approval — for kicking the tires or taking
-screenshots (the ones on the marketing site and this landing page come from it).
-
-Import llama-ui history (idempotent; JSONL or zip, attachments, branch trees):
+Seed helpers:
 
 ```sh
-bun src/tasks/import-llama-ui.ts <export.jsonl-or-.zip> --user you@example.com
+bun src/tasks/seed-provider.ts --user you@example.com
+bun src/tasks/seed-demo.ts
+bun src/tasks/import-llama-ui.ts <export.jsonl-or.zip> --user you@example.com
 ```
 
-Chat on your own ChatGPT subscription (Codex): Providers → Add provider →
-"Sign in with ChatGPT". This is an experimental personal-use bridge through the
-Codex CLI path, not the official OpenAI API; prefer API providers for shared or
-production use. Sign-in uses a one-time OpenAI device code in any browser. You
-may need to enable **Allow device code login** in ChatGPT settings first; a
-legacy `localhost:1455` callback (with remote paste-to-finish support) remains
-as a fallback. Your OpenAI password stays with OpenAI, but inkcap stores
-refreshable ChatGPT tokens server-side; use only a trusted server/DB. Usage
-counts against ChatGPT limits; details:
-`docs/specs/openai-codex.md`.
-
-## Env
-
-`DATABASE_URL`, `SESSION_SECRET`, `ASSET_VERSION`, `PORT`, `NODE_ENV`,
-`REGISTRATION` (see `.env.example`); `DEV_LLAMA_SERVER` / `DEV_LLAMA_KEY` feed
-the provider seed task. In production, `SESSION_SECRET` must be ≥32 bytes and
-not a placeholder, and `ASSET_VERSION` must be set (pass as a Docker build arg
-so asset URLs roll back with the image). `REGISTRATION` defaults to `closed`
-in production (`open` elsewhere); bootstrap a closed deployment with
-`bun build/tasks/create-user.js --name ... --email ...` (password via the
-`CREATE_USER_PASSWORD` env var). Split-origin deployments (TLS-terminating
-proxy and/or direct LAN IP access) opt in via `PUBLIC_ORIGIN`,
-`CSRF_TRUSTED_ORIGINS`, and `OUTBOUND_TRUSTED_HOSTS` (see `.env.example`).
+ChatGPT/Codex provider support is experimental and personal-use only. It uses a
+server-side device-code login and stores refreshable tokens in the DB; prefer
+API providers for shared/production use. Details: `docs/specs/openai-codex.md`.
 
 ## Scripts
 
 ```sh
-bun run dev         # css:watch + bun --watch src/index.ts
-bun run db:migrate  # Apply unapplied SQL migrations
-bun run db:types    # Generate bun-sqlgen query result types
-bun run typecheck   # TypeScript verification
-bun test            # Concurrent test suite using .env.test
-bun run app:build   # Build CSS, bundle src/index.ts + src/tasks/*.ts into build/
+bun run dev         # CSS watch + app watch
+bun run db:migrate  # apply SQL migrations
+bun run db:types    # regenerate typed query declarations
+bun run typecheck   # tsc --noEmit
+bun test            # reset/migrate .env.test DB, run tests
+bun run app:build   # CSS + production bundle in build/
 bun run build       # db:types + typecheck + test + app:build
 ```
 
-Every `src/tasks/*.ts` file becomes a production-runnable `build/tasks/*.js`
-entrypoint taking CLI args via `Bun.argv`.
+Every `src/tasks/*.ts` is bundled as `build/tasks/*.js` and reads CLI args from
+`Bun.argv`.
 
-## Structure
-
-Runtime files (`src/views`, `src/static`, `src/db/migrations`) stay as files
-and are copied verbatim into `build/`; everything else is bundled. `runtimeRoot`
-in `src/utils/paths.ts` flips between `src` (dev) and `build` (prod). `build/`
-is gitignored.
+## Repo map
 
 ```txt
 src/
-├── index.ts, app.ts        # entrypoint; Hono app, middleware, routes
-├── routes/                 # auth, conversations (chat + SSE + branching), providers, mcp-servers, ...
-├── services/               # runner.ts (the agent runtime), provider-client, codex-auth/-client, mcp-client, branching
-├── views/                  # .eta templates (conversations/, providers/, mcp-servers/, auth/, partials/)
-├── static/                 # app.tailwind.css → generated app.css, chat.js island, svgs
-├── db/
-│   ├── migrations/         # 001_init ... 012_accounts (raw SQL)
-│   └── queries/            # named bun-sqlgen queries per table + queries.gen.d.ts
-├── middleware/             # render.ts, current-user.ts
-├── tasks/                  # migrate, seed-provider, seed-demo, create-user, import-llama-ui, mock-provider
-├── utils/                  # env, markdown, message-view, outbound-url, private-session, ...
-└── build.ts                # build-time tooling, never shipped
+├── app.ts, index.ts       Hono app + entrypoint
+├── routes/                SSR routes and form handlers
+├── views/                 Eta templates
+├── static/                Tailwind source, generated CSS, chat island
+├── services/              runner, provider clients, MCP, branching
+├── db/migrations/         numbered raw SQL migrations
+├── db/queries/            bun-sqlgen tagged queries
+├── middleware/            render/current-user/session plumbing
+├── tasks/                 migrate, seed, import, create-user, mock-provider
+└── utils/                 env, markdown, message view, paths, outbound guard
 ```
 
-## Development Rules
+Runtime files (`views`, `static`, `db/migrations`) are copied into `build/`;
+other server code is bundled. `src/utils/paths.ts` switches between dev/prod
+roots.
 
-- Add pages in `src/routes`, render with `c.var.render('template-name', data)`.
-- Templates display data; no business logic; never raw-print user input; keep
-  Eta escaping enabled. Assistant markdown goes through `renderMarkdown()` only.
-- Prefer Tailwind utilities in templates; keep `app.tailwind.css` to imports,
-  theme tokens, and rare global rules. Never hand-edit generated `app.css`.
-- Do not concatenate SQL strings or use `sql.unsafe` with user input.
-- Commit only at milestones (working end-to-end slices).
+## Development guardrails
+
+- Add pages in `src/routes`; render with `c.var.render(name, data)`.
+- Templates display data only. Keep Eta escaping on. Never raw-print user input.
+- Prefer Tailwind utilities. Do not hand-edit generated `src/static/app.css`.
+- Do not concatenate SQL or use `sql.unsafe` with user input.
 - After DB changes: `bun run db:types && bun run typecheck && bun test`.
+- Account scoping matters: providers/MCP servers belong to accounts and must be
+  fetched through membership checks so foreign IDs 404.
+- Production defaults: registration closed, strong `SESSION_SECRET`, explicit
+  `ASSET_VERSION`, migrations before app start.
 
-## Database
+## Deploy
 
-- Schema changes are numbered SQL files in `src/db/migrations`; the runner
-  applies pending files in one transaction (so no `CREATE INDEX CONCURRENTLY`
-  without a custom path).
-- App queries live in `src/db/queries/*.ts` as `sql.QueryName\`...\``;
-  `bun run db:types` validates them against migrations.
-- `bun test` resets and migrates the `.env.test` database (name must end with
-  `test`) and runs concurrently — tests create unique data, no global
-  row-count assertions.
-- Core tables: `users`, `accounts` + `account_memberships` (ownership scope;
-  a user's personal account id equals their user id), `providers`,
-  `conversations`, `messages` (tree), `runs` (+ partial unique index: one
-  active run per conversation), `run_events` (SSE replay log), `attachments`
-  (bytea), `mcp_servers`.
-
-## Auth
-
-- `Bun.password` hash/verify; session payload encrypted into an HTTP-only
-  cookie via `SESSION_SECRET` with an `issuedAt` timestamp.
-- Registering creates the user plus a personal account and owner membership in
-  one statement. Providers and MCP servers belong to accounts; every route
-  fetches them through an `account_memberships` join, so a foreign id 404s.
-  Sharing later = adding membership rows, not re-scoping queries.
-- Stateless sessions are non-revocable by default (`docs/issues/09`): re-fetch
-  users on sensitive routes; add an invalidation watermark before shipping
-  password changes or "log out everywhere".
-
-## Assets
-
-- `/assets/:version/app.css` serves generated `src/static/app.css`; other
-  files map to `src/static/*`. Production: immutable caching; dev: `no-store`.
-
-## Production
-
-- `bun run app:build` → `build/`; Docker copies only `build/` (no `src/`,
-  no `node_modules/`). GHCR publishes `ghcr.io/jakswa/inkcap:latest` plus SHA
-  tags on pushes to master. Migrate inside the image with
-  `bun build/tasks/migrate.js` (examples below run it before the app starts).
-- The app is a single stateful process (web server + runner) by design;
-  restart is always safe — boot recovery finalizes interrupted runs.
+Published image: `ghcr.io/jakswa/inkcap:latest`.
 
 ```sh
-docker pull ghcr.io/jakswa/inkcap:latest
 docker run -p 3000:3000 --env-file .env.production ghcr.io/jakswa/inkcap:latest \
   sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
+```
 
-# self-build instead:
+Self-build:
+
+```sh
 docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t inkcap .
-docker run -p 3000:3000 --env-file .env.production inkcap \
-  sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
 ```
