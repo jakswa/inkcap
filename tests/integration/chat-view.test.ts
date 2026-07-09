@@ -113,6 +113,7 @@ describe('message partial rendering', () => {
     // reasoning tucked into a collapsed <details>
     expect(html).toContain('<details')
     expect(html).toContain('Reasoning')
+    expect(html).toContain('data-reasoning')
     expect(html).toContain('let me think about it')
     // subtle footer: model + prompt/generation timings
     expect(html).toContain('test-model')
@@ -120,14 +121,16 @@ describe('message partial rendering', () => {
     expect(html).toContain('50.0 tok/s')
     expect(html).toContain('gen')
     expect(html).toContain('20.0 tok/s')
+    expect(html).toContain('<footer')
+    expect(html).toContain('msg-actions')
   })
 
-  test('renders assistant tool-call names and arguments in a collapsed inspector', async () => {
+  test('assistant tool turns keep reasoning but do not render empty content or durable tool UI', async () => {
     const html = await renderMessageHtml({
       id: 'msg-tools',
       role: 'assistant',
       content: '',
-      reasoning_content: null,
+      reasoning_content: 'thinking before the tool',
       model: 'test-model',
       status: 'complete',
       timings: null,
@@ -140,10 +143,33 @@ describe('message partial rendering', () => {
       ],
     })
 
-    expect(html).toContain('Tool call')
-    expect(html).toContain('echo')
-    expect(html).toContain('call_1')
+    expect(html).toContain('thinking before the tool')
+    expect(html).toContain('data-reasoning')
+    expect(html).not.toContain('data-content')
+    expect(html).not.toContain('Tool call')
+    expect(html).not.toContain('call_1')
+  })
+
+  test('tool result rows own tool names and arguments', async () => {
+    const html = await renderMessageHtml({
+      id: 'msg-tool-result',
+      role: 'tool',
+      content: 'tool said hi',
+      tool_call_id: 'call_1',
+      status: 'complete',
+      toolCall: {
+        id: 'call_1',
+        name: 'echo',
+        arguments: '{\n  "text": "hi"\n}',
+        icon: 'wrench',
+        tone: 'generic',
+      },
+    })
+
+    expect(html).toContain('Tool result: echo')
+    expect(html).toContain('Arguments')
     expect(html).toContain('&quot;text&quot;: &quot;hi&quot;')
+    expect(html).toContain('tool said hi')
   })
 
   test('a streaming message stays plain text (no client-side markdown)', async () => {

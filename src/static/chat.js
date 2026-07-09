@@ -27,6 +27,7 @@
   var streamOpenedAt = 0;
   var sawOutput = false;
   var sawProgress = false;
+  var statusPhase = '';
   var pinned = true; // stick to the newest tokens unless the user scrolls up
 
   function root() {
@@ -85,6 +86,7 @@
     streamOpenedAt = Date.now();
     sawOutput = false;
     sawProgress = false;
+    statusPhase = 'waiting';
     var update = function () {
       if (sawOutput || sawProgress) return;
       var seconds = Math.floor((Date.now() - streamOpenedAt) / 1000);
@@ -95,27 +97,36 @@
   }
 
   function markOutputStarted() {
-    if (sawOutput) return;
     sawOutput = true;
     stopStatusTimer();
-    setStatus('Generating…');
+    if (statusPhase !== 'generation') {
+      statusPhase = 'generation';
+      setStatus('Generating…');
+    }
   }
 
   function updateLiveStatus(stats) {
     if (!stats) return;
     sawProgress = true;
     if (stats.generation && Number(stats.generation.tokens || 0) > 0) {
+      var tokens = Number(stats.generation.tokens || 0).toLocaleString();
+      var rate = Number(stats.generation.rate || 0);
       sawOutput = true;
       stopStatusTimer();
-      setStatus('Generating…');
+      statusPhase = 'generation';
+      setStatus('Generating… ' + tokens + ' tokens' + (rate > 0 ? ' · ' + rate.toFixed(1) + ' tok/s' : ''));
       return;
     }
-    if (!sawOutput && stats.prompt) {
+    if (stats.prompt) {
+      stopStatusTimer();
+      statusPhase = 'prompt';
       var done = Number(stats.prompt.processed || 0).toLocaleString();
       var total = Number(stats.prompt.total || 0);
-      setStatus(total > 0
+      var promptRate = Number(stats.prompt.rate || 0);
+      setStatus((total > 0
         ? 'Processing prompt… ' + done + '/' + total.toLocaleString() + ' tokens'
-        : 'Processing prompt… ' + done + ' tokens');
+        : 'Processing prompt… ' + done + ' tokens') +
+        (promptRate > 0 ? ' · ' + promptRate.toFixed(1) + ' tok/s' : '')); 
     }
   }
 
@@ -142,7 +153,7 @@
   }
 
   function appendDeltaText(node, selector, text, offset) {
-    if (!text) return true;
+    if (!text) return false;
     var el = node.querySelector(selector);
     if (!el) return false;
     if (typeof offset !== 'number') {
@@ -151,7 +162,7 @@
     }
     var current = el.textContent.length;
     var end = offset + text.length;
-    if (current >= end) return true; // already represented by the SSR snapshot
+    if (current >= end) return false; // already represented by the SSR snapshot
     if (current > offset) {
       el.textContent += text.slice(current - offset);
       return true;
@@ -164,28 +175,6 @@
     // guessing and corrupting the reasoning/content panes.
     refreshChat();
     return false;
-  }
-
-  function collapseResolvedToolCall(finalNode) {
-    if (!finalNode || finalNode.getAttribute('data-role') !== 'tool') return;
-    var id = finalNode.getAttribute('data-tool-call-id');
-    if (!id) return;
-    var r = root();
-    if (!r) return;
-    var allChips = r.querySelectorAll('[data-tool-call-host] [data-tool-call-id]');
-    for (var i = 0; i < allChips.length; i++) {
-      if (allChips[i].getAttribute('data-tool-call-id') !== id) continue;
-      var host = allChips[i].closest('[data-tool-call-host]');
-      allChips[i].remove();
-      if (!host) continue;
-      var stillPending = host.querySelector('[data-tool-call-id]');
-      var content = host.querySelector('[data-content]');
-      var reasoning = host.querySelector('[data-reasoning]');
-      var hasText =
-        (content && content.textContent.trim() !== '') ||
-        (reasoning && reasoning.textContent.trim() !== '');
-      if (!stillPending && !hasText) host.classList.add('hidden');
-    }
   }
 
   function openStream() {
@@ -213,7 +202,6 @@
         article.setAttribute('data-message-id', d.messageId);
         article.setAttribute('data-role', d.role || 'assistant');
         article.setAttribute('data-status', 'streaming');
-        if ((d.role || 'assistant') === 'assistant') article.setAttribute('data-tool-call-host', '');
         article.innerHTML =
           '<pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning></pre>' +
           '<pre class="m-0 hidden rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5 [&:not(:empty)]:block" data-content></pre>';
@@ -222,15 +210,18 @@
       if (pinned) scrollToBottom();
     });
 
+    es.addEventListener('run-progress', function (e) {
+      updateLiveStatus(JSON.parse(e.data));
+    });
+
     es.addEventListener('delta', function (e) {
       var d = JSON.parse(e.data);
       var node = find(d.messageId);
       if (!node) return;
-      if (d.content || d.reasoning) markOutputStarted();
-      var ok = appendDeltaText(node, '[data-content]', d.content, d.contentOffset);
-      ok = appendDeltaText(node, '[data-reasoning]', d.reasoning, d.reasoningOffset) && ok;
-      if (d.liveStats) updateLiveStatus(d.liveStats);
-      if (ok && pinned) scrollToBottom();
+      var appended = appendDeltaText(node, '[data-content]', d.content, d.contentOffset);
+      appended = appendDeltaText(node, '[data-reasoning]', d.reasoning, d.reasoningOffset) || appended;
+      if (appended) markOutputStarted();
+      if (appended && pinned) scrollToBottom();
     });
 
     es.addEventListener('message-final', function (e) {
@@ -243,7 +234,6 @@
         var t = root() && root().querySelector('[data-transcript]');
         if (t) t.insertAdjacentHTML('beforeend', d.html);
       }
-      collapseResolvedToolCall(find(d.messageId));
       if (pinned) scrollToBottom();
     });
 

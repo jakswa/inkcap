@@ -127,7 +127,8 @@ function defaultStallTimeoutMs() {
 
 const TERMINAL_STATUSES = new Set(['done', 'cancelled', 'error'])
 
-export type RunEventType = 'message-start' | 'delta' | 'message-final' | 'run-status'
+type PersistedRunEventType = 'message-start' | 'delta' | 'message-final' | 'run-status'
+export type RunEventType = PersistedRunEventType | 'run-progress'
 
 export interface RunEventRecord {
   runId: string
@@ -181,7 +182,7 @@ export function subscribeToRun(
 // Persist an event (atomically bumping runs.seq) and fan it out. Persistence
 // happens BEFORE fan-out: a subscriber that replays rows `seq <= n` and then
 // receives live events `seq > n` sees every event exactly once, in order.
-async function emitEvent(runId: string, type: RunEventType, payload: unknown) {
+async function emitEvent(runId: string, type: PersistedRunEventType, payload: unknown) {
   const row = await insertRunEvent({ runId, type, payload })
   const event: RunEventRecord = {
     runId,
@@ -200,6 +201,20 @@ async function emitEvent(runId: string, type: RunEventType, payload: unknown) {
     }
   }
   return event
+}
+
+function emitTransientEvent(runId: string, type: RunEventType, payload: unknown) {
+  const event: RunEventRecord = { runId, seq: 0, type, payload }
+  const set = subscribers.get(runId)
+  if (set) {
+    for (const listener of [...set]) {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error('run event listener failed', error)
+      }
+    }
+  }
 }
 
 export async function renderMessageHtml<
@@ -335,12 +350,10 @@ function liveStatsFromPromptProgress(progress: PromptProgress): LiveStats {
 class DeltaFlusher {
   private pendingContent = ''
   private pendingReasoning = ''
-  private pendingStats: LiveStats | null = null
   private contentLength = 0
   private reasoningLength = 0
   private count = 0
   private timer: ReturnType<typeof setTimeout> | null = null
-  private statsTimer: ReturnType<typeof setTimeout> | null = null
   private chain: Promise<void> = Promise.resolve()
 
   constructor(private handle: RunHandle) {}
@@ -359,39 +372,22 @@ class DeltaFlusher {
     }
   }
 
-  addStats(stats: LiveStats | null) {
-    if (!stats) return
-    this.pendingStats = stats
-    if (this.pendingContent !== '' || this.pendingReasoning !== '') return
-    if (!this.statsTimer) {
-      this.statsTimer = setTimeout(() => {
-        this.statsTimer = null
-        this.flush()
-      }, STATS_FLUSH_MS)
-    }
-  }
 
   private flush() {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
-    if (this.statsTimer) {
-      clearTimeout(this.statsTimer)
-      this.statsTimer = null
-    }
     const content = this.pendingContent
     const reasoning = this.pendingReasoning
     const contentOffset = this.contentLength
     const reasoningOffset = this.reasoningLength
-    const liveStats = this.pendingStats
     this.pendingContent = ''
     this.pendingReasoning = ''
-    this.pendingStats = null
     this.contentLength += content.length
     this.reasoningLength += reasoning.length
     this.count = 0
-    if (content === '' && reasoning === '' && !liveStats) return
+    if (content === '' && reasoning === '') return
     const { messageId, runId } = this.handle
     this.chain = this.chain.then(async () => {
       if (content !== '' || reasoning !== '') {
@@ -403,8 +399,51 @@ class DeltaFlusher {
         reasoning,
         contentOffset,
         reasoningOffset,
-        liveStats,
       })
+    })
+  }
+
+  async close() {
+    this.flush()
+    await this.chain
+  }
+}
+
+class ProgressEmitter {
+  private pending: LiveStats | null = null
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private chain: Promise<void> = Promise.resolve()
+  private lastSentAt = 0
+
+  constructor(private runId: string) {}
+
+  add(stats: LiveStats | null) {
+    if (!stats) return
+    this.pending = stats
+    const now = Date.now()
+    if (this.lastSentAt === 0 || now - this.lastSentAt >= STATS_FLUSH_MS) {
+      this.flush()
+      return
+    }
+    if (!this.timer) {
+      this.timer = setTimeout(() => {
+        this.timer = null
+        this.flush()
+      }, STATS_FLUSH_MS - (now - this.lastSentAt))
+    }
+  }
+
+  private flush() {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    const stats = this.pending
+    this.pending = null
+    if (!stats) return
+    this.lastSentAt = Date.now()
+    this.chain = this.chain.then(() => {
+      emitTransientEvent(this.runId, 'run-progress', stats)
     })
   }
 
@@ -440,6 +479,8 @@ async function streamTurn(
     finishReason: null,
   }
   const flusher = new DeltaFlusher(handle)
+  const progress = new ProgressEmitter(handle.runId)
+  let generationStarted = false
   try {
     for await (const delta of streamChat(
       provider,
@@ -452,25 +493,33 @@ async function streamTurn(
     )) {
       switch (delta.kind) {
         case 'content':
+          generationStarted = true
           flusher.add('content', delta.text)
           break
         case 'reasoning':
+          generationStarted = true
           flusher.add('reasoning', delta.text)
           break
         case 'tool-calls':
+          generationStarted = true
           // Full merged array every time; keep the latest.
           result.toolCalls = delta.toolCalls
           break
         case 'model':
           result.model = delta.model
           break
-        case 'timings':
+        case 'timings': {
           result.timings = delta.timings
-          flusher.addStats(liveStatsFromTimings(delta.timings))
+          const stats = liveStatsFromTimings(delta.timings)
+          if (!generationStarted) delete stats?.generation
+          progress.add(stats)
           break
-        case 'prompt-progress':
-          flusher.addStats(liveStatsFromPromptProgress(delta.progress))
+        }
+        case 'prompt-progress': {
+          const stats = liveStatsFromPromptProgress(delta.progress)
+          progress.add(stats)
           break
+        }
         case 'finish':
           result.finishReason = delta.finishReason
           break
@@ -478,6 +527,7 @@ async function streamTurn(
     }
   } finally {
     await flusher.close()
+    await progress.close()
   }
   return result
 }

@@ -308,15 +308,10 @@ async function renderShow(
     }
   }
 
-  // Tool calls are stored on the assistant turn; tool results are separate
-  // role='tool' messages keyed by tool_call_id. For the transcript, decorate
-  // each result with its call name/args and only show assistant-side call chips
-  // for calls that are still waiting on a result (transient live feedback).
-  const resolvedToolCallIds = new Set(
-    path
-      .filter((message) => message.role === 'tool' && message.tool_call_id)
-      .map((message) => message.tool_call_id!),
-  )
+  // Tool calls are stored on assistant turns; tool results are separate
+  // role='tool' messages keyed by tool_call_id. The durable transcript shows
+  // resolved tool metadata on the tool row, not by mutating the previous
+  // assistant row in the browser.
   const toolCallById = new Map(
     path
       .flatMap((message) => toolCallsFor(message).filter((call) => call.id))
@@ -328,29 +323,22 @@ async function renderShow(
   // renders a "‹ i/n ›" switcher. Computed here (not in toRenderable) because
   // it needs a DB lookup the runner's message-final render doesn't do.
   const messages = await Promise.all(
-    path.map(async (message) => {
-      const pendingToolCalls =
-        message.role === 'assistant'
-          ? toolCallsFor(message).filter((call) => !call.id || !resolvedToolCallIds.has(call.id))
-          : undefined
-      return {
-        ...toRenderable({
-          ...message,
-          ...(pendingToolCalls ? { toolCalls: pendingToolCalls } : {}),
-          toolCall:
-            message.role === 'tool' && message.tool_call_id
-              ? toolCallById.get(message.tool_call_id) ?? null
-              : null,
-        }),
-        siblingNav: message.id
-          ? await siblingNavFor({
-              conversationId: conversation.id,
-              parentId: message.parent_id,
-              messageId: message.id,
-            })
-          : null,
-      }
-    }),
+    path.map(async (message) => ({
+      ...toRenderable({
+        ...message,
+        toolCall:
+          message.role === 'tool' && message.tool_call_id
+            ? toolCallById.get(message.tool_call_id) ?? null
+            : null,
+      }),
+      siblingNav: message.id
+        ? await siblingNavFor({
+            conversationId: conversation.id,
+            parentId: message.parent_id,
+            messageId: message.id,
+          })
+        : null,
+    })),
   )
 
   c.header('Cache-Control', 'private, no-store')
@@ -1075,12 +1063,15 @@ conversationRoutes.get('/conversations/:id/events', async (c) => {
       isTerminalRunStatus(String((event.payload as { status?: string })?.status ?? ''))
 
     const send = (event: RunEventRecord) => {
-      if (event.seq <= lastSentSeq) return
-      lastSentSeq = event.seq
+      const transient = event.type === 'run-progress'
+      if (!transient) {
+        if (event.seq <= lastSentSeq) return
+        lastSentSeq = event.seq
+      }
       writeChain = writeChain
         .then(() =>
           stream.writeSSE({
-            id: String(event.seq),
+            ...(transient ? {} : { id: String(event.seq) }),
             event: event.type,
             data: JSON.stringify(event.payload),
           }),

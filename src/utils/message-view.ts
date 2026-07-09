@@ -21,9 +21,11 @@ import { renderMarkdown } from './markdown'
 // Loose structural shape (no index signature) so the generated, concrete
 // message-row types from bun-sqlgen satisfy the constraint without a cast.
 interface MessageFields {
+  id?: string | null
   role?: string | null
   content?: string | null
   reasoning_content?: string | null
+  model?: string | null
   status?: string | null
   timings?: unknown
   tool_calls?: unknown
@@ -66,6 +68,10 @@ export interface RenderableExtras {
   artifactLinks: ArtifactLink[]
   toolCalls: ToolCallView[]
   toolCall: ToolCallView | null
+  showReasoning: boolean
+  showContent: boolean
+  showFooter: boolean
+  showActions: boolean
   hideMessage: boolean
 }
 
@@ -225,27 +231,35 @@ export function toRenderable<T extends MessageFields>(
   const hasActions = rendersMarkdown
   const stats = statsFor(message.timings)
   const toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : toolCallsFor(message)
-  const hideMessage =
-    message.hideMessage === true ||
-    (role === 'assistant' &&
-      status !== 'streaming' &&
-      toolCalls.length === 0 &&
-      Array.isArray(message.tool_calls) &&
-      message.tool_calls.length > 0 &&
-      (message.content ?? '').trim().length === 0 &&
-      !message.reasoning_content)
+  const contentHtml =
+    status === 'streaming' || !rendersMarkdown
+      ? null
+      : renderMarkdown(message.content ?? '')
+  const showReasoning =
+    role === 'assistant' && (message.reasoning_content ?? '').trim().length > 0
+  const showContent =
+    status === 'streaming' ||
+    (rendersMarkdown && contentHtml !== null && contentHtml.trim().length > 0)
+  const visibleAssistant = role !== 'assistant' || status === 'streaming' || showReasoning || showContent
+  const showFooter =
+    role === 'assistant' &&
+    status !== 'streaming' &&
+    visibleAssistant &&
+    Boolean(message.model || stats || message.id)
+  const showActions = showFooter && Boolean(message.id)
   return {
     ...message,
-    contentHtml:
-      status === 'streaming' || !rendersMarkdown
-        ? null
-        : renderMarkdown(message.content ?? ''),
+    contentHtml,
     stats,
     timingLabel: timingLabelFor(stats),
     clipContent: hasActions ? clipContentFor(message.content) : '',
     artifactLinks: artifactLinksFor(message),
     toolCalls,
     toolCall: message.toolCall ?? null,
-    hideMessage,
+    showReasoning,
+    showContent,
+    showFooter,
+    showActions,
+    hideMessage: message.hideMessage === true || !visibleAssistant,
   }
 }
