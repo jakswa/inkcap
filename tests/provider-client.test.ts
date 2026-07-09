@@ -17,6 +17,15 @@ describe('buildChatRequest streaming flag', () => {
     ).toBe(true)
   })
 
+  test('llama-server streaming requests opt into live progress timings', () => {
+    const provider = { kind: 'llama-server', base_url: 'http://x', api_key: null }
+    const messages = [{ role: 'user' as const, content: 'hi' }]
+    const body = buildChatRequest(provider, null, messages, { stream: true }).body
+    expect(body['return_progress']).toBe(true)
+    expect(body['timings_per_token']).toBe(true)
+    expect(body['sse_ping_interval']).toBe(1)
+  })
+
   test('non-empty tools opt the request into automatic tool choice', () => {
     const provider = { base_url: 'http://x', api_key: null }
     const messages = [{ role: 'user' as const, content: 'hi' }]

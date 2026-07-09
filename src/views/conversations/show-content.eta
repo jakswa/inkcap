@@ -1,6 +1,6 @@
 <%~ include('./sidebar', it) %>
 
-<div id="chat" class="flex min-w-0 flex-1 flex-col" data-chat data-conversation="<%= it.conversation.id %>" data-events="/conversations/<%= it.conversation.id %>/events"<% if (it.activeRun) { %> data-active="1"<% } %>>
+<div id="chat" class="flex min-w-0 flex-1 flex-col" data-chat data-conversation="<%= it.conversation.id %>" data-events="/conversations/<%= it.conversation.id %>/events?after=<%= it.eventCursor || 0 %>"<% if (it.activeRun) { %> data-active="1"<% } %>>
   <header class="flex h-12 shrink-0 items-center gap-1 border-b border-edge bg-veil px-3 backdrop-blur-xl">
     <a class="icon-btn lg:hidden" href="/conversations" aria-label="All chats" title="All chats">
       <%~ include('../partials/icon', { name: 'arrowLeft', class: 'size-4' }) %>
@@ -31,9 +31,9 @@
             <h2 class="text-sm font-bold tracking-wider text-accent uppercase">Artifacts</h2>
             <div class="grid gap-2">
               <% it.artifacts.forEach((artifact) => { %>
-                <a class="flex items-baseline justify-between gap-3 rounded-xl bg-raised px-3 py-2 no-underline transition-colors hover:bg-ink/5" href="/artifacts/<%= artifact.id %>">
-                  <span class="min-w-0 truncate font-semibold"><%= artifact.title %></span>
-                  <span class="shrink-0 text-xs text-ink-faint"><%= artifact.kind %></span>
+                <a class="flex min-w-0 max-w-full items-baseline justify-between gap-3 overflow-hidden rounded-xl bg-raised px-3 py-2 no-underline transition-colors hover:bg-ink/5" href="/artifacts/<%= artifact.id %>">
+                  <span class="min-w-0 flex-1 truncate font-semibold"><%= artifact.title %></span>
+                  <span class="shrink-0 truncate text-xs text-ink-faint"><%= artifact.kind %></span>
                 </a>
               <% }) %>
             </div>

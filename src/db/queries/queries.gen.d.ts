@@ -895,6 +895,11 @@ export interface IInsertRunEventResult {
     created_at: Date;
 }
 
+/** Result of query `GetRunEventCursor`. */
+export interface IGetRunEventCursorResult {
+    seq: string | null;
+}
+
 /** Result of query `ListRunEventsAfter`. */
 export interface IListRunEventsAfterResult {
     run_id: string;
@@ -1181,6 +1186,7 @@ export interface Queries {
     CountPushSubscriptionsForUser: ICountPushSubscriptionsForUserResult;
     MarkPushSubscriptionUsed: IMarkPushSubscriptionUsedResult;
     InsertRunEvent: IInsertRunEventResult;
+    GetRunEventCursor: IGetRunEventCursorResult;
     ListRunEventsAfter: IListRunEventsAfterResult;
     DeleteExpiredRunEvents: IDeleteExpiredRunEventsResult;
     CreateRun: ICreateRunResult;

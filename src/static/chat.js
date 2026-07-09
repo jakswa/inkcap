@@ -26,6 +26,7 @@
   var statusTimer = null;
   var streamOpenedAt = 0;
   var sawOutput = false;
+  var sawProgress = false;
   var pinned = true; // stick to the newest tokens unless the user scrolls up
 
   function root() {
@@ -83,8 +84,9 @@
     stopStatusTimer();
     streamOpenedAt = Date.now();
     sawOutput = false;
+    sawProgress = false;
     var update = function () {
-      if (sawOutput) return;
+      if (sawOutput || sawProgress) return;
       var seconds = Math.floor((Date.now() - streamOpenedAt) / 1000);
       setStatus(seconds > 0 ? 'Waiting for model… ' + seconds + 's' : 'Waiting for model…');
     };
@@ -99,6 +101,24 @@
     setStatus('Generating…');
   }
 
+  function updateLiveStatus(stats) {
+    if (!stats) return;
+    sawProgress = true;
+    if (stats.generation && Number(stats.generation.tokens || 0) > 0) {
+      sawOutput = true;
+      stopStatusTimer();
+      setStatus('Generating…');
+      return;
+    }
+    if (!sawOutput && stats.prompt) {
+      var done = Number(stats.prompt.processed || 0).toLocaleString();
+      var total = Number(stats.prompt.total || 0);
+      setStatus(total > 0
+        ? 'Processing prompt… ' + done + '/' + total.toLocaleString() + ' tokens'
+        : 'Processing prompt… ' + done + ' tokens');
+    }
+  }
+
   function closeStream() {
     stopStatusTimer();
     if (es) {
@@ -107,7 +127,44 @@
     }
   }
 
-  var seen = {}; // messageId -> already cleared the SSR partial before rebuild
+  function refreshChat(statusText) {
+    fetch(location.href)
+      .then(function (res) {
+        return res.text();
+      })
+      .then(function (html) {
+        swap(html, { preserveComposer: true });
+        if (statusText) setStatus(statusText);
+      })
+      .catch(function () {
+        location.reload();
+      });
+  }
+
+  function appendDeltaText(node, selector, text, offset) {
+    if (!text) return true;
+    var el = node.querySelector(selector);
+    if (!el) return false;
+    if (typeof offset !== 'number') {
+      el.textContent += text;
+      return true;
+    }
+    var current = el.textContent.length;
+    var end = offset + text.length;
+    if (current >= end) return true; // already represented by the SSR snapshot
+    if (current > offset) {
+      el.textContent += text.slice(current - offset);
+      return true;
+    }
+    if (current === offset) {
+      el.textContent += text;
+      return true;
+    }
+    // We missed an earlier patch. The server owns truth, so resync instead of
+    // guessing and corrupting the reasoning/content panes.
+    refreshChat();
+    return false;
+  }
 
   function collapseResolvedToolCall(finalNode) {
     if (!finalNode || finalNode.getAttribute('data-role') !== 'tool') return;
@@ -135,7 +192,6 @@
     var r = root();
     if (!r || !r.hasAttribute('data-active')) return;
     closeStream();
-    seen = {};
     es = new EventSource(r.getAttribute('data-events'));
     startWaitingStatus();
 
@@ -149,17 +205,20 @@
       if (!t) return;
       var empty = t.querySelector('[data-empty]');
       if (empty) empty.remove();
-      var article = document.createElement('article');
-      article.className = 'group grid gap-3.5 py-1';
-      article.setAttribute('data-message-id', d.messageId);
-      article.setAttribute('data-role', d.role || 'assistant');
-      article.setAttribute('data-status', 'streaming');
-      // Keep these classes in sync with the streaming branch of message.eta.
-      article.innerHTML =
-        '<pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning></pre>' +
-        '<pre class="m-0 rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5" data-content></pre>';
-      t.appendChild(article);
-      seen[d.messageId] = true; // born empty — nothing to clear on first delta
+      if (d.html) {
+        t.insertAdjacentHTML('beforeend', d.html);
+      } else {
+        var article = document.createElement('article');
+        article.className = 'group grid gap-3.5 py-1';
+        article.setAttribute('data-message-id', d.messageId);
+        article.setAttribute('data-role', d.role || 'assistant');
+        article.setAttribute('data-status', 'streaming');
+        if ((d.role || 'assistant') === 'assistant') article.setAttribute('data-tool-call-host', '');
+        article.innerHTML =
+          '<pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning></pre>' +
+          '<pre class="m-0 hidden rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5 [&:not(:empty)]:block" data-content></pre>';
+        t.appendChild(article);
+      }
       if (pinned) scrollToBottom();
     });
 
@@ -167,19 +226,11 @@
       var d = JSON.parse(e.data);
       var node = find(d.messageId);
       if (!node) return;
-      if (!seen[d.messageId]) {
-        // First delta after (re)connect: clear the SSR/replayed partial, then
-        // rebuild from the flushed deltas (same bytes as the persisted row).
-        seen[d.messageId] = true;
-        var pres = node.querySelectorAll('[data-content], [data-reasoning]');
-        for (var i = 0; i < pres.length; i++) pres[i].textContent = '';
-      }
-      var c = node.querySelector('[data-content]');
-      var rz = node.querySelector('[data-reasoning]');
       if (d.content || d.reasoning) markOutputStarted();
-      if (d.content && c) c.textContent += d.content;
-      if (d.reasoning && rz) rz.textContent += d.reasoning;
-      if (pinned) scrollToBottom();
+      var ok = appendDeltaText(node, '[data-content]', d.content, d.contentOffset);
+      ok = appendDeltaText(node, '[data-reasoning]', d.reasoning, d.reasoningOffset) && ok;
+      if (d.liveStats) updateLiveStatus(d.liveStats);
+      if (ok && pinned) scrollToBottom();
     });
 
     es.addEventListener('message-final', function (e) {
@@ -206,17 +257,7 @@
       var after = '';
       if (d.status === 'cancelled') after = 'Stopped.';
       else if (d.status === 'error') after = 'Error: ' + (d.error || 'the run failed.');
-      fetch(location.href)
-        .then(function (res) {
-          return res.text();
-        })
-        .then(function (html) {
-          swap(html, { preserveComposer: true });
-          if (after) setStatus(after);
-        })
-        .catch(function () {
-          location.reload();
-        });
+      refreshChat(after);
     });
 
     // On transient network drops EventSource reconnects on its own with the
@@ -349,28 +390,6 @@
     }
     var box = container.querySelector('input[name="enabled_mcp_server_id"]');
     if (box) updateToolsCountFrom(box);
-  }
-
-  function syncStatsToggle(button) {
-    var root = button.closest('[data-stats-toggle]');
-    if (!root) return;
-    var kind = button.getAttribute('data-stats-tab');
-    var tabs = root.querySelectorAll('[data-stats-tab]');
-    var panels = root.querySelectorAll('[data-stats-panel]');
-    for (var i = 0; i < tabs.length; i++) {
-      var active = tabs[i].getAttribute('data-stats-tab') === kind;
-      tabs[i].setAttribute('aria-pressed', active ? 'true' : 'false');
-      tabs[i].classList.toggle('bg-ink/10', active);
-      tabs[i].classList.toggle('text-ink', active);
-      tabs[i].classList.toggle('text-ink-dim', !active);
-      tabs[i].classList.toggle('hover:bg-ink/5', !active);
-      tabs[i].classList.toggle('hover:text-ink', !active);
-    }
-    for (var j = 0; j < panels.length; j++) {
-      var show = panels[j].getAttribute('data-stats-panel') === kind;
-      panels[j].hidden = !show;
-      panels[j].classList.toggle('inline-flex', show);
-    }
   }
 
   function positionMenu(details) {
@@ -518,12 +537,6 @@
     },
     true,
   );
-
-  document.addEventListener('click', function (e) {
-    var tab = e.target && e.target.closest ? e.target.closest('[data-stats-tab]') : null;
-    if (!tab) return;
-    syncStatsToggle(tab);
-  });
 
   // Copy a message's raw markdown; flash a check as feedback.
   document.addEventListener('click', function (e) {

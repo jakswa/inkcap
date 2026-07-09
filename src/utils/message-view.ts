@@ -72,6 +72,10 @@ export interface RenderableExtras {
 // llama.cpp / OpenAI-compatible timings block (see mock-provider finishChunk):
 // { prompt_n, prompt_ms, predicted_n, predicted_ms }. All optional/defensive —
 // a provider may send a subset or nothing.
+function tokenLabel(count: number) {
+  return `${count} token${count === 1 ? '' : 's'}`
+}
+
 function timingStatsFor(count: unknown, ms: unknown): TimingStats | null {
   if (typeof count !== 'number' || count <= 0) return null
   let seconds: string | null = null
@@ -82,7 +86,7 @@ function timingStatsFor(count: unknown, ms: unknown): TimingStats | null {
     if (Number.isFinite(perSecond)) rate = `${perSecond.toFixed(1)} tok/s`
   }
   return {
-    tokens: `${count} tokens`,
+    tokens: tokenLabel(count),
     seconds,
     rate,
   }

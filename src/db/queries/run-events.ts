@@ -27,6 +27,18 @@ export async function insertRunEvent(input: {
   return event
 }
 
+// Current cursor for a run's event log. SSR captures this before reading the
+// transcript, then the browser subscribes with `?after=<seq>` so live deltas
+// append to the snapshot instead of replaying old bytes over it.
+export async function getRunEventCursor(runId: string) {
+  const [row] = await sql.GetRunEventCursor`
+    SELECT COALESCE(max(seq), 0)::bigint AS seq
+    FROM run_events
+    WHERE run_id = ${runId}
+  `
+  return Number(row?.seq ?? 0)
+}
+
 // Replay: all of a run's events with seq strictly after the cursor, in order.
 // Pass afterSeq = 0 for a full replay.
 export async function listRunEventsAfter(input: { runId: string; afterSeq: number }) {

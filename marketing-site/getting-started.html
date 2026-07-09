@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Getting started — inkcap</title>
-  <meta name="description" content="Run inkcap with Docker or Bun, add providers, sign in to ChatGPT through Codex device auth, import llama.cpp web UI history, and deploy with GHCR images.">
+  <meta name="description" content="Run inkcap with Docker or Bun, add providers, sign in to ChatGPT through Codex device auth, and import llama.cpp web UI history.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -23,44 +23,40 @@
       <h1>Getting started</h1>
       <p class="lede">inkcap is one stateful process: web server plus agent runtime. Bring PostgreSQL and an LLM provider; the server keeps runs moving even when every browser disconnects.</p>
 
-      <h2 id="docker">Fast path: Docker + existing Postgres</h2>
-      <p>Create an <code>inkcap</code> database, then run the published GHCR image. This example points at PostgreSQL on the host machine and also allows local providers such as <code>llama-server</code> at <code>host.docker.internal</code>.</p>
-      <pre><code>docker run -d --name inkcap --restart unless-stopped \
-  -p 3000:3000 \
-  --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap \
-  -e SESSION_SECRET="$(openssl rand -base64 32)" \
-  -e REGISTRATION=open \
-  -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal \
-  ghcr.io/jakswa/inkcap:latest \
-  sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
-      <p>Open <code>http://localhost:3000</code>, register, add a provider, and start chatting. For a real deployment, use a fixed secret, keep registration closed, and bootstrap the first user with the task below.</p>
+      <h2 id="requirements">Requirements</h2>
+      <ul>
+        <li>PostgreSQL with an <code>inkcap</code> database.</li>
+        <li>An LLM provider: <code>llama-server</code>, an OpenAI-compatible API, or ChatGPT via Codex.</li>
+        <li>Either Docker or <a href="https://bun.sh">Bun</a>.</li>
+      </ul>
 
-      <h3 id="postgres-container">No Postgres yet?</h3>
-      <pre><code>docker network create inkcap
+      <div class="setup-tabs" id="run">
+        <input type="radio" name="setup" id="setup-docker" checked>
+        <input type="radio" name="setup" id="setup-bun">
+        <div class="setup-head">
+          <h2>Run it</h2>
+          <div class="tab-list" role="tablist" aria-label="Setup method">
+            <label for="setup-docker" role="tab">Docker</label>
+            <label for="setup-bun" role="tab">Bun</label>
+          </div>
+        </div>
 
-docker run -d --name inkcap-postgres --network inkcap --restart unless-stopped \
-  -e POSTGRES_DB=inkcap \
-  -e POSTGRES_PASSWORD=inkcap \
-  -v inkcap-postgres:/var/lib/postgresql/data \
-  postgres:17
+        <div class="tab-panel tab-docker" aria-labelledby="setup-docker">
+          <p>Published image. Migrations run before the app starts; adjust <code>DATABASE_URL</code> for your Postgres.</p>
+          <pre><code>docker run -d --name inkcap --restart unless-stopped -p 3000:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
+        </div>
 
-docker run -d --name inkcap --network inkcap --restart unless-stopped \
-  -p 3000:3000 \
-  -e DATABASE_URL=postgresql://postgres:inkcap@inkcap-postgres:5432/inkcap \
-  -e SESSION_SECRET="$(openssl rand -base64 32)" \
-  -e REGISTRATION=open \
-  ghcr.io/jakswa/inkcap:latest \
-  sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
-
-      <h2 id="source">Source checkout</h2>
-      <p>Use this path for hacking on inkcap or running tests.</p>
-      <pre><code>git clone https://github.com/jakswa/inkcap
+        <div class="tab-panel tab-bun" aria-labelledby="setup-bun">
+          <p>Source checkout for hacking on inkcap or running tests.</p>
+          <pre><code>git clone https://github.com/jakswa/inkcap
 cd inkcap
 bun install
 cp .env.example .env.local   <span class="cmt"># set DATABASE_URL and SESSION_SECRET</span>
 bun run db:migrate
 bun run dev</code></pre>
+        </div>
+      </div>
+      <p class="setup-next">Open <code>http://localhost:3000</code>, register, add a provider, and start chatting.</p>
 
       <h2 id="providers">Add a provider</h2>
       <p>Providers live server-side; API keys are stored in PostgreSQL and never reach the browser. Add one under <strong>Providers → Add provider</strong>. Supported paths include llama-server, OpenAI-compatible APIs, and ChatGPT via Codex.</p>
@@ -80,7 +76,7 @@ bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
         <thead><tr><th>Variable</th><th>What it does</th></tr></thead>
         <tbody>
           <tr><td><code>DATABASE_URL</code></td><td>PostgreSQL connection string</td></tr>
-          <tr><td><code>SESSION_SECRET</code></td><td>Encrypts the session cookie; production needs a fixed, non-placeholder value at least 32 bytes long</td></tr>
+          <tr><td><code>SESSION_SECRET</code></td><td>Encrypts the session cookie; use a fixed, non-placeholder value at least 32 bytes long outside throwaway dev</td></tr>
           <tr><td><code>ASSET_VERSION</code></td><td>Static-asset version; required when building a production image</td></tr>
           <tr><td><code>PORT</code></td><td>HTTP port inside the container/process (default 3000)</td></tr>
           <tr><td><code>REGISTRATION</code></td><td><code>open</code> or <code>closed</code>; defaults to closed in production, open elsewhere</td></tr>
@@ -88,16 +84,6 @@ bun src/tasks/seed-provider.ts --user you@example.com</code></pre>
           <tr><td><code>DEV_LLAMA_SERVER</code> / <code>DEV_LLAMA_KEY</code></td><td>Feed the development seed-provider task</td></tr>
         </tbody>
       </table>
-
-      <h2 id="production">Production notes</h2>
-      <p>Every push to master builds a multi-arch image at <code>ghcr.io/jakswa/inkcap:latest</code> plus a SHA tag. To self-build instead:</p>
-      <pre><code>docker build --build-arg ASSET_VERSION=$(git rev-parse --short=7 HEAD) -t inkcap .</code></pre>
-      <p>The quick-start command migrates on container start. If you run the default image command instead, run migrations with the same environment as the app:</p>
-      <pre><code>docker exec inkcap bun build/tasks/migrate.js</code></pre>
-      <p>Registration defaults to <em>closed</em> in production. Bootstrap the first user from the running container:</p>
-      <pre><code>docker exec -e CREATE_USER_PASSWORD=... inkcap \
-  bun build/tasks/create-user.js --name You --email you@example.com</code></pre>
-      <div class="note">inkcap is deliberately a single stateful process. Restarts are safe: boot recovery finalizes runs interrupted mid-generation.</div>
 
       <h2 id="more">Digging deeper</h2>
       <ul>

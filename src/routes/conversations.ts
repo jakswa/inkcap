@@ -31,6 +31,7 @@ import {
 import { getUserSettings, patchUserSettings } from '../db/queries/users'
 import { listPendingApprovalsForRun } from '../db/queries/tool-approvals'
 import { listArtifactsForConversation } from '../db/queries/artifacts'
+import { getRunEventCursor } from '../db/queries/run-events'
 import {
   cancelRun,
   getActiveRunHandle,
@@ -278,6 +279,12 @@ async function renderShow(
     }),
   ])
 
+  // Capture a best-effort SSE cursor before reading the transcript. The
+  // browser subscribes after it to avoid replaying the whole run over the SSR
+  // snapshot; delta offsets still make races harmless if a flushed delta lands
+  // between this cursor read and the transcript read.
+  const eventCursor = activeRun ? await getRunEventCursor(activeRun.id) : 0
+
   const path = conversation.curr_node
     ? ((await getActivePath(conversation.curr_node)) as PathMessage[])
     : []
@@ -374,6 +381,7 @@ async function renderShow(
       current: row.id === conversation.id,
     })),
     activeRun: activeRun ?? null,
+    eventCursor,
     pendingApproval,
     artifacts,
     mcpServers,

@@ -104,18 +104,10 @@
 
       <section aria-label="Quick start">
         <p class="eyebrow">quick start</p>
-        <h2 class="section-title">A Docker image, your Postgres, then register.</h2>
+        <h2 class="section-title">Bring Postgres, run Docker, then register.</h2>
         <div class="prose">
-          <pre><code>docker run -d --name inkcap --restart unless-stopped \
-  -p 3000:3000 \
-  --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap \
-  -e SESSION_SECRET="$(openssl rand -base64 32)" \
-  -e REGISTRATION=open \
-  -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal \
-  ghcr.io/jakswa/inkcap:latest \
-  sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
-          <p>Open <code>http://localhost:3000</code>, register, add a provider, and chat. Prefer source checkout, Docker Compose-ish setup, or production-hardening notes? See <a href="getting-started.html">Getting started</a>.</p>
+          <pre><code>docker run -d --name inkcap --restart unless-stopped -p 3000:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre>
+          <p>Open <code>http://localhost:3000</code>, register, add a provider, and chat. Prefer Bun/source checkout? See <a href="getting-started.html">Getting started</a>.</p>
         </div>
       </section>
     </main>

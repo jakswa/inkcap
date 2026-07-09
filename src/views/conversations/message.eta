@@ -10,20 +10,20 @@
   <article class="group grid gap-2" data-message-id="<%= m.id %>" data-role="<%= m.role %>" data-status="<%= m.status %>"<% if (m.tool_call_id) { %> data-tool-call-id="<%= m.tool_call_id %>"<% } %>>
     <% if (artifactLinks.length > 0) { %>
       <% artifactLinks.forEach((artifact) => { %>
-        <div class="rounded-2xl border border-accent/30 bg-accent/10 p-3 shadow-sm shadow-black/5">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex min-w-0 items-center gap-3">
+        <div class="min-w-0 overflow-hidden rounded-2xl border border-accent/30 bg-accent/10 p-3 shadow-sm shadow-black/5">
+          <div class="flex min-w-0 flex-wrap items-center justify-between gap-3">
+            <div class="flex min-w-0 flex-1 items-center gap-3">
               <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/15 text-accent">
                 <%~ include('../partials/icon', { name: 'sparkles', class: 'size-4' }) %>
               </span>
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <p class="mb-0 text-xs font-bold tracking-wider text-accent uppercase">Artifact created</p>
-                <a class="block truncate text-sm font-bold text-ink no-underline hover:underline" href="<%= artifact.href %>"><%= artifact.title %></a>
+                <a class="block max-w-full truncate text-sm font-bold text-ink no-underline hover:underline" href="<%= artifact.href %>"><%= artifact.title %></a>
               </div>
             </div>
-            <div class="flex shrink-0 gap-2">
-              <a class="btn btn-primary px-3 py-1.5 text-xs" href="<%= artifact.href %>">Open</a>
-              <a class="btn btn-ghost px-3 py-1.5 text-xs" href="<%= artifact.downloadHref %>" download>Download</a>
+            <div class="flex w-full shrink-0 gap-2 sm:w-auto">
+              <a class="btn btn-primary flex-1 px-3 py-1.5 text-xs sm:flex-none" href="<%= artifact.href %>">Open</a>
+              <a class="btn btn-ghost flex-1 px-3 py-1.5 text-xs sm:flex-none" href="<%= artifact.downloadHref %>" download>Download</a>
             </div>
           </div>
         </div>
@@ -88,7 +88,7 @@
             then message-final swaps this whole <article> for the settled
             render. */ %>
       <pre class="m-0 hidden rounded-2xl border border-edge bg-raised/60 px-4 py-3 font-body text-sm whitespace-pre-wrap break-words text-ink-dim [&:not(:empty)]:block" data-reasoning><%= m.reasoning_content || '' %></pre>
-      <pre class="m-0 rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5" data-content><%= m.content %></pre>
+      <pre class="m-0 hidden rounded-3xl rounded-bl-lg border border-edge bg-raised/35 px-4 py-3.5 font-body whitespace-pre-wrap break-words text-ink shadow-sm shadow-black/5 [&:not(:empty)]:block" data-content><%= m.content %></pre>
     <% } else { %>
       <% if (m.reasoning_content) { %>
         <details class="group/acc rounded-2xl border border-edge bg-raised/60 px-4 py-2.5 text-sm">
@@ -139,39 +139,29 @@
     <% } %>
 
     <% if (m.status !== 'streaming' && (m.model || m.stats || m.id)) { %>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
+      <div class="grid gap-1.5 px-1">
         <% if (m.model || m.stats) { %>
-          <footer class="flex min-w-0 max-w-full flex-wrap items-center gap-2 text-xs leading-none text-ink-dim sm:text-[0.8125rem]">
+          <footer class="flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 text-[0.6875rem] leading-snug text-ink-dim sm:text-xs" title="<%= m.timingLabel || '' %>">
             <% if (m.model) { %>
-              <span class="inline-flex min-w-0 max-w-[8rem] items-center gap-1.5 rounded-md border border-edge px-1.5 py-1 font-medium text-ink-dim sm:max-w-xs" title="<%= m.model %>">
-                <%~ include('../partials/icon', { name: 'cube', class: 'size-3.5 shrink-0' }) %>
+              <span class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md border border-edge px-1.5 py-1 font-medium sm:max-w-xs" title="<%= m.model %>">
+                <%~ include('../partials/icon', { name: 'cube', class: 'size-3 shrink-0' }) %>
                 <span class="truncate"><%= m.model %></span>
               </span>
             <% } %>
-            <% if (m.stats) { %>
-              <% const defaultStatsKind = m.stats.generation ? 'generation' : 'prompt' %>
-              <span class="inline-flex max-w-full shrink-0 items-center gap-0.5 rounded-full border border-edge bg-raised/70 p-0.5 font-medium text-ink-dim shadow-sm shadow-black/5 sm:gap-1" data-stats-toggle title="<%= m.timingLabel || 'timings' %>">
-                <% if (m.stats.prompt) { %>
-                  <button class="rounded-full px-1.5 py-1 text-xs font-bold transition-colors sm:px-2 <%= defaultStatsKind === 'prompt' ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink' %>" type="button" data-stats-tab="prompt" aria-label="Show prompt stats" aria-pressed="<%= defaultStatsKind === 'prompt' ? 'true' : 'false' %>"><span class="sm:hidden">P</span><span class="hidden sm:inline">prompt</span></button>
-                <% } %>
-                <% if (m.stats.generation) { %>
-                  <button class="rounded-full px-1.5 py-1 text-xs font-bold transition-colors sm:px-2 <%= defaultStatsKind === 'generation' ? 'bg-ink/10 text-ink' : 'text-ink-dim hover:bg-ink/5 hover:text-ink' %>" type="button" data-stats-tab="generation" aria-label="Show generation stats" aria-pressed="<%= defaultStatsKind === 'generation' ? 'true' : 'false' %>"><span class="sm:hidden">G</span><span class="hidden sm:inline">gen</span></button>
-                <% } %>
-                <span class="h-4 w-px bg-edge" aria-hidden="true"></span>
-                <% if (m.stats.prompt) { %>
-                  <span class="items-center gap-1.5 whitespace-nowrap px-1 pr-1.5 sm:gap-2 sm:px-1.5 sm:pr-2 <%= defaultStatsKind === 'prompt' ? 'inline-flex' : '' %>" data-stats-panel="prompt" <%= defaultStatsKind === 'prompt' ? '' : 'hidden' %>>
-                    <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.prompt.tokens.replace(/ tokens?$/, '') %></span><span class="hidden sm:inline"><%= m.stats.prompt.tokens %></span></span>
-                    <% if (m.stats.prompt.seconds) { %><span class="hidden items-center gap-1 sm:inline-flex"><%~ include('../partials/icon', { name: 'clock', class: 'size-3.5' }) %><%= m.stats.prompt.seconds %></span><% } %>
-                    <% if (m.stats.prompt.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.prompt.rate.replace(' tok/s', '/s') %></span><span class="hidden sm:inline"><%= m.stats.prompt.rate %></span></span><% } %>
-                  </span>
-                <% } %>
-                <% if (m.stats.generation) { %>
-                  <span class="items-center gap-1.5 whitespace-nowrap px-1 pr-1.5 sm:gap-2 sm:px-1.5 sm:pr-2 <%= defaultStatsKind === 'generation' ? 'inline-flex' : '' %>" data-stats-panel="generation" <%= defaultStatsKind === 'generation' ? '' : 'hidden' %>>
-                    <span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'type', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.generation.tokens.replace(/ tokens?$/, '') %></span><span class="hidden sm:inline"><%= m.stats.generation.tokens %></span></span>
-                    <% if (m.stats.generation.seconds) { %><span class="hidden items-center gap-1 sm:inline-flex"><%~ include('../partials/icon', { name: 'clock', class: 'size-3.5' }) %><%= m.stats.generation.seconds %></span><% } %>
-                    <% if (m.stats.generation.rate) { %><span class="inline-flex items-center gap-1"><%~ include('../partials/icon', { name: 'gauge', class: 'size-3.5' }) %><span class="sm:hidden"><%= m.stats.generation.rate.replace(' tok/s', '/s') %></span><span class="hidden sm:inline"><%= m.stats.generation.rate %></span></span><% } %>
-                  </span>
-                <% } %>
+            <% if (m.stats && m.stats.prompt) { %>
+              <span class="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-md border border-edge px-1.5 py-1">
+                <span class="font-semibold text-ink-dim">prompt</span>
+                <span><%= m.stats.prompt.tokens %></span>
+                <% if (m.stats.prompt.seconds) { %><span>· <%= m.stats.prompt.seconds %></span><% } %>
+                <% if (m.stats.prompt.rate) { %><span>· <%= m.stats.prompt.rate %></span><% } %>
+              </span>
+            <% } %>
+            <% if (m.stats && m.stats.generation) { %>
+              <span class="inline-flex max-w-full flex-wrap items-center gap-x-1 rounded-md border border-edge px-1.5 py-1">
+                <span class="font-semibold text-ink-dim">gen</span>
+                <span><%= m.stats.generation.tokens %></span>
+                <% if (m.stats.generation.seconds) { %><span>· <%= m.stats.generation.seconds %></span><% } %>
+                <% if (m.stats.generation.rate) { %><span>· <%= m.stats.generation.rate %></span><% } %>
               </span>
             <% } %>
           </footer>

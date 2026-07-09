@@ -39,15 +39,7 @@ Needs PostgreSQL with an `inkcap` database (`inkcap_test` too if running tests).
 The published image is `ghcr.io/jakswa/inkcap:latest`:
 
 ```sh
-docker run -d --name inkcap --restart unless-stopped \
-  -p 3000:3000 \
-  --add-host=host.docker.internal:host-gateway \
-  -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap \
-  -e SESSION_SECRET="$(openssl rand -base64 32)" \
-  -e REGISTRATION=open \
-  -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal \
-  ghcr.io/jakswa/inkcap:latest \
-  sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
+docker run -d --name inkcap --restart unless-stopped -p 3000:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js && exec bun build/index.js'
 ```
 
 Source checkout:

@@ -66,6 +66,7 @@ import {
   streamChat,
   type ChatMessage,
   type ChatRole,
+  type PromptProgress,
   type ProviderConfig,
   type ReasoningEffort,
   type ToolCall,
@@ -79,6 +80,7 @@ import {
 // handful of UPDATEs per second worst-case, which local Postgres shrugs at.
 const FLUSH_MS = 300
 const FLUSH_TOKENS = 24
+const STATS_FLUSH_MS = 500
 
 // Default tool-turn budget: how many assistant turns may end with tool_calls
 // (and drive another completion) before the run parks. A turn that ends WITHOUT
@@ -261,6 +263,69 @@ function normalizeToolCalls(calls: ToolCall[]): NormalizedToolCall[] {
   }))
 }
 
+interface LiveStats {
+  prompt?: {
+    processed: number
+    total: number
+    cache: number
+    timeMs: number
+    rate: number | null
+  }
+  generation?: {
+    tokens: number
+    timeMs: number
+    rate: number | null
+  }
+}
+
+function liveStatsFromTimings(timings: unknown): LiveStats | null {
+  if (!timings || typeof timings !== 'object') return null
+  const t = timings as Record<string, unknown>
+  const promptN = typeof t['prompt_n'] === 'number' ? t['prompt_n'] : null
+  const promptMs = typeof t['prompt_ms'] === 'number' ? t['prompt_ms'] : null
+  const predictedN = typeof t['predicted_n'] === 'number' ? t['predicted_n'] : null
+  const predictedMs = typeof t['predicted_ms'] === 'number' ? t['predicted_ms'] : null
+  const cacheN = typeof t['cache_n'] === 'number' ? t['cache_n'] : 0
+  const stats: LiveStats = {}
+  if (promptN !== null) {
+    const measuredPrompt = Math.max(promptN - cacheN, 0)
+    stats.prompt = {
+      processed: promptN,
+      total: promptN,
+      cache: cacheN,
+      timeMs: promptMs ?? 0,
+      rate:
+        promptMs && promptMs > 0
+          ? measuredPrompt / (promptMs / 1000)
+          : null,
+    }
+  }
+  if (predictedN !== null) {
+    stats.generation = {
+      tokens: predictedN,
+      timeMs: predictedMs ?? 0,
+      rate:
+        predictedMs && predictedMs > 0
+          ? predictedN / (predictedMs / 1000)
+          : null,
+    }
+  }
+  return Object.keys(stats).length > 0 ? stats : null
+}
+
+function liveStatsFromPromptProgress(progress: PromptProgress): LiveStats {
+  const measured = Math.max(progress.processed - progress.cache, 0)
+  return {
+    prompt: {
+      processed: progress.processed,
+      total: progress.total,
+      cache: progress.cache,
+      timeMs: progress.time_ms,
+      rate: progress.time_ms > 0 ? measured / (progress.time_ms / 1000) : null,
+    },
+  }
+}
+
 // Debounced persistence of stream deltas (see D2 above). add() buffers;
 // flushes are serialized on a promise chain so the UPDATE and its `delta`
 // event always land in stream order, even when the timer races the
@@ -270,8 +335,12 @@ function normalizeToolCalls(calls: ToolCall[]): NormalizedToolCall[] {
 class DeltaFlusher {
   private pendingContent = ''
   private pendingReasoning = ''
+  private pendingStats: LiveStats | null = null
+  private contentLength = 0
+  private reasoningLength = 0
   private count = 0
   private timer: ReturnType<typeof setTimeout> | null = null
+  private statsTimer: ReturnType<typeof setTimeout> | null = null
   private chain: Promise<void> = Promise.resolve()
 
   constructor(private handle: RunHandle) {}
@@ -290,23 +359,53 @@ class DeltaFlusher {
     }
   }
 
+  addStats(stats: LiveStats | null) {
+    if (!stats) return
+    this.pendingStats = stats
+    if (this.pendingContent !== '' || this.pendingReasoning !== '') return
+    if (!this.statsTimer) {
+      this.statsTimer = setTimeout(() => {
+        this.statsTimer = null
+        this.flush()
+      }, STATS_FLUSH_MS)
+    }
+  }
+
   private flush() {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
     }
+    if (this.statsTimer) {
+      clearTimeout(this.statsTimer)
+      this.statsTimer = null
+    }
     const content = this.pendingContent
     const reasoning = this.pendingReasoning
+    const contentOffset = this.contentLength
+    const reasoningOffset = this.reasoningLength
+    const liveStats = this.pendingStats
     this.pendingContent = ''
     this.pendingReasoning = ''
+    this.pendingStats = null
+    this.contentLength += content.length
+    this.reasoningLength += reasoning.length
     this.count = 0
-    if (content === '' && reasoning === '') return
+    if (content === '' && reasoning === '' && !liveStats) return
     const { messageId, runId } = this.handle
-    this.chain = this.chain
-      .then(async () => {
+    this.chain = this.chain.then(async () => {
+      if (content !== '' || reasoning !== '') {
         await appendMessageDeltas({ id: messageId, content, reasoning })
-        await emitEvent(runId, 'delta', { messageId, content, reasoning })
+      }
+      await emitEvent(runId, 'delta', {
+        messageId,
+        content,
+        reasoning,
+        contentOffset,
+        reasoningOffset,
+        liveStats,
       })
+    })
   }
 
   async close() {
@@ -367,6 +466,10 @@ async function streamTurn(
           break
         case 'timings':
           result.timings = delta.timings
+          flusher.addStats(liveStatsFromTimings(delta.timings))
+          break
+        case 'prompt-progress':
+          flusher.addStats(liveStatsFromPromptProgress(delta.progress))
           break
         case 'finish':
           result.finishReason = delta.finishReason
@@ -608,6 +711,8 @@ async function executeToolBatch(
   await emitEvent(handle.runId, 'message-start', {
     messageId: assistant!.id,
     role: 'assistant',
+    model: ctx.model,
+    html: await renderMessageHtml(assistant),
   })
 }
 
@@ -811,6 +916,8 @@ export async function startRun(
     await emitEvent(run!.id, 'message-start', {
       messageId: assistantMessage!.id,
       role: 'assistant',
+      model: conversation.model,
+      html: await renderMessageHtml(assistantMessage),
     })
 
     // Gather the tools exposed to the model for this conversation (connecting to

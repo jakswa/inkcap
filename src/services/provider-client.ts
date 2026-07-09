@@ -93,9 +93,15 @@ export function buildChatRequest(
     headers.Authorization = `Bearer ${provider.api_key}`
   }
 
+  const stream = options.stream ?? false
   const body: Record<string, unknown> = {
     messages,
-    stream: options.stream ?? false,
+    stream,
+  }
+  if (stream && provider.kind === 'llama-server') {
+    body.return_progress = true
+    body.timings_per_token = true
+    body.sse_ping_interval = 1
   }
   if (model && model.length > 0) {
     body.model = model
@@ -246,12 +252,20 @@ export interface ToolCallDelta {
 // One parsed unit of the SSE stream. `tool-calls` carries the FULL merged
 // array accumulated so far (mirroring the fork's onToolCallChunk), so the
 // consumer can just keep the last one it saw.
+export interface PromptProgress {
+  cache: number
+  processed: number
+  time_ms: number
+  total: number
+}
+
 export type StreamDelta =
   | { kind: 'content'; text: string }
   | { kind: 'reasoning'; text: string }
   | { kind: 'tool-calls'; toolCalls: ToolCall[] }
   | { kind: 'model'; model: string }
   | { kind: 'timings'; timings: unknown }
+  | { kind: 'prompt-progress'; progress: PromptProgress }
   | { kind: 'finish'; finishReason: string | null }
 
 // Merge streamed tool-call deltas into the running aggregate (spec §2.3):
@@ -301,6 +315,26 @@ interface StreamChunk {
     finish_reason?: string | null
   }>
   timings?: unknown
+  prompt_progress?: unknown
+}
+
+function promptProgressFromChunk(chunk: StreamChunk): PromptProgress | null {
+  const progress = chunk.prompt_progress
+  if (!progress || typeof progress !== 'object') return null
+  const record = progress as Record<string, unknown>
+  const cache = record['cache']
+  const processed = record['processed']
+  const timeMs = record['time_ms']
+  const total = record['total']
+  if (
+    typeof cache !== 'number' ||
+    typeof processed !== 'number' ||
+    typeof timeMs !== 'number' ||
+    typeof total !== 'number'
+  ) {
+    return null
+  }
+  return { cache, processed, time_ms: timeMs, total }
 }
 
 // First non-empty model name for a streaming chunk: root `model`, then
@@ -507,6 +541,11 @@ export async function* streamChat(
 
         if (chunk.timings != null) {
           yield { kind: 'timings', timings: chunk.timings }
+        }
+
+        const promptProgress = promptProgressFromChunk(chunk)
+        if (promptProgress) {
+          yield { kind: 'prompt-progress', progress: promptProgress }
         }
 
         if (choice?.finish_reason != null) {
