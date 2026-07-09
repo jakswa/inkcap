@@ -88,6 +88,13 @@
     background-attachment: fixed;
   }
 
+  /* Chat pages own their scroll regions. In Android installed-PWA mode, 100dvh
+     can include pixels hidden behind system chrome; chat.js narrows this var to
+     visualViewport.height only when the app is launched standalone. */
+  body.chat-shell {
+    height: var(--chat-shell-height, 100dvh);
+  }
+
   button,
   input,
   textarea,

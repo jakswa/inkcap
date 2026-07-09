@@ -22,6 +22,37 @@
   // layout, because the CSP forbids inline scripts (default-src 'self').
   document.documentElement.classList.add('js');
 
+  function isStandaloneDisplay() {
+    return Boolean(
+      (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true
+    );
+  }
+
+  function installStandaloneViewportFix() {
+    if (!document.body || !document.body.classList.contains('chat-shell')) return;
+    if (!isStandaloneDisplay() || !window.visualViewport) return;
+
+    var scheduled = false;
+    var apply = function () {
+      scheduled = false;
+      var height = Number(window.visualViewport.height || window.innerHeight || 0);
+      if (height > 0) document.documentElement.style.setProperty('--chat-shell-height', height + 'px');
+    };
+    var schedule = function () {
+      if (scheduled) return;
+      scheduled = true;
+      window.requestAnimationFrame(apply);
+    };
+
+    schedule();
+    window.visualViewport.addEventListener('resize', schedule, { passive: true });
+    window.visualViewport.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('orientationchange', schedule, { passive: true });
+  }
+
+  installStandaloneViewportFix();
+
   var es = null; // active EventSource, if any
   var statusTimer = null;
   var streamOpenedAt = 0;

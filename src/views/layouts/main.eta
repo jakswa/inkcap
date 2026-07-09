@@ -18,7 +18,7 @@
   </head>
   <% /* shell === 'chat' pins the app to the viewport (its own scroll regions);
         everything else is a normal scrolling page with a footer. */ %>
-  <body class="flex <%= it.shell === 'chat' ? 'h-dvh overflow-hidden' : 'min-h-screen' %> flex-col font-body text-ink antialiased">
+  <body class="flex <%= it.shell === 'chat' ? 'chat-shell h-dvh overflow-hidden' : 'min-h-screen' %> flex-col font-body text-ink antialiased">
     <%~ include('../partials/header', it) %>
     <% if (it.shell === 'chat') { %>
       <main class="flex min-h-0 flex-1">
