@@ -17,6 +17,15 @@ completed design history is in `docs/completed/`.
   needs approval, or fails.
 - **Codex auth cleanup** (`codex-device-auth.md`): device-code auth is the
   default; keep loopback fallback until real-account QA says otherwise.
+- **Draft a loop from chat** (`chat-to-loop-draft.md`): an explicit inference
+  turns the active conversation branch into reviewable, prefilled loop form
+  data; it must never auto-save or infer unattended permission.
+- **Browser-footprint budget** (`browser-footprint-budget.md`): reproduce and
+  enforce the small browser-asset claim instead of relying on stale marketing
+  numbers.
+- **Operational footprint** (`operational-footprint.md`): provide a supported
+  one-command Compose path and evaluate, without promising, an embedded personal
+  mode.
 
 ## Known feature gaps
 

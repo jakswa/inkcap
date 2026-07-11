@@ -1,0 +1,38 @@
+# inkcap
+
+> A small, self-hosted AI workbench for chat, scheduled loops, and push notifications.
+
+Low complexity by design: one boring stack—PostgreSQL with raw SQL, a Bun/TypeScript backend, and server-rendered Eta/HTML/CSS views. No ORM. No separate frontend build. Most pages need no JavaScript; live chat uses one small vanilla JS file.
+
+## What it does
+
+- Connect local llama-server and hosted OpenAI-compatible models.
+- Chat with reasoning controls, message branches, and server-rendered Markdown.
+- Connect MCP tools; inspect calls and require human approval where needed.
+- Save a prompt, model, tools, and schedule as a manual or recurring loop.
+- Get push notifications when loops finish, fail, or wait for approval.
+
+## How it works
+
+Runs are durable server jobs: streaming, tool loops, and persistence continue without a browser. PostgreSQL is truth; browsers render state, subscribe to replayable SSE, and submit ordinary forms. Credentials remain server-side. Messages form a tree, so edit, regenerate, and fork preserve branches.
+
+Browser footprint: 5.9 KB Brotli-compressed chat JavaScript, 8.7 KB shared CSS, no frontend framework, and no webfonts. HTML and model traffic excluded; measured 2026-07-11.
+
+## Run it
+
+Requires Bun and PostgreSQL. Install dependencies, configure `DATABASE_URL` and `SESSION_SECRET`, run migrations, then start the server:
+
+```sh
+bun install
+bun run db:migrate
+bun run dev
+```
+
+Published image: `ghcr.io/jakswa/inkcap:latest`.
+
+## Links
+
+- Site: https://inkcap.click/
+- Setup: https://inkcap.click/getting-started.html
+- Source: https://github.com/jakswa/inkcap
+- Current status: https://github.com/jakswa/inkcap/blob/main/docs/STATUS.md

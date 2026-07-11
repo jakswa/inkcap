@@ -1,24 +1,114 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>inkcap — self-hosted model chat, tools, and loops</title><meta name="description" content="Connect local or hosted LLMs, give conversations MCP tools, and turn useful prompts into repeatable loops with inkcap, a self-hosted server-driven chat UI."><link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"></head>
-<body><div class="wrap"><header class="site-header"><a class="brand" href="./"><img src="favicon.svg" alt=""> inkcap</a><nav class="site-nav"><a href="getting-started.html">Getting started</a><a href="https://github.com/jakswa/inkcap">GitHub</a></nav></header><main>
-<section class="hero">
-  <svg class="mushroom" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" role="img" aria-label="inkcap mushroom">
-    <ellipse cx="360" cy="282" rx="252" ry="214" fill="var(--accent)" opacity=".12"/>
-    <g fill="var(--ok)" opacity=".38">
-      <circle cx="120" cy="142" r="7"/><circle cx="176" cy="86" r="4"/><circle cx="566" cy="124" r="6"/><circle cx="612" cy="226" r="4"/><circle cx="118" cy="318" r="4"/><circle cx="548" cy="376" r="5"/><circle cx="222" cy="420" r="5"/><circle cx="486" cy="72" r="3.5"/>
-    </g>
-    <path d="M146 298c23-121 103-196 222-190 118 6 190 89 205 190-95-35-330-35-427 0Z" fill="var(--accent)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
-    <path d="M160 310c82 86 315 86 398 0-91-28-306-28-398 0Z" fill="var(--mushroom-gill)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
-    <path d="M302 348c-6 55-30 97-73 135 61 36 201 36 262 0-43-38-67-80-73-135-35 13-81 13-116 0Z" fill="var(--surface-raised)" stroke="var(--ink)" stroke-width="14" stroke-linejoin="round"/>
-  </svg>
-  <div><h1>inkcap</h1><p class="tagline">a small, self-hosted LLM chat UI with tools, branches, and runs that outlive the browser</p></div>
-  <div class="actions"><a class="btn btn-primary" href="getting-started.html">Get started</a><a class="btn btn-ghost" href="https://github.com/jakswa/inkcap">View on GitHub</a></div>
-  <a class="hero-more" href="#product">See what it does <span aria-hidden="true">↓</span></a>
-</section>
-<section id="product" aria-label="Product view"><figure class="shot hero-shot"><picture><source srcset="shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)"><img src="shots/chat-desktop-light.webp" alt="An inkcap conversation with model reasoning, a code answer, token details, MCP tool controls, and a composer" width="1440" height="900"></picture><figcaption>One conversation, with the model and tool controls close at hand.</figcaption></figure></section>
-<section><p class="eyebrow">From connection to loop</p><h2 class="section-title">Try freely. Keep what earns a rerun.</h2><div class="story"><article><b>01</b><h3>Connect your models</h3><p>Keep a local llama-server beside hosted OpenAI-compatible models and choose per conversation.</p></article><article><b>02</b><h3>Explore with tools</h3><p>Branch prompts, inspect outputs, and let MCP calls pause for your approval when needed.</p></article><article><b>03</b><h3>Make a loop</h3><p>Save the prompt, model, schedule, and exact tool permissions. Every run becomes a chat you can inspect.</p></article></div></section>
-<section><p class="eyebrow">The workbench</p><h2 class="section-title">Connections and automations that stay understandable.</h2><div class="product-gallery"><figure class="shot"><picture><source srcset="shots/providers-dark.webp" media="(prefers-color-scheme: dark)"><img src="shots/providers-light.webp" alt="Provider connections showing health, endpoint, authentication state, models, and contextual actions" width="1440" height="1000" loading="lazy"></picture><figcaption>Local and hosted models, with connection health and capabilities in view.</figcaption></figure><figure class="shot"><picture><source srcset="shots/loops-dark.webp" media="(prefers-color-scheme: dark)"><img src="shots/loops-light.webp" alt="Loops dashboard showing paused and scheduled automations, their next events, and run actions" width="1440" height="1000" loading="lazy"></picture><figcaption>Prompts become manual or scheduled loops without hiding their state.</figcaption></figure><figure class="shot gallery-wide"><img src="shots/loop-config-light.webp" alt="Loop configuration showing manual and scheduled modes, timezone, MCP tool selection, and separate unattended permissions" width="1440" height="1000" loading="lazy"><figcaption>Timing and unattended tool permission stay explicit, even with JavaScript off.</figcaption></figure></div></section>
-<section class="proof-feature"><div><p class="eyebrow">Close the laptop</p><h2 class="section-title">The run belongs to the server, not the tab.</h2><p>Tokens keep flowing with zero browsers connected. Tool calls can park for approval, and a reload always returns to database truth—not a half-remembered client state.</p></div><div class="shot-row"><figure class="shot"><img src="shots/approval-desktop-dark.webp" alt="An inkcap tool call waiting for approval, with clear approve and deny actions" width="1440" height="900" loading="lazy"><figcaption>A database tool waits for a person before continuing.</figcaption></figure><figure class="shot phone"><img src="shots/chat-mobile-light.webp" alt="An inkcap chat on a phone with markdown, branch controls, and the message composer" width="390" height="844" loading="lazy"><figcaption>Return from a phone; the conversation is still there.</figcaption></figure></div></section>
-<section><p class="eyebrow">Quiet technical proof</p><h2 class="section-title">Dependable without pretending to be enterprise magic.</h2><div class="proof-strip"><span>Server-owned runs</span><span>PostgreSQL truth</span><span>Message branches</span><span>Credentials server-side</span><span>SSR + plain forms</span><span>Minimal chat-only JS</span></div></section>
-<section aria-label="Quick start"><p class="eyebrow">Quick start</p><h2 class="section-title">Bring PostgreSQL and one model connection.</h2><div class="quick-start"><p>Run the published Docker image, register, then connect a local or hosted provider. The detailed guide includes a copyable Docker command, Bun setup, networking, and environment options.</p><a class="btn btn-primary" href="getting-started.html#run">Open the setup guide</a></div></section>
-</main><footer class="site-footer"><span>🍄 inkcap — grown in the dark, served warm</span><a href="https://github.com/jakswa/inkcap">github.com/jakswa/inkcap</a></footer></div></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fbf1c7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#282828" media="(prefers-color-scheme: dark)">
+  <title>inkcap — a small, self-hosted LLM workbench</title>
+  <meta name="description" content="A small, self-hosted AI workbench for chat, scheduled loops, and push notifications.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="landing">
+  <div class="wrap">
+    <header class="site-header">
+      <a class="brand" href="./"><img src="favicon.svg" alt=""> inkcap</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="getting-started.html">Get started</a>
+        <a href="https://github.com/jakswa/inkcap">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="landing-intro" aria-labelledby="hero-title">
+        <svg class="hero-mushroom" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 540" role="img" aria-label="An illustrated inkcap mushroom">
+          <defs>
+            <linearGradient id="cap-wash" x1=".08" y1=".12" x2=".9" y2=".86">
+              <stop offset="0" stop-color="var(--accent-soft)"/>
+              <stop offset="1" stop-color="var(--tokyo-violet)"/>
+            </linearGradient>
+            <linearGradient id="gill-wash" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="var(--mushroom-gill)"/>
+              <stop offset="1" stop-color="var(--gold)"/>
+            </linearGradient>
+          </defs>
+          <ellipse cx="360" cy="282" rx="252" ry="214" fill="var(--accent)" opacity=".1"/>
+          <g class="mushroom-spores" fill="var(--ok)" opacity=".42">
+            <circle cx="120" cy="142" r="7"/><circle cx="176" cy="86" r="4"/><circle cx="566" cy="124" r="6"/><circle cx="612" cy="226" r="4"/><circle cx="118" cy="318" r="4"/><circle cx="548" cy="376" r="5"/><circle cx="222" cy="420" r="5"/><circle cx="486" cy="72" r="3.5"/>
+          </g>
+          <g class="mushroom-body">
+            <path d="M146 298c23-121 103-196 222-190 118 6 190 89 205 190-95-35-330-35-427 0Z" fill="url(#cap-wash)" stroke="var(--mushroom-line)" stroke-width="14" stroke-linejoin="round"/>
+            <path d="M160 310c82 86 315 86 398 0-91-28-306-28-398 0Z" fill="url(#gill-wash)" stroke="var(--mushroom-line)" stroke-width="14" stroke-linejoin="round"/>
+            <path d="M302 348c-6 55-30 97-73 135 61 36 201 36 262 0-43-38-67-80-73-135-35 13-81 13-116 0Z" fill="var(--surface-raised)" stroke="var(--mushroom-line)" stroke-width="14" stroke-linejoin="round"/>
+          </g>
+        </svg>
+        <div class="intro-copy">
+          <h1 id="hero-title">inkcap</h1>
+          <p>self-hosted AI chat, scheduled loops, and push notifications</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="getting-started.html">Get started</a>
+          <a class="btn btn-ghost" href="https://github.com/jakswa/inkcap">View on GitHub</a>
+        </div>
+      </section>
+
+      <section class="product-proof" id="product" aria-label="Product view">
+        <figure class="shot hero-shot">
+          <picture>
+            <source srcset="shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
+            <img src="shots/chat-desktop-light.webp" alt="An inkcap conversation with model reasoning, a code answer, token details, MCP tool controls, and a composer" width="1440" height="900">
+          </picture>
+          <figcaption>One conversation with the controls that matter close at hand.</figcaption>
+        </figure>
+      </section>
+
+      <section class="capabilities" aria-labelledby="capabilities-title">
+        <div class="section-head compact-head">
+          <div><p class="eyebrow">What it does</p><h2 class="section-title" id="capabilities-title">Useful chats become routines.</h2></div>
+        </div>
+        <div class="capability-list">
+          <article><h3>Chat</h3><p>Use local or hosted models, connect MCP tools, and keep approval where a person should stay involved.</p></article>
+          <article><h3>Schedule</h3><p>Save a prompt, model, and tools as a loop. Run it manually or put it on a schedule.</p></article>
+          <article><h3>Wake up to it</h3><p>Hear when a loop finishes, fails, or waits for approval.</p></article>
+        </div>
+        <div class="product-pair">
+          <figure class="shot">
+            <picture><source srcset="shots/providers-dark.webp" media="(prefers-color-scheme: dark)"><img src="shots/providers-light.webp" alt="Provider connections showing local and hosted models, health, authentication, and capabilities" width="1440" height="1000" loading="lazy"></picture>
+            <figcaption>Local and hosted providers.</figcaption>
+          </figure>
+          <figure class="shot">
+            <picture><source srcset="shots/loops-dark.webp" media="(prefers-color-scheme: dark)"><img src="shots/loops-light.webp" alt="Loops dashboard showing manual and scheduled prompts, their state, and next run" width="1440" height="1000" loading="lazy"></picture>
+            <figcaption>Manual and scheduled loops.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="small-proof" id="small" aria-labelledby="small-title">
+        <div class="small-copy">
+          <p class="eyebrow">Small on purpose</p>
+          <h2 id="small-title">No JavaScript on most pages.</h2>
+          <p>The live conversation adds one small vanilla JS file. The rest is server-rendered HTML and ordinary forms.</p>
+        </div>
+        <dl class="payload-facts">
+          <div><dt>Chat JavaScript</dt><dd>5.9 KB</dd></div>
+          <div><dt>Shared CSS</dt><dd>8.7 KB</dd></div>
+          <div><dt>Frontend frameworks</dt><dd>0</dd></div>
+          <div><dt>Webfonts</dt><dd>0</dd></div>
+        </dl>
+        <small class="measurement-note">Brotli-compressed. Excludes HTML and model traffic. Measured 2026-07-11.</small>
+      </section>
+
+      <section class="quick-landing" aria-labelledby="quick-title">
+        <div><p class="eyebrow">Bring PostgreSQL and a model</p><h2 class="section-title" id="quick-title">See if this small thing fits.</h2></div>
+        <div class="quick-landing-action"><p>The setup guide covers Docker, Bun, local-model networking, provider credentials, and environment options.</p><a class="btn btn-primary" href="getting-started.html#run">Open the setup guide <span aria-hidden="true">→</span></a></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>🍄 inkcap — grown in the dark, readable in the light</span>
+      <a href="https://github.com/jakswa/inkcap">github.com/jakswa/inkcap</a>
+    </footer>
+  </div>
+</body>
+</html>
