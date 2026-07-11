@@ -43,8 +43,12 @@
         </div>
 
         <div class="tab-panel tab-docker" aria-labelledby="setup-docker">
-          <p>Published image. Migrations run before the app starts; adjust <code>DATABASE_URL</code> for your Postgres.</p>
-          <div class="code-block"><button class="copy-btn" type="button">Copy</button><pre><code>docker run -d --name inkcap --restart unless-stopped -p 3000:3000 --add-host=host.docker.internal:host-gateway -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open -e OUTBOUND_TRUSTED_HOSTS=host.docker.internal ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre></div>
+          <h3>1. Start PostgreSQL</h3>
+          <div class="code-block"><button class="copy-btn" type="button">Copy</button><pre><code>docker run -d --name inkcap-postgres --restart unless-stopped -p 54329:5432 -v inkcap-postgres:/var/lib/postgresql/data -e POSTGRES_USER=inkcap -e POSTGRES_PASSWORD=inkcap -e POSTGRES_DB=inkcap docker.io/postgres:17</code></pre></div>
+          <p><small>Already have PostgreSQL? Skip this step and set <code>DATABASE_URL</code> to your database below. Otherwise, keep port <code>54329</code> private in your firewall.</small></p>
+
+          <h3>2. Start inkcap</h3>
+          <div class="code-block"><button class="copy-btn" type="button">Copy</button><pre><code>docker run -d --name inkcap --restart unless-stopped --add-host=host.docker.internal:host-gateway -p 3000:3000 -e DATABASE_URL=postgresql://inkcap:inkcap@host.docker.internal:54329/inkcap -e SESSION_SECRET="$(openssl rand -base64 32)" -e REGISTRATION=open ghcr.io/jakswa/inkcap:latest sh -lc 'bun build/tasks/migrate.js &amp;&amp; exec bun build/index.js'</code></pre></div>
         </div>
 
         <div class="tab-panel tab-bun" aria-labelledby="setup-bun">
