@@ -14,7 +14,7 @@ import {
 import { countPushSubscriptionsForUser } from '../db/queries/push-subscriptions'
 import { listMcpServersForUser } from '../db/queries/mcp-servers'
 import { getProviderForUser, listProvidersForUser } from '../db/queries/providers'
-import { fireLoop, defaultLoopTimezone, normalizeSchedule, validateLoopSchedule } from '../services/loops'
+import { fireLoop, defaultLoopTimezone, humanizeLoopSchedule, humanizeRunStatus, nextLoopFireAt, normalizeSchedule, validateLoopSchedule } from '../services/loops'
 import { readString } from '../utils/validation'
 import { relativeTime } from '../utils/relative-time'
 
@@ -76,6 +76,8 @@ async function renderList(c: Context) {
       ...loop,
       lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
       nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+      scheduleLabel: humanizeLoopSchedule(loop.schedule, loop.timezone),
+      runStatusLabel: humanizeRunStatus(loop.last_run_status),
     })),
   })
 }
@@ -97,7 +99,7 @@ async function renderForm(
     options.loop
       ? listMcpServersWithLoopSelection({ loopId: options.loop.id, userId: user.id })
       : listMcpServersForUser(user.id).then((rows) =>
-          rows.map((row) => ({ ...row, loop_enabled: false, loop_auto_approve: true })),
+          rows.map((row) => ({ ...row, loop_enabled: false, loop_auto_approve: false })),
         ),
   ])
 
@@ -118,18 +120,28 @@ async function renderForm(
         loop_enabled: submitted ? selectedMcpIds.has(id) : Boolean(server.loop_enabled),
         loop_auto_approve: submitted
           ? approvedMcpIds.has(id)
-          : server.loop_auto_approve !== false,
+          : Boolean(server.loop_auto_approve),
       }
     }),
     errors: options.errors ?? [],
     values,
     schedulePresets: [
-      { label: 'Manual only', value: '' },
-      { label: 'Hourly', value: '0 * * * *' },
-      { label: 'Daily at 7:00', value: '0 7 * * *' },
+      { label: 'Every hour', value: '0 * * * *' },
+      { label: 'Every day at 7:00', value: '0 7 * * *' },
       { label: 'Weekdays at 8:00', value: '0 8 * * 1-5' },
       { label: 'Mondays at 9:00', value: '0 9 * * 1' },
     ],
+    schedulePreview: (() => {
+      const schedule = normalizeSchedule(values.schedule ?? options.loop?.schedule)
+      const timezone = values.timezone ?? options.loop?.timezone ?? defaultLoopTimezone()
+      if (!schedule) return null
+      try {
+        const next = nextLoopFireAt(schedule, timezone)
+        return next ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone, timeZoneName: 'short' }).format(next) : null
+      } catch {
+        return null
+      }
+    })(),
   })
 }
 
@@ -142,9 +154,12 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
   const providerId = readString(form, 'provider_id').trim()
   const model = readString(form, 'model').trim()
   const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
-  const schedule = normalizeSchedule(readString(form, 'schedule'))
+  const scheduleMode = readString(form, 'schedule_mode') === 'scheduled' ? 'scheduled' : 'manual'
+  const advancedSchedule = readString(form, 'schedule').trim()
+  const presetSchedule = readString(form, 'schedule_preset').trim()
+  const schedule = scheduleMode === 'scheduled' ? normalizeSchedule(advancedSchedule || presetSchedule) : null
   const timezone = readString(form, 'timezone').trim() || defaultLoopTimezone()
-  const enabled = readString(form, 'enabled') === 'on'
+  const enabled = scheduleMode === 'scheduled' && readString(form, 'enabled') === 'on'
   const selectedMcpIdsRaw = readStringList(form, 'enabled_mcp_server_id')
   const approvedMcpIdsRaw = readStringList(form, 'auto_approve_mcp_server_id')
 
@@ -195,7 +210,7 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     })),
     selectedMcpIds,
     approvedMcpIds: [...approvedMcpIds],
-    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', timezone, enabled: enabled ? 'on' : '' },
+    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', scheduleMode, timezone, enabled: enabled ? 'on' : '' },
   }
 }
 
@@ -254,9 +269,11 @@ loopRoutes.get('/loops/:id', async (c) => {
       ...loop,
       lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
       nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+      scheduleLabel: humanizeLoopSchedule(loop.schedule, loop.timezone),
     },
     history: history.map((run) => ({
       ...run,
+      statusLabel: humanizeRunStatus(run.run_status),
       createdLabel: relativeTime(run.created_at),
       updatedLabel: run.run_updated_at ? relativeTime(run.run_updated_at) : relativeTime(run.updated_at),
     })),
@@ -322,6 +339,8 @@ loopRoutes.post('/loops/:id/run', async (c) => {
 loopRoutes.post('/loops/:id/delete', async (c) => {
   const user = requireUser(c)
   if (!user) return c.redirect('/login')
-  await deleteLoop({ id: c.req.param('id'), userId: user.id })
+  const loop = await getLoopForUser({ id: c.req.param('id'), userId: user.id })
+  if (!loop) return c.notFound()
+  await deleteLoop({ id: loop.id, userId: user.id })
   return c.redirect('/loops')
 })

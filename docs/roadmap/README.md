@@ -5,6 +5,9 @@ completed design history is in `docs/completed/`.
 
 ## Bigger slices
 
+- **Product UI and marketing polish** (`ui-marketing-polish.md`): provider and
+  loop UX, shared interaction patterns, reproducible screenshots, and a
+  tinkerer-first app/marketing story.
 - **Routines / scheduled prompts** (`scheduled-prompts.md`): saved prompt +
   provider/model/tools + cron/manual trigger. Each fire creates a normal
   durable run.

@@ -2,7 +2,7 @@
   <div>
     <p class="eyebrow mb-3">Registry</p>
     <h1 class="max-w-[13ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Add provider</h1>
-    <p class="mt-4 text-ink-dim">Register a llama-server or OpenAI-compatible endpoint. Saving runs model discovery and a tiny text inference first.</p>
+    <p class="mt-4 text-ink-dim">Connect a local model server, a hosted compatible API, or your personal ChatGPT sign-in. API connections are tested with model discovery and a tiny inference before they are saved.</p>
 
     <form class="card mt-6 grid max-w-[25rem] gap-3" method="post" action="/providers/codex/connect">
       <p class="mb-0 font-bold">ChatGPT subscription (Codex)</p>
@@ -65,20 +65,20 @@
     </label>
 
     <label class="grid gap-1.5">
-      <span>Kind</span>
+      <span>Connection type</span>
       <select class="input" name="kind" required>
-        <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>llama-server</option>
-        <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>openai-compat</option>
+        <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>Local llama-server</option>
+        <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>Hosted or local OpenAI-compatible API</option>
       </select>
     </label>
 
     <label class="grid gap-1.5">
-      <span>Base URL</span>
+      <span>Endpoint URL</span>
       <input class="input" name="base_url" placeholder="http://localhost:8001" maxlength="2048" value="<%= it.values.baseUrl || '' %>" required>
     </label>
 
     <label class="grid gap-1.5">
-      <span>API key</span>
+      <span>API key <span class="text-ink-faint">(if required)</span></span>
       <input class="input" name="api_key" type="password" autocomplete="off" value="<%= it.values.apiKey || '' %>">
     </label>
 
@@ -112,7 +112,7 @@
       <% } %>
     <% } %>
 
-    <button class="btn btn-primary" type="submit">Test and add provider</button>
+    <button class="btn btn-primary" type="submit">Test connection and add</button>
     <p class="mb-0 text-ink-dim"><a class="link" href="/providers">Back to providers</a></p>
   </form>
 </section>

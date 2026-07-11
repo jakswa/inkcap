@@ -7,7 +7,7 @@
   <div class="flex h-14 items-center justify-between gap-3 <%= it.shell === 'chat' ? 'px-4' : 'mx-auto w-full max-w-5xl px-4' %>">
     <a class="flex min-w-0 items-center gap-2.5 font-extrabold tracking-tight text-ink no-underline" href="/">
       <img class="shrink-0" src="/assets/<%= it.assetVersion %>/logo.svg" alt="" width="24" height="24">
-      <span class="truncate">inkcap</span>
+      <span class="truncate max-[430px]:hidden">inkcap</span>
     </a>
     <nav class="flex shrink-0 items-center gap-1" aria-label="Primary">
       <% if (it.user) { %>

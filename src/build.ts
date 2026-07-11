@@ -7,6 +7,10 @@ const taskGlob = new Bun.Glob('src/tasks/*.ts')
 
 const taskEntrypoints = Array.from(taskGlob.scanSync({ cwd: root }), (file) =>
   join(root, file),
+).filter(
+  // Dev-only screenshot automation pulls Playwright (a devDependency) and must
+  // not be bundled into the production image.
+  (entry) => !entry.endsWith('capture-product-shots.ts'),
 )
 
 await rm(buildDir, { recursive: true, force: true })

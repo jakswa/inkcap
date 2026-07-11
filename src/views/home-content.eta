@@ -1,55 +1,8 @@
-<section class="relative isolate grid min-h-[calc(100svh-9rem)] place-items-center overflow-hidden pb-[clamp(3rem,8vw,7rem)] text-center">
-  <div class="pointer-events-none absolute inset-x-1/2 top-[8%] -z-10 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-accent/10 blur-3xl" aria-hidden="true"></div>
-  <div class="grid justify-items-center gap-5">
-    <%~ include('./partials/mushroom') %>
-    <div class="grid justify-items-center gap-2">
-      <h1 class="text-[clamp(3rem,10vw,7.5rem)] font-black leading-none tracking-[-0.07em] text-ink">inkcap</h1>
-      <p class="max-w-[30rem] text-balance text-[clamp(1rem,2vw,1.35rem)] font-medium text-ink-dim">a small LLM chat web UI</p>
-    </div>
-    <div class="mt-2 flex flex-wrap justify-center gap-3">
-      <% if (it.user) { %>
-        <a class="btn btn-primary" href="/conversations">Open chats</a>
-        <a class="btn btn-ghost" href="/settings">Settings</a>
-      <% } else { %>
-        <% if (it.registrationOpen) { %>
-          <a class="btn btn-primary" href="/register">Start chatting</a>
-          <a class="btn btn-ghost" href="/login">Log in</a>
-        <% } else { %>
-          <a class="btn btn-primary" href="/login">Log in</a>
-        <% } %>
-      <% } %>
-    </div>
-  </div>
+<section class="grid items-center gap-8 py-[clamp(3rem,9vw,7rem)] md:grid-cols-[1fr_0.8fr]">
+  <div><p class="eyebrow mb-4">Self-hosted LLM workbench</p><h1 class="max-w-[11ch] text-[clamp(3.4rem,9vw,7rem)] font-black leading-[0.88] tracking-[-0.07em]">inkcap</h1><p class="mt-6 max-w-xl text-balance text-[clamp(1.1rem,2vw,1.45rem)] font-semibold text-ink">Connect your models. Give them tools. Turn good prompts into loops.</p><p class="mt-3 max-w-xl text-ink-dim">A warm, server-driven place to tinker with local and hosted models—without losing a run when the browser goes away.</p>
+  <div class="mt-6 flex flex-wrap gap-3"><% if (it.user) { %><a class="btn btn-primary" href="/conversations">Open chats</a><a class="btn btn-ghost" href="/loops">View loops</a><% } else if (it.registrationOpen) { %><a class="btn btn-primary" href="/register">Create an account</a><a class="btn btn-ghost" href="/login">Log in</a><% } else { %><a class="btn btn-primary" href="/login">Log in</a><% } %></div></div>
+  <div class="mx-auto w-52 [&>svg]:w-full md:w-72"><%~ include('./partials/mushroom') %></div>
 </section>
-
-<section class="py-[clamp(1rem,4vw,3rem)]" aria-label="Product screenshot">
-  <figure class="m-0 mx-auto grid max-w-4xl gap-3">
-    <picture>
-      <source srcset="/assets/<%= it.assetVersion %>/shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
-      <img class="h-auto w-full rounded-2xl border border-edge shadow-2xl shadow-black/20" src="/assets/<%= it.assetVersion %>/shots/chat-desktop-light.webp" alt="The inkcap chat view: a conversation with an open reasoning accordion, a syntax-highlighted code block, per-message token stats, and a composer with MCP tools and a model picker" width="1440" height="900" loading="lazy">
-    </picture>
-    <figcaption class="text-center text-sm text-ink-faint">Reasoning, markdown, token stats, MCP tools — rendered server-side.</figcaption>
-  </figure>
-</section>
-
-<section class="grid gap-5 py-[clamp(2rem,7vw,5rem)]" aria-label="What inkcap does">
-  <div class="grid gap-2">
-    <p class="eyebrow mb-0">what it does</p>
-    <h2 class="max-w-2xl text-[clamp(1.75rem,4vw,3rem)] font-extrabold leading-tight tracking-tight">Quiet infrastructure for conversations that keep going.</h2>
-  </div>
-
-  <div class="grid grid-cols-3 gap-4 max-[720px]:grid-cols-1">
-    <article class="card">
-      <h3 class="mb-2 text-lg font-bold">Server-owned runs</h3>
-      <p class="mb-0">Completions are durable jobs. Browsers attach, detach, and reattach as spectators.</p>
-    </article>
-    <article class="card">
-      <h3 class="mb-2 text-lg font-bold">Bring your own providers</h3>
-      <p class="mb-0">llama-server, OpenAI-compatible endpoints, and ChatGPT Codex live server-side with keys kept out of the browser.</p>
-    </article>
-    <article class="card">
-      <h3 class="mb-2 text-lg font-bold">Small surface area</h3>
-      <p class="mb-0">SSR templates and HTML forms everywhere; JavaScript is saved for the chat stream.</p>
-    </article>
-  </div>
-</section>
+<section class="py-[clamp(1rem,4vw,3rem)]" aria-label="inkcap conversation"><figure class="m-0 grid gap-3"><div class="overflow-hidden rounded-2xl border border-edge shadow-2xl shadow-black/20"><picture><source srcset="/assets/<%= it.assetVersion %>/shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)"><img class="h-auto w-full min-w-[46rem] -translate-x-[18%] sm:min-w-0 sm:translate-x-0" src="/assets/<%= it.assetVersion %>/shots/chat-desktop-light.webp" alt="An inkcap conversation showing model reasoning, a code answer, token details, tool controls, and the message composer" width="1440" height="900" loading="lazy"></picture></div><figcaption class="text-center text-sm text-ink-faint">Reasoning and tools stay close to the conversation—not buried in a dashboard.</figcaption></figure></section>
+<section class="grid gap-6 py-[clamp(3rem,8vw,6rem)]"><div><p class="eyebrow mb-2">From connection to loop</p><h2 class="max-w-2xl text-[clamp(1.8rem,4vw,3rem)] font-extrabold leading-tight">Tinker once. Keep what works.</h2></div><ol class="grid gap-4 md:grid-cols-3"><li class="card"><p class="eyebrow">01 · Connect</p><h3 class="my-2 text-lg font-bold">Choose your models</h3><p class="mb-0 text-ink-dim">Use a local llama-server, an OpenAI-compatible API, or experimental personal ChatGPT/Codex access.</p></li><li class="card"><p class="eyebrow">02 · Explore</p><h3 class="my-2 text-lg font-bold">Chat with tools</h3><p class="mb-0 text-ink-dim">Branch prompts, inspect reasoning, and approve MCP calls while the server keeps the run moving.</p></li><li class="card"><p class="eyebrow">03 · Repeat</p><h3 class="my-2 text-lg font-bold">Turn it into a loop</h3><p class="mb-0 text-ink-dim">Save a useful prompt as a manual or scheduled automation. Every run remains an inspectable chat.</p></li></ol></section>
+<section class="mb-[clamp(3rem,8vw,6rem)] flex flex-wrap justify-center gap-x-8 gap-y-2 border-y border-edge py-5 text-sm text-ink-dim" aria-label="Technical proof"><span>Server-owned durable runs</span><span>PostgreSQL is truth</span><span>Credentials stay server-side</span><span>Plain forms; JavaScript only for chat</span></section>

@@ -1,0 +1,143 @@
+{
+  "generatedAt": "2026-07-10T12:00:00Z",
+  "command": "bun src/tasks/capture-product-shots.ts",
+  "browser": {
+    "package": "playwright@1.61.1",
+    "executable": "/usr/bin/chromium",
+    "version": "150.0.7871.114"
+  },
+  "port": 4344,
+  "shotsDatabase": "spail_shots",
+  "fixedNow": "2026-07-10T12:00:00Z",
+  "deviceScaleFactor": 1,
+  "login": "demo@inkcap.dev",
+  "captures": [
+    {
+      "name": "chat-hero-light",
+      "route": "__HERO__",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "colorScheme": "light",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/chat-hero-light.png",
+      "bytes": 164835,
+      "width": 1440,
+      "height": 900,
+      "httpStatus": 200
+    },
+    {
+      "name": "chat-hero-dark",
+      "route": "__HERO__",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "colorScheme": "dark",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/chat-hero-dark.png",
+      "bytes": 158341,
+      "width": 1440,
+      "height": 900,
+      "httpStatus": 200
+    },
+    {
+      "name": "providers-light",
+      "route": "/providers",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "colorScheme": "light",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/providers-light.png",
+      "bytes": 188156,
+      "width": 1440,
+      "height": 1000,
+      "httpStatus": 200
+    },
+    {
+      "name": "providers-dark",
+      "route": "/providers",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "colorScheme": "dark",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/providers-dark.png",
+      "bytes": 169839,
+      "width": 1440,
+      "height": 1000,
+      "httpStatus": 200
+    },
+    {
+      "name": "loops-light",
+      "route": "/loops",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "colorScheme": "light",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/loops-light.png",
+      "bytes": 187094,
+      "width": 1440,
+      "height": 1000,
+      "httpStatus": 200
+    },
+    {
+      "name": "loops-dark",
+      "route": "/loops",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "colorScheme": "dark",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/loops-dark.png",
+      "bytes": 168380,
+      "width": 1440,
+      "height": 1000,
+      "httpStatus": 200
+    },
+    {
+      "name": "loop-config-light",
+      "route": "/loops/new",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "colorScheme": "light",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/loop-config-light.png",
+      "bytes": 162492,
+      "width": 1440,
+      "height": 1000,
+      "httpStatus": 200
+    },
+    {
+      "name": "mcp-approval-dark",
+      "route": "__APPROVAL__",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "colorScheme": "dark",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/mcp-approval-dark.png",
+      "bytes": 146841,
+      "width": 1440,
+      "height": 900,
+      "httpStatus": 200
+    },
+    {
+      "name": "chat-mobile-light",
+      "route": "__HERO__",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "colorScheme": "light",
+      "path": "/home/jake/sandbox/inkcap/docs/assets/ui-polish/candidates/chat-mobile-light.png",
+      "bytes": 155368,
+      "width": 390,
+      "height": 844,
+      "httpStatus": 200
+    }
+  ],
+  "status": "approved for publication"
+}

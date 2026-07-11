@@ -1,0 +1,217 @@
+import { describe, expect, test } from 'bun:test'
+import { randomUUIDv7 } from 'bun'
+
+const { app } = await import('../../src/app')
+const { createLoop, getLoopForUser, listLoopMcpServers, listLoopsForUser } = await import('../../src/db/queries/loops')
+const { createMcpServer } = await import('../../src/db/queries/mcp-servers')
+const { createProvider } = await import('../../src/db/queries/providers')
+const { createUser } = await import('../../src/db/queries/users')
+const { getLatestRunForConversation } = await import('../../src/db/queries/runs')
+const { encryptSession } = await import('../../src/utils/private-session')
+
+const origin = 'http://localhost:3000'
+const url = (path: string) => `${origin}${path}`
+
+function form(input: Record<string, string | string[]>) {
+  const body = new FormData()
+  for (const [key, value] of Object.entries(input)) {
+    for (const item of Array.isArray(value) ? value : [value]) body.append(key, item)
+  }
+  return body
+}
+
+async function auth() {
+  const suffix = randomUUIDv7()
+  const user = await createUser({
+    name: 'Loops Test User',
+    email: `loops-${suffix}@example.com`,
+    emailNormalized: `loops-${suffix}@example.com`,
+    passwordHash: 'x',
+  })
+  const expiresAt = new Date(Date.now() + 86_400_000)
+  const session = encryptSession({
+    user: { id: user.id, name: user.name, email: user.email, created_at: user.created_at.toISOString() },
+    issuedAt: new Date().toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  })
+  return { user, headers: { Cookie: `session=${session}`, Origin: origin } }
+}
+
+async function fixture() {
+  const identity = await auth()
+  const provider = await createProvider({
+    accountId: identity.user.id,
+    name: `loop-provider-${randomUUIDv7()}`,
+    kind: 'openai-compat',
+    baseUrl: 'http://127.0.0.1:9',
+    defaultModel: 'model-test',
+    models: ['model-test'],
+  })
+  return { ...identity, provider }
+}
+
+function loopForm(providerId: string, overrides: Record<string, string | string[]> = {}) {
+  return form({
+    name: 'Morning report',
+    prompt: 'Summarize the overnight changes.',
+    provider_id: providerId,
+    model: 'model-test',
+    reasoning_effort: 'high',
+    schedule_mode: 'manual',
+    timezone: 'UTC',
+    ...overrides,
+  })
+}
+
+describe('loops', () => {
+  test('anonymous requests redirect to login', async () => {
+    const response = await app.request(url('/loops'))
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('/login')
+  })
+
+  test('create, edit, schedule, toggle, and delete', async () => {
+    const { user, headers, provider } = await fixture()
+    const created = await app.request(url('/loops'), {
+      method: 'POST', headers, body: loopForm(provider.id),
+    })
+    expect(created.status).toBe(302)
+
+    const listBody = await (await app.request(url('/loops'), { headers })).text()
+    expect(listBody).toContain('Morning report')
+    expect(listBody).toContain('Manual only')
+    expect(listBody).toContain('Paused automation')
+    const id = (await listLoopsForUser(user.id)).find((loop) => loop.name === 'Morning report')?.id ?? ''
+    expect(id).not.toBe('')
+
+    const manual = await getLoopForUser({ id, userId: user.id })
+    expect(manual?.enabled).toBe(false)
+    expect(manual?.schedule).toBeNull()
+
+    const updated = await app.request(url(`/loops/${id}`), {
+      method: 'POST',
+      headers,
+      body: loopForm(provider.id, {
+        name: 'Weekday report',
+        schedule_mode: 'scheduled',
+        schedule_preset: '0 8 * * 1-5',
+        enabled: 'on',
+      }),
+    })
+    expect(updated.status).toBe(302)
+    const scheduled = await getLoopForUser({ id, userId: user.id })
+    expect(scheduled?.name).toBe('Weekday report')
+    expect(scheduled?.schedule).toBe('0 8 * * 1-5')
+    expect(scheduled?.enabled).toBe(true)
+    expect(scheduled?.next_fire_at).toBeInstanceOf(Date)
+
+    const disable = await app.request(url(`/loops/${id}/toggle`), { method: 'POST', headers })
+    expect(disable.status).toBe(302)
+    expect((await getLoopForUser({ id, userId: user.id }))?.enabled).toBe(false)
+    const enable = await app.request(url(`/loops/${id}/toggle`), { method: 'POST', headers })
+    expect(enable.status).toBe(302)
+    expect((await getLoopForUser({ id, userId: user.id }))?.enabled).toBe(true)
+
+    const deleted = await app.request(url(`/loops/${id}/delete`), { method: 'POST', headers })
+    expect(deleted.status).toBe(302)
+    expect(await getLoopForUser({ id, userId: user.id })).toBeUndefined()
+  })
+
+  test('validation retains submitted values and rejects invalid schedules', async () => {
+    const { headers, provider } = await fixture()
+    const response = await app.request(url('/loops'), {
+      method: 'POST',
+      headers,
+      body: loopForm(provider.id, {
+        name: 'Retained name',
+        schedule_mode: 'scheduled',
+        schedule: 'not cron',
+        enabled: 'on',
+      }),
+    })
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('Retained name')
+    expect(body).toContain('Schedule is not a valid 5-field cron expression')
+    expect(body).toContain('value="not cron"')
+  })
+
+  test('MCP auto-approval is stored only for a selected owned server', async () => {
+    const { user, headers, provider } = await fixture()
+    const selected = await createMcpServer({ accountId: user.id, name: 'selected', url: 'http://127.0.0.1:9991/mcp' })
+    const unselected = await createMcpServer({ accountId: user.id, name: 'unselected', url: 'http://127.0.0.1:9992/mcp' })
+    await app.request(url('/loops'), {
+      method: 'POST',
+      headers,
+      body: loopForm(provider.id, {
+        enabled_mcp_server_id: selected.id,
+        auto_approve_mcp_server_id: [selected.id, unselected.id],
+      }),
+    })
+    const id = (await listLoopsForUser(user.id)).find((loop) => loop.name === 'Morning report')?.id ?? ''
+    expect(id).not.toBe('')
+    expect(await listLoopMcpServers(id)).toEqual([{ mcp_server_id: selected.id, auto_approve: true }])
+  })
+
+  test('foreign loops and providers cannot be read or changed', async () => {
+    const owner = await fixture()
+    const stranger = await fixture()
+    const loop = await createLoop({
+      accountId: owner.user.id,
+      userId: owner.user.id,
+      name: 'Private loop',
+      prompt: 'private',
+      providerId: owner.provider.id,
+      timezone: 'UTC',
+      enabled: false,
+    })
+
+    for (const attempt of [
+      { path: `/loops/${loop.id}`, method: 'GET' },
+      { path: `/loops/${loop.id}/edit`, method: 'GET' },
+      { path: `/loops/${loop.id}/toggle`, method: 'POST' },
+      { path: `/loops/${loop.id}/delete`, method: 'POST' },
+    ]) {
+      const response = await app.request(url(attempt.path), { method: attempt.method, headers: stranger.headers })
+      expect(response.status).toBe(404)
+    }
+    expect(await getLoopForUser({ id: loop.id, userId: owner.user.id })).not.toBeNull()
+
+    const invalidProvider = await app.request(url('/loops'), {
+      method: 'POST', headers: stranger.headers, body: loopForm(owner.provider.id),
+    })
+    expect(invalidProvider.status).toBe(200)
+    expect(await invalidProvider.text()).toContain('Choose an enabled provider')
+  })
+
+  test('run now creates an inspectable conversation', async () => {
+    const { user, headers, provider } = await fixture()
+    const loop = await createLoop({
+      accountId: user.id,
+      userId: user.id,
+      name: 'Run now loop',
+      prompt: 'Say hello',
+      providerId: provider.id,
+      model: 'model-test',
+      timezone: 'UTC',
+      enabled: false,
+    })
+    const response = await app.request(url(`/loops/${loop.id}/run`), { method: 'POST', headers })
+    expect(response.status).toBe(302)
+    const location = response.headers.get('location') ?? ''
+    expect(location).toMatch(/^\/conversations\/[0-9a-f-]+$/)
+    const conversationId = location.split('/').at(-1) ?? ''
+    expect((await getLoopForUser({ id: loop.id, userId: user.id }))?.last_conversation_id).toBe(conversationId)
+
+    // The runner is intentionally detached from the POST response. Wait for
+    // its expected terminal network error so test teardown does not close SQL
+    // beneath an in-flight finalization query.
+    const deadline = Date.now() + 2_000
+    while (Date.now() < deadline) {
+      const run = await getLatestRunForConversation(conversationId)
+      if (run && ['done', 'error', 'cancelled'].includes(run.status)) break
+      await Bun.sleep(20)
+    }
+    expect((await getLatestRunForConversation(conversationId))?.status).toBe('error')
+  })
+})

@@ -49,16 +49,16 @@
       </div>
     <% } else { %>
       <label class="grid gap-1.5">
-        <span>Kind</span>
+        <span>Connection type</span>
         <select class="input" name="kind" required>
-          <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>llama-server</option>
-          <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>openai-compat</option>
+          <option value="llama-server" <%= it.values.kind === 'llama-server' ? 'selected' : '' %>>Local llama-server</option>
+          <option value="openai-compat" <%= it.values.kind === 'openai-compat' ? 'selected' : '' %>>Hosted or local OpenAI-compatible API</option>
         </select>
       </label>
     <% } %>
 
     <label class="grid gap-1.5">
-      <span>Base URL</span>
+      <span>Endpoint URL</span>
       <input class="input" name="base_url" maxlength="2048" value="<%= it.values.baseUrl || '' %>" required>
     </label>
 
@@ -104,7 +104,7 @@
       <% } %>
     <% } %>
 
-    <button class="btn btn-primary" type="submit">Test and save changes</button>
+    <button class="btn btn-primary" type="submit">Test connection and save</button>
     <p class="mb-0 text-ink-dim"><a class="link" href="/providers">Back to providers</a></p>
   </form>
 </section>

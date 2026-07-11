@@ -33,6 +33,28 @@ export function nextLoopFireAt(
   return next ? new Date(next) : null
 }
 
+export function humanizeLoopSchedule(schedule: string | null, timezone: string) {
+  if (!schedule) return 'Manual only'
+  const known: Record<string, string> = {
+    '0 * * * *': 'Every hour',
+    '0 7 * * *': 'Every day at 7:00 AM',
+    '0 8 * * 1-5': 'Weekdays at 8:00 AM',
+    '0 9 * * 1': 'Mondays at 9:00 AM',
+    '30 6 * * 1': 'Mondays at 6:30 AM',
+  }
+  const label = known[schedule]
+  return label ? `${label} ${timezone}` : `Scheduled in ${timezone}`
+}
+
+export function humanizeRunStatus(status: string | null | undefined) {
+  const labels: Record<string, string> = {
+    queued: 'Queued', running: 'Running', streaming: 'Running',
+    done: 'Completed', completed: 'Completed', waiting_approval: 'Waiting for approval',
+    error: 'Failed', failed: 'Failed', cancelled: 'Cancelled',
+  }
+  return status ? (labels[status] ?? 'In progress') : 'Never run'
+}
+
 export function validateLoopSchedule(schedule: string | null, timezone: string) {
   if (!schedule) return null
   try {

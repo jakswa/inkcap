@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { randomUUIDv7 } from 'bun'
 
 const { app } = await import('../../src/app')
-const { createProvider, getProviderById } = await import('../../src/db/queries/providers')
+const { createProvider, getProviderById, listProvidersForUser } = await import('../../src/db/queries/providers')
 const { createUser } = await import('../../src/db/queries/users')
 const { encryptSession } = await import('../../src/utils/private-session')
 
@@ -167,7 +167,7 @@ describe('providers CRUD', () => {
       const enabledBody = await (
         await app.request(url('/providers'), { headers })
       ).text()
-      expect(enabledBody).toContain('Enabled')
+      expect(enabledBody).toContain('Available to chats')
 
       const clearKey = await app.request(url(`/providers/${id}`), {
         method: 'POST',
@@ -185,7 +185,7 @@ describe('providers CRUD', () => {
       const clearedBody = await (
         await app.request(url('/providers'), { headers })
       ).text()
-      expect(clearedBody).toContain('API key: Not set')
+      expect(clearedBody).toContain('<dt>Authentication</dt><dd>Not set</dd>')
 
       const del = await app.request(url(`/providers/${id}/delete`), {
         method: 'POST',
@@ -242,7 +242,7 @@ describe('providers CRUD', () => {
       const after = await app.request(url('/providers'), { headers: owner.headers })
       const afterBody = await after.text()
       expect(afterBody).toContain(name)
-      expect(afterBody).toContain('Enabled')
+      expect(afterBody).toContain('Available to chats')
     } finally {
       server.stop(true)
     }
@@ -291,7 +291,7 @@ describe('providers CRUD', () => {
 
 describe('providers test connection', () => {
   test('llama-server kind succeeds against a stub /props endpoint', async () => {
-    const { headers } = await authHeadersFor()
+    const { user, headers } = await authHeadersFor()
     const server = Bun.serve({
       port: 0,
       async fetch(req) {
@@ -329,10 +329,8 @@ describe('providers test connection', () => {
 
       const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
-      const rowMatch = listBody.match(
-        new RegExp(`localhost:${server.port}[\\s\\S]*?/providers/([0-9a-f-]+)/test`),
-      )
-      const id = rowMatch?.[1] ?? ''
+      expect(listBody).toContain(`localhost:${server.port}`)
+      const id = (await listProvidersForUser(user.id))[0]?.id ?? ''
       expect(id).not.toBe('')
 
       const testResult = await app.request(url(`/providers/${id}/test`), {
@@ -341,8 +339,8 @@ describe('providers test connection', () => {
       })
       expect(testResult.status).toBe(200)
       const testBody = await testResult.text()
-      expect(testBody).toContain('Connection ok')
-      expect(testBody).toContain('4096')
+      expect(testBody).toContain('Connection healthy')
+      expect(testBody).toContain('4,096 token context')
       expect(testBody).toContain('test-model.gguf')
       expect(testBody).toContain('Inference')
     } finally {

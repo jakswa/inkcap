@@ -17,7 +17,7 @@ const CALLBACK_URL = 'http://localhost:14855/auth/callback'
 const CALLBACK_FETCH_URL = 'http://127.0.0.1:14855/auth/callback'
 
 const { app } = await import('../../src/app')
-const { createProvider, getProviderById } = await import('../../src/db/queries/providers')
+const { createProvider, getProviderById, listProvidersForUser } = await import('../../src/db/queries/providers')
 const { createUser } = await import('../../src/db/queries/users')
 const { getConversationById } = await import('../../src/db/queries/conversations')
 const { getMessageById } = await import('../../src/db/queries/messages')
@@ -533,7 +533,7 @@ describe('codex connect flow', () => {
       const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
       expect(listBody).toContain(name)
-      expect(listBody).toContain('ChatGPT OAuth: connected')
+      expect(listBody).toContain('ChatGPT connected')
       expect(listBody).toContain('gpt-5.5')
       expect(listBody).not.toContain('gpt-5.2-codex')
       expect(listBody).not.toContain('hidden-model')
@@ -596,7 +596,7 @@ describe('codex connect flow', () => {
   })
 
   test('double-submitting the poll completes once and creates one provider', async () => {
-    const { headers } = await authHeadersFor()
+    const { user, headers } = await authHeadersFor()
     const issuer = issuerStub({ tokenDelayMs: 100 })
     const backend = codexBackendStub()
     const startHeaders = codexStubHeaders(headers, { issuer: issuer.issuer, baseUrl: backend.baseUrl })
@@ -620,9 +620,7 @@ describe('codex connect flow', () => {
       }
       expect(issuer.deviceTokenRequests.length).toBe(1)
 
-      const list = await app.request(url('/providers'), { headers })
-      const listBody = await list.text()
-      expect(listBody.split(name).length - 1).toBe(1)
+      expect((await listProvidersForUser(user.id)).filter((provider) => provider.name === name)).toHaveLength(1)
     } finally {
       issuer.server.stop(true)
       backend.server.stop(true)
@@ -689,7 +687,7 @@ describe('codex connect flow', () => {
       const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
       expect(listBody).toContain(name)
-      expect(listBody).toContain('ChatGPT OAuth: connected')
+      expect(listBody).toContain('ChatGPT connected')
       expect(listBody).toContain('gpt-5.5')
       expect(listBody).not.toContain('gpt-5.2-codex')
       expect(listBody).not.toContain('hidden-model')
@@ -737,7 +735,7 @@ describe('codex connect flow', () => {
       const list = await app.request(url('/providers'), { headers })
       const listBody = await list.text()
       expect(listBody).toContain(name)
-      expect(listBody).toContain('ChatGPT OAuth: connected')
+      expect(listBody).toContain('ChatGPT connected')
     } finally {
       issuer.server.stop(true)
       backend.server.stop(true)

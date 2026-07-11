@@ -21,6 +21,7 @@ import {
 } from '../db/queries/conversations'
 import { createImportedMessage, setMessageParentId } from '../db/queries/messages'
 import { createMcpServer, listMcpServersForUser, setConversationMcpOverride } from '../db/queries/mcp-servers'
+import { createLoop, replaceLoopMcpServers } from '../db/queries/loops'
 import {
   createProvider,
   getProviderByNameForAccount,
@@ -40,6 +41,19 @@ function readArg(flag: string): string | null {
 }
 
 const minutes = (n: number) => n * 60_000
+
+// Deterministic capture passes INKCAP_FIXED_NOW (ISO-8601) so seeded instants
+// are reproducible instead of wall-clock-relative. Unset → real now, the
+// historical behavior.
+const fixedNowMs = (() => {
+  const raw = process.env['INKCAP_FIXED_NOW']
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  return Number.isFinite(ms) ? ms : null
+})()
+function nowMs(): number {
+  return fixedNowMs ?? Date.now()
+}
 
 interface SeedMessage {
   role: 'system' | 'user' | 'assistant' | 'tool'
@@ -142,6 +156,58 @@ try {
       const created = await createMcpServer({ accountId, ...server })
       mcpIds.push(created.id)
     }
+  }
+
+  // Keep the automation screens useful for product screenshots too. Loops are
+  // safe to replace because this task owns the entire demo account fixture.
+  await sql`DELETE FROM loops WHERE account_id = ${accountId}`
+  const seededLoops = [
+    {
+      name: 'Morning model watch',
+      prompt: 'Review the latest local-model and inference-server releases. Summarize only changes that could improve our current setup, then submit a short briefing artifact.',
+      model: 'qwen3-32b',
+      schedule: '0 8 * * 1-5',
+      timezone: 'America/New_York',
+      enabled: true,
+      nextFireAt: new Date(nowMs() + minutes(11 * 60)),
+      tools: [{ mcpServerId: mcpIds[1]!, autoApprove: true }],
+    },
+    {
+      name: 'Analytics index check',
+      prompt: 'Inspect analytics database index health. Explain meaningful regressions and prepare SQL recommendations, but require approval before making any changes.',
+      model: 'llama-3.3-70b-instruct',
+      schedule: '30 6 * * 1',
+      timezone: 'UTC',
+      enabled: true,
+      nextFireAt: new Date(nowMs() + minutes(2 * 24 * 60)),
+      tools: [{ mcpServerId: mcpIds[0]!, autoApprove: false }],
+    },
+    {
+      name: 'Release notes draft',
+      prompt: 'Turn the merged changes since the last tag into concise release notes for technical users. Group fixes, features, and operational changes.',
+      model: 'qwen3-32b',
+      schedule: null,
+      timezone: 'UTC',
+      enabled: false,
+      nextFireAt: null,
+      tools: [],
+    },
+  ]
+  for (const seed of seededLoops) {
+    const loop = await createLoop({
+      accountId,
+      userId,
+      name: seed.name,
+      prompt: seed.prompt,
+      providerId: llamaId,
+      model: seed.model,
+      reasoningEffort: 'medium',
+      schedule: seed.schedule,
+      timezone: seed.timezone,
+      enabled: seed.enabled,
+      nextFireAt: seed.nextFireAt,
+    })
+    await replaceLoopMcpServers({ loopId: loop.id, servers: seed.tools })
   }
 
   const conversations: SeedConversation[] = [
@@ -409,7 +475,7 @@ No extra binaries, and \`bun -e\` exits non-zero on a thrown value, which is all
     },
   ]
 
-  const now = Date.now()
+  const now = nowMs()
   for (const seed of conversations) {
     const conversation = await createConversation({
       userId,

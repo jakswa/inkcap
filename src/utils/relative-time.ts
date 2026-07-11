@@ -6,7 +6,17 @@ const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 const WEEK = 7 * DAY
 
-export function relativeTime(value: Date | string | number, now: Date = new Date()): string {
+// Deterministic screenshot capture passes `INKCAP_FIXED_NOW` (an ISO-8601
+// instant) so server-rendered relative labels do not drift with wall-clock
+// time. Unset in normal dev/prod, so `now` falls back to the real clock.
+const fixedNowMs = (() => {
+  const raw = process.env['INKCAP_FIXED_NOW']
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  return Number.isFinite(ms) ? ms : null
+})()
+
+export function relativeTime(value: Date | string | number, now: Date = fixedNowMs != null ? new Date(fixedNowMs) : new Date()): string {
   const then = value instanceof Date ? value : new Date(value)
   const diff = now.getTime() - then.getTime()
 

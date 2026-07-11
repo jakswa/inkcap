@@ -8,7 +8,7 @@
       <p class="eyebrow mb-3">Loop</p>
       <div class="flex flex-wrap items-center gap-3">
         <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight"><%= it.loop.name %></h1>
-        <span class="chip <%= it.loop.enabled ? 'border-accent/40 text-accent' : '' %>"><%= it.loop.enabled ? 'enabled' : 'disabled' %></span>
+        <span class="status <%= it.loop.enabled ? 'status-healthy' : 'status-neutral' %>"><span aria-hidden="true"></span><%= it.loop.enabled ? 'Enabled' : 'Paused' %></span>
       </div>
       <p class="mt-4 text-ink-dim"><%= it.loop.provider_name || 'Missing provider' %><% if (it.loop.model) { %> · <%= it.loop.model %><% } %></p>
     </div>
@@ -45,7 +45,7 @@
     <aside class="grid content-start gap-4">
       <div class="card grid gap-3">
         <h2 class="text-lg font-bold">Timing</h2>
-        <p class="mb-0 text-sm"><span class="font-semibold">Schedule:</span> <%= it.loop.schedule || 'manual only' %></p>
+        <p class="mb-0 text-sm"><span class="font-semibold">Schedule:</span> <%= it.loop.scheduleLabel %></p><% if (it.loop.schedule) { %><p class="mb-0 font-mono text-xs text-ink-faint"><%= it.loop.schedule %></p><% } %>
         <p class="mb-0 text-sm"><span class="font-semibold">Timezone:</span> <%= it.loop.timezone %></p>
         <p class="mb-0 text-sm"><span class="font-semibold">Last fired:</span> <%= it.loop.lastFiredLabel %></p>
         <p class="mb-0 text-sm"><span class="font-semibold">Next fire:</span> <%= it.loop.nextFireLabel || 'not scheduled' %></p>
@@ -80,7 +80,7 @@
               <div class="flex flex-wrap items-center gap-2">
                 <a class="truncate font-semibold" href="/conversations/<%= run.id %>"><%= run.title || 'Untitled loop run' %></a>
                 <% if (run.run_status) { %>
-                  <span class="chip <%= run.run_status === 'done' ? 'border-accent/40 text-accent' : run.run_status === 'error' ? 'border-danger/40 text-danger' : run.run_status === 'waiting_approval' ? 'border-warn/40 text-warn' : '' %>"><%= run.run_status %></span>
+                  <span class="status <%= run.run_status === 'done' ? 'status-healthy' : run.run_status === 'error' ? 'status-failed' : run.run_status === 'waiting_approval' ? 'status-waiting' : 'status-neutral' %>"><span aria-hidden="true"></span><%= run.statusLabel %></span>
                 <% } %>
                 <% if (run.artifact_count > 0) { %>
                   <span class="chip"><%= run.artifact_count %> artifact<%= run.artifact_count === 1 ? '' : 's' %></span>

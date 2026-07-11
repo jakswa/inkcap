@@ -1,108 +1,97 @@
-<section class="grid gap-4">
-  <div class="flex flex-wrap items-end justify-between gap-4">
+<section class="grid gap-6">
+  <header class="page-intro">
     <div>
-      <p class="eyebrow mb-3">Registry</p>
-      <h1 class="max-w-[16ch] text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight">Providers</h1>
-      <p class="mt-4 text-ink-dim">llama-server and OpenAI-compatible endpoints, picked per conversation.</p>
+      <p class="eyebrow mb-3">Model connections</p>
+      <h1>Connect your models</h1>
+      <p>Bring a local llama-server, a hosted OpenAI-compatible API, or your personal ChatGPT/Codex sign-in.</p>
     </div>
     <a class="btn btn-primary" href="/providers/new">Add provider</a>
-  </div>
+  </header>
 
   <% if (it.providers.length === 0) { %>
-    <div class="card text-ink-dim">
-      No providers yet. <a class="link" href="/providers/new">Add one</a> to get started.
+    <div class="empty-state">
+      <p class="mb-1 font-bold text-ink">Your conversations need a model connection.</p>
+      <p class="mb-4">Start with a local server or an API you already use.</p>
+      <a class="btn btn-primary" href="/providers/new">Connect a model</a>
     </div>
   <% } %>
 
+  <div class="grid gap-4">
   <% it.providers.forEach((provider) => { %>
-    <article class="card grid gap-4">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-lg font-bold"><%= provider.name %></h2>
-            <span class="rounded-full border border-edge-strong px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ink-dim"><%= provider.kind %></span>
-            <% if (provider.enabled) { %>
-              <span class="rounded-full border border-ok/40 bg-ok/10 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ok">Enabled</span>
-            <% } else { %>
-              <span class="rounded-full border border-edge bg-ink/5 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-ink-dim">Disabled</span>
-            <% } %>
+    <% const tested = it.testResult && it.testResult.providerId === provider.id ? it.testResult.result : null %>
+    <% const kindLabel = provider.kind === 'llama-server' ? 'Local llama-server' : provider.kind === 'openai-codex' ? 'ChatGPT / Codex' : 'OpenAI-compatible API' %>
+    <article class="resource-card">
+      <div class="resource-card-head">
+        <div class="min-w-0">
+          <p class="eyebrow mb-2"><%= kindLabel %></p>
+          <h2 class="break-words text-xl font-bold"><a class="hover:text-accent" href="/providers/<%= provider.id %>/edit"><%= provider.name %></a></h2>
+          <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+            <span class="status <%= !provider.enabled ? 'status-neutral' : tested && !tested.ok ? 'status-failed' : tested && tested.ok ? 'status-healthy' : 'status-neutral' %>">
+              <span aria-hidden="true"></span><%= !provider.enabled ? 'Disabled' : tested && !tested.ok ? 'Connection failed' : tested && tested.ok ? 'Connected' : 'Connection not tested' %>
+            </span>
+            <span class="text-ink-dim"><%= provider.enabled ? 'Available to chats' : 'Not available to chats' %></span>
           </div>
-          <p class="mb-0 mt-2 text-ink-dim"><%= provider.base_url %></p>
-          <p class="mb-0 mt-1 text-sm text-ink-dim">
-            Default model: <%= provider.default_model || 'not set' %> &middot;
-            <% if (provider.kind === 'openai-codex') { %>
-              ChatGPT OAuth: <%= provider.oauthConnected ? 'connected' : 'not connected' %>
-            <% } else { %>
-              API key: <%= provider.maskedApiKey %>
-            <% } %>
-          </p>
-          <% if (provider.models.length > 0) { %>
-            <p class="mb-0 mt-2 flex flex-wrap gap-1 text-sm text-ink-dim">
-              <% provider.models.slice(0, 8).forEach((model) => { %>
-                <% const info = provider.model_metadata && provider.model_metadata[model] ? provider.model_metadata[model] : null %>
-                <% const caps = info && info.capabilities ? info.capabilities.filter((cap) => cap !== 'text') : [] %>
-                <span class="chip" title="<%= caps.length > 0 ? caps.join(', ') : 'text' %>">
-                  <%= model %><% if (caps.length > 0) { %> · <%= caps.join('/') %><% } %>
-                </span>
-              <% }) %>
-              <% if (provider.models.length > 8) { %>
-                <span class="chip">+<%= provider.models.length - 8 %> more</span>
-              <% } %>
-            </p>
-          <% } %>
         </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-          <a class="btn btn-ghost px-3 py-2" href="/providers/<%= provider.id %>/edit">Edit</a>
-
-          <form method="post" action="/providers/<%= provider.id %>/test">
-            <button class="btn btn-ghost px-3 py-2" type="submit">Test connection</button>
-          </form>
-
-          <% if (provider.enabled) { %>
-            <form method="post" action="/providers/<%= provider.id %>/disable">
-              <button class="btn btn-ghost px-3 py-2" type="submit">Disable</button>
-            </form>
+        <div class="flex shrink-0 flex-wrap gap-2">
+          <% if (!tested || !tested.ok) { %>
+            <form method="post" action="/providers/<%= provider.id %>/test"><button class="btn btn-primary" type="submit">Test connection</button></form>
+            <a class="btn btn-ghost" href="/providers/<%= provider.id %>/edit">Edit</a>
           <% } else { %>
-            <form method="post" action="/providers/<%= provider.id %>/enable">
-              <button class="btn btn-ghost px-3 py-2" type="submit">Enable</button>
-            </form>
+            <a class="btn btn-primary" href="/providers/<%= provider.id %>/edit">Edit provider</a>
+            <form method="post" action="/providers/<%= provider.id %>/test"><button class="btn btn-ghost" type="submit">Test again</button></form>
           <% } %>
-
-          <form method="post" action="/providers/<%= provider.id %>/delete">
-            <button class="btn btn-danger px-3 py-2" type="submit">Delete</button>
-          </form>
         </div>
       </div>
 
-      <% if (it.testResult && it.testResult.providerId === provider.id) { %>
-        <% if (it.testResult.result.ok) { %>
-          <div class="alert-ok" role="status">
-            <p class="mb-0 font-bold">Connection ok</p>
-            <% if (it.testResult.result.contextSize) { %>
-              <p class="mb-0">Context size: <%= it.testResult.result.contextSize %> tokens</p>
-            <% } %>
-            <% if (it.testResult.result.models.length > 0) { %>
-              <p class="mb-0">Models: <%= it.testResult.result.models.join(', ') %></p>
-            <% } %>
-            <% if (it.testResult.result.modelMetadata) { %>
-              <% const capable = Object.entries(it.testResult.result.modelMetadata).filter(([, info]) => info.capabilities && info.capabilities.some((cap) => cap !== 'text')) %>
-              <% if (capable.length > 0) { %>
-                <p class="mb-0">Capabilities: <%= capable.map(([model, info]) => `${model}: ${info.capabilities.filter((cap) => cap !== 'text').join('/')}`).join(', ') %></p>
-              <% } %>
-            <% } %>
-            <p class="mb-0">Inference<% if (it.testResult.result.inferenceModel) { %> on <%= it.testResult.result.inferenceModel %><% } %>: <%= it.testResult.result.inferenceText %></p>
+      <dl class="definition-grid">
+        <div><dt>Endpoint</dt><dd class="break-all"><%= provider.base_url %></dd></div>
+        <div><dt>Default model</dt><dd class="break-all"><%= provider.default_model || 'Automatic' %></dd></div>
+        <div><dt>Authentication</dt><dd><%= provider.kind === 'openai-codex' ? (provider.oauthConnected ? 'ChatGPT connected' : 'Sign-in required') : provider.maskedApiKey %></dd></div>
+        <div><dt>Discovered models</dt><dd><%= provider.models.length %></dd></div>
+      </dl>
+
+      <% if (provider.models.length > 0) { %>
+        <div class="border-t border-edge pt-4">
+          <p class="mb-2 text-sm font-semibold">Model capabilities</p>
+          <div class="flex flex-wrap gap-1.5">
+            <% provider.models.slice(0, 3).forEach((model) => { const info = provider.model_metadata?.[model]; const caps = info?.capabilities?.filter((cap) => cap !== 'text') || [] %>
+              <span class="chip max-w-full break-all"><%= model %><% if (caps.length) { %> · <%= caps.join('/') %><% } %></span>
+            <% }) %>
           </div>
-        <% } else { %>
-          <div class="alert-danger" role="alert">
-            <p class="mb-0 font-bold">Connection failed</p>
-            <p class="mb-0"><%= it.testResult.result.error %></p>
-            <% if (it.testResult.result.models && it.testResult.result.models.length > 0) { %>
-              <p class="mb-0">Models discovered before failure: <%= it.testResult.result.models.join(', ') %></p>
-            <% } %>
-          </div>
-        <% } %>
+          <% if (provider.models.length > 3) { %>
+            <details class="mt-3 text-sm"><summary class="link cursor-pointer">Show <%= provider.models.length - 3 %> more models</summary><p class="mt-2 break-words text-ink-dim"><%= provider.models.slice(3).join(' · ') %></p></details>
+          <% } %>
+        </div>
       <% } %>
+
+      <% if (tested) { %>
+        <div class="<%= tested.ok ? 'alert-ok' : 'alert-danger' %>" role="<%= tested.ok ? 'status' : 'alert' %>">
+          <p class="mb-0 font-bold"><%= tested.ok ? 'Connection healthy' : 'Could not connect' %></p>
+          <% if (tested.ok) { %>
+            <p class="mb-0">Inference<% if (tested.inferenceModel) { %> with <span class="break-all"><%= tested.inferenceModel %></span><% } %> succeeded · <%= tested.models.length %> model<%= tested.models.length === 1 ? '' : 's' %> discovered.</p>
+            <details class="mt-2"><summary class="cursor-pointer underline underline-offset-4">Discovery details</summary><div class="mt-2 grid gap-1 text-sm"><% if (tested.models.length === 0) { %><p class="mb-0">No model list returned</p><% } %><% tested.models.forEach((model) => { const info = tested.modelMetadata?.[model] %><p class="mb-0 break-words"><strong><%= model %></strong><% if (info?.contextSize) { %> · <%= info.contextSize.toLocaleString() %> token context<% } %><% if (info?.capabilities?.length) { %> · <%= info.capabilities.join('/') %><% } %></p><% }) %></div></details>
+          <% } else { %>
+            <p class="mb-0 break-words"><%= tested.error %></p><p class="mb-0 mt-1">Check the endpoint and credentials, then edit the provider or test again.</p>
+          <% } %>
+        </div>
+      <% } %>
+
+      <details class="management-area">
+        <summary>Manage provider</summary>
+        <div class="mt-4 flex flex-wrap items-start gap-3">
+          <% if (provider.enabled) { %>
+            <form method="post" action="/providers/<%= provider.id %>/disable"><button class="btn btn-ghost" type="submit">Disable provider</button></form>
+          <% } else { %>
+            <form method="post" action="/providers/<%= provider.id %>/enable"><button class="btn btn-ghost" type="submit">Enable provider</button></form>
+          <% } %>
+          <details class="danger-zone min-w-[min(100%,18rem)] flex-1">
+            <summary class="cursor-pointer font-semibold text-danger">Delete provider…</summary>
+            <p class="my-3 text-sm text-ink-dim">This permanently removes the connection. Existing chats remain, but cannot use it.</p>
+            <form method="post" action="/providers/<%= provider.id %>/delete"><button class="btn btn-danger" type="submit">Yes, delete <%= provider.name %></button></form>
+          </details>
+        </div>
+      </details>
     </article>
   <% }) %>
+  </div>
 </section>

@@ -5,6 +5,10 @@
   const selectedProvider = field('providerId', loop.provider_id || '')
   const selectedReasoning = field('reasoningEffort', loop.reasoning_effort || 'medium')
   const scheduleValue = field('schedule', loop.schedule || '')
+  const scheduleMode = field('scheduleMode', scheduleValue ? 'scheduled' : 'manual')
+  const presetValues = new Set(it.schedulePresets.map((preset) => preset.value))
+  const selectedPreset = presetValues.has(scheduleValue) ? scheduleValue : ''
+  const advancedSchedule = scheduleValue && !selectedPreset ? scheduleValue : ''
   const timezoneValue = field('timezone', loop.timezone || 'UTC')
   const enabledValue = values.enabled !== undefined ? values.enabled === 'on' : Boolean(loop.enabled)
   const reasoningOptions = ['off', 'low', 'medium', 'high', 'max']
@@ -14,7 +18,7 @@
     <div>
       <p class="eyebrow mb-3">Loops</p>
       <h1 class="text-[clamp(2rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-tight"><%= it.mode === 'new' ? 'New loop' : 'Edit loop' %></h1>
-      <p class="mt-4 max-w-3xl text-ink-dim">Loops are unattended server-side runs. If you approve tools here, those tool calls may execute without a later click.</p>
+      <p class="mt-4 max-w-3xl text-ink-dim">Configure the task, model, timing, and exactly which tools it may use. New loops start paused unless you explicitly enable a schedule.</p>
     </div>
     <a class="btn btn-ghost" href="/loops">Back to loops</a>
   </div>
@@ -27,6 +31,7 @@
 
   <form class="grid gap-5" method="post" action="<%= it.mode === 'new' ? '/loops' : `/loops/${loop.id}` %>">
     <div class="card grid gap-4">
+      <div><p class="eyebrow mb-1">Step 1</p><h2 class="text-xl font-bold">Task</h2><p class="mb-0 text-sm text-ink-dim">Describe the result you want to make repeatable.</p></div>
       <div class="grid gap-2">
         <label class="text-sm font-semibold" for="name">Name</label>
         <input id="name" name="name" class="input" required maxlength="120" value="<%= field('name', '') %>" placeholder="Morning briefing">
@@ -45,7 +50,7 @@
     </div>
 
     <div class="card grid gap-4">
-      <h2 class="text-lg font-bold">Model</h2>
+      <div><p class="eyebrow mb-1">Step 2</p><h2 class="text-xl font-bold">Model</h2><p class="mb-0 text-sm text-ink-dim">Choose the connection and model that should do the work.</p></div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="provider_id">Provider</label>
@@ -73,30 +78,46 @@
 
     <div class="card grid gap-4">
       <div>
-        <h2 class="text-lg font-bold">Schedule</h2>
-        <p class="mb-0 text-sm text-ink-dim">Use a 5-field cron expression. Leave blank for manual-only.</p>
+        <p class="eyebrow mb-1">Step 3</p><h2 class="text-xl font-bold">When</h2>
+        <p class="mb-0 text-sm text-ink-dim">Keep it available on demand, or give it a schedule. Scheduled loops still start paused unless you enable them.</p>
       </div>
-      <div class="grid gap-4 sm:grid-cols-[1fr_auto]">
+      <fieldset class="grid gap-3">
+        <legend class="text-sm font-semibold">Run mode</legend>
+        <div class="grid gap-2 sm:grid-cols-2">
+          <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="radio" name="schedule_mode" value="manual" <%= scheduleMode !== 'scheduled' ? 'checked' : '' %>><span><strong class="block">Manual only</strong><span class="text-ink-dim">Run it when you choose.</span></span></label>
+          <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="radio" name="schedule_mode" value="scheduled" <%= scheduleMode === 'scheduled' ? 'checked' : '' %>><span><strong class="block">Scheduled</strong><span class="text-ink-dim">Use a preset or cron expression below.</span></span></label>
+        </div>
+      </fieldset>
+      <div class="grid gap-4 sm:grid-cols-2">
         <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="schedule">Cron</label>
-          <input id="schedule" name="schedule" class="input font-mono" list="schedule-presets" value="<%= scheduleValue %>" placeholder="0 7 * * *">
-          <datalist id="schedule-presets">
-            <% it.schedulePresets.forEach((preset) => { %><option value="<%= preset.value %>"><%= preset.label %></option><% }) %>
-          </datalist>
+          <label class="text-sm font-semibold" for="schedule_preset">Common schedule</label>
+          <select id="schedule_preset" name="schedule_preset" class="input">
+            <option value="">Custom cron…</option>
+            <% it.schedulePresets.forEach((preset) => { %><option value="<%= preset.value %>" <%= selectedPreset === preset.value ? 'selected' : '' %>><%= preset.label %></option><% }) %>
+          </select>
         </div>
         <div class="grid gap-2">
           <label class="text-sm font-semibold" for="timezone">Timezone</label>
           <input id="timezone" name="timezone" class="input" value="<%= timezoneValue %>" placeholder="UTC">
         </div>
       </div>
-      <label class="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" name="enabled" <%= enabledValue ? 'checked' : '' %>> Enabled</label>
+      <details <%= advancedSchedule ? 'open' : '' %>>
+        <summary class="cursor-pointer text-sm font-semibold text-ink-dim">Advanced cron</summary>
+        <div class="mt-2 grid gap-2">
+          <label class="sr-only" for="schedule">Five-field cron expression</label>
+          <input id="schedule" name="schedule" class="input font-mono" value="<%= advancedSchedule %>" placeholder="0 7 * * *" aria-describedby="schedule-help">
+          <p id="schedule-help" class="mb-0 text-xs text-ink-faint">Five fields: minute, hour, day of month, month, day of week. A custom value overrides the preset.</p>
+        </div>
+      </details>
+      <% if (it.schedulePreview) { %><p class="mb-0 text-sm text-ink-dim"><strong class="text-ink">Next occurrence:</strong> <%= it.schedulePreview %></p><% } else if (scheduleMode === 'scheduled') { %><p class="mb-0 text-sm text-ink-dim">Choose a valid schedule and save to calculate its next occurrence.</p><% } %>
+      <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="checkbox" name="enabled" <%= enabledValue ? 'checked' : '' %>><span><strong class="block">Enable this schedule</strong><span class="text-ink-dim">Unchecked keeps the loop paused; you can still use Run now.</span></span></label>
     </div>
 
     <div class="card grid gap-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 class="text-lg font-bold">Tools and unattended approvals</h2>
-          <p class="mb-0 text-sm text-ink-dim">Select MCP servers for this loop. “Approve unattended” lets those server tool calls run headlessly.</p>
+          <p class="eyebrow mb-1">Step 4</p><h2 class="text-xl font-bold">Tools &amp; permission</h2>
+          <p class="mb-0 text-sm text-ink-dim">Each server and its unattended permission are one choice. Calls are not pre-approved unless you select both options.</p>
         </div>
         <a class="btn btn-ghost" href="/mcp-servers">Manage MCP</a>
       </div>
@@ -114,8 +135,8 @@
                 </span>
               </span>
               <span class="flex items-center gap-2 text-sm text-ink-dim">
-                <input type="checkbox" name="auto_approve_mcp_server_id" value="<%= server.id %>" <%= server.loop_auto_approve ? 'checked' : '' %> <%= server.enabled ? '' : 'disabled' %>>
-                Approve unattended
+                <input type="checkbox" name="auto_approve_mcp_server_id" value="<%= server.id %>" <%= server.loop_enabled && server.loop_auto_approve ? 'checked' : '' %> <%= server.enabled ? '' : 'disabled' %>>
+                <span><strong class="block text-ink">Allow without a later click</strong>Calls from this server may run unattended.</span>
               </span>
             </label>
           <% }) %>
@@ -130,8 +151,6 @@
   </form>
 
   <% if (it.mode === 'edit') { %>
-    <form method="post" action="/loops/<%= loop.id %>/delete">
-      <button class="btn btn-ghost text-danger" type="submit">Delete loop</button>
-    </form>
+    <details class="danger-zone"><summary class="cursor-pointer font-semibold text-danger">Delete this loop…</summary><p class="my-3 text-sm text-ink-dim">This removes the recipe and schedule. Existing run chats remain.</p><form method="post" action="/loops/<%= loop.id %>/delete"><button class="btn btn-danger" type="submit">Yes, permanently delete this loop</button></form></details>
   <% } %>
 </section>

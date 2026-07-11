@@ -12,7 +12,9 @@ import { startLoopScheduler } from './services/loops'
 const recovered = await recoverInterruptedRuns()
 if (recovered > 0) console.log(`recovered ${recovered} interrupted run(s)`)
 await cleanupExpiredRunEvents()
-startLoopScheduler()
+// Capture automation sets INKCAP_DISABLE_SCHEDULER so the seeded demo loops
+// never fire during screenshot runs. Normal boots leave it unset.
+if (!process.env['INKCAP_DISABLE_SCHEDULER']) startLoopScheduler()
 
 export default {
   port: env.PORT,
