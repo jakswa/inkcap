@@ -512,6 +512,7 @@ conversationRoutes.post('/conversations', async (c) => {
   const conversation = await createConversation({
     userId: user.id,
     title: title || titleFromContent(content),
+    metadata: { titleSource: title ? 'user' : 'fallback' },
     providerId: provider.id,
     model: selectedModel,
     reasoningEffort: modelSupportsReasoning(provider, selectedModel) ? reasoningEffort : null,

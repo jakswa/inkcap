@@ -9,9 +9,10 @@ export async function createConversation(input: {
   reasoningEffort?: string | null
   forkedFromConversationId?: string | null
   routineId?: string | null
+  metadata?: Record<string, unknown> | null
 }) {
   const [conversation] = await sql.CreateConversation`
-    INSERT INTO conversations (id, user_id, title, provider_id, model, reasoning_effort, forked_from_conversation_id, routine_id)
+    INSERT INTO conversations (id, user_id, title, provider_id, model, reasoning_effort, forked_from_conversation_id, routine_id, metadata)
     VALUES (
       ${randomUUIDv7()},
       ${input.userId},
@@ -20,10 +21,11 @@ export async function createConversation(input: {
       ${input.model ?? null},
       ${input.reasoningEffort ?? null},
       ${input.forkedFromConversationId ?? null},
-      ${input.routineId ?? null}
+      ${input.routineId ?? null},
+      ${input.metadata ?? null}
     )
     RETURNING id, user_id, title, provider_id, model, reasoning_effort, curr_node, pinned,
-              forked_from_conversation_id, routine_id, created_at, updated_at
+              forked_from_conversation_id, routine_id, metadata, created_at, updated_at
   `
 
   return conversation
@@ -33,11 +35,23 @@ export async function getConversationById(id: string) {
   const [conversation] = await sql.GetConversationById`
     SELECT id, user_id, title, provider_id, model, curr_node, pinned,
            reasoning_effort,
-           forked_from_conversation_id, routine_id, created_at, updated_at
+           forked_from_conversation_id, routine_id, metadata, created_at, updated_at
     FROM conversations
     WHERE id = ${id}
   `
 
+  return conversation
+}
+
+export async function setGeneratedConversationTitle(input: { id: string; title: string }) {
+  const [conversation] = await sql.SetGeneratedConversationTitle`
+    UPDATE conversations
+    SET title = ${input.title},
+        metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{titleSource}', '"generated"'::jsonb)
+    WHERE id = ${input.id}
+      AND metadata->>'titleSource' = 'fallback'
+    RETURNING id, title, metadata
+  `
   return conversation
 }
 

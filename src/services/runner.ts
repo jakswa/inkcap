@@ -56,6 +56,7 @@ import {
   listApprovalsForRun,
 } from '../db/queries/tool-approvals'
 import { notifyLoopRunStatus } from './push'
+import { maybeGenerateConversationTitle } from './conversation-title'
 import {
   callTool,
   gatherTools,
@@ -971,6 +972,19 @@ export async function startRun(
       role: 'assistant',
       model: conversation.model,
       html: await renderMessageHtml(assistantMessage),
+    })
+
+    // Optional decoration runs beside the durable reply and can neither delay
+    // nor fail it. Usually it lands before the terminal SSR refresh.
+    maybeGenerateConversationTitle({
+      conversation,
+      provider: {
+        id: provider.id,
+        kind: provider.kind,
+        base_url: provider.base_url,
+        api_key: provider.api_key,
+      },
+      history,
     })
 
     // Gather the tools exposed to the model for this conversation (connecting to

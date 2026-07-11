@@ -7,6 +7,9 @@
 export const DEFAULT_LOOP_NOTIFICATION_PROMPT =
   'Notify me when the loop finds a meaningful change, produces a useful result, or reaches a conclusion worth reviewing. Do not notify me when nothing materially changed or the result is routine and uneventful.'
 
+export const DEFAULT_AUTO_TITLE_PROMPT =
+  'Give this chat a concise, sensible title based on my request. Reply with only the title, with no quotation marks or prefix.'
+
 export type UserSettings = {
   // MCP servers pre-checked on the new-chat composer. Updated to the
   // selection of the last created conversation, so tool choices are sticky
@@ -19,6 +22,12 @@ export type UserSettings = {
   // The completed conversation remains the prefix so provider prompt caches can
   // be reused; this instruction is never persisted as a chat message.
   loopNotificationPrompt: string
+  // Run a throwaway inference alongside the first reply to replace the
+  // first-message fallback with a concise model-generated title.
+  autoTitleEnabled: boolean
+  // Ephemeral instruction appended to the initial conversation path when
+  // automatic naming is enabled.
+  autoTitlePrompt: string
 }
 
 export function parseUserSettings(raw: unknown): UserSettings {
@@ -30,6 +39,11 @@ export function parseUserSettings(raw: unknown): UserSettings {
       typeof settings.loopNotificationPrompt === 'string' && settings.loopNotificationPrompt.trim()
         ? settings.loopNotificationPrompt.trim()
         : DEFAULT_LOOP_NOTIFICATION_PROMPT,
+    autoTitleEnabled: settings.autoTitleEnabled === true,
+    autoTitlePrompt:
+      typeof settings.autoTitlePrompt === 'string' && settings.autoTitlePrompt.trim()
+        ? settings.autoTitlePrompt.trim()
+        : DEFAULT_AUTO_TITLE_PROMPT,
   }
 }
 

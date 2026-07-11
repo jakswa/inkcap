@@ -141,6 +141,7 @@ export interface ICreateConversationResult {
     pinned: boolean;
     forked_from_conversation_id: string | null;
     routine_id: string | null;
+    metadata: unknown | null;
     created_at: Date;
     updated_at: Date;
 }
@@ -157,8 +158,16 @@ export interface IGetConversationByIdResult {
     reasoning_effort: string | null;
     forked_from_conversation_id: string | null;
     routine_id: string | null;
+    metadata: unknown | null;
     created_at: Date;
     updated_at: Date;
+}
+
+/** Result of query `SetGeneratedConversationTitle`. */
+export interface ISetGeneratedConversationTitleResult {
+    id: string;
+    title: string | null;
+    metadata: unknown | null;
 }
 
 /** Result of query `ListConversationsForUser`. */
@@ -1137,6 +1146,7 @@ export interface Queries {
     ListAttachmentsForMessage: IListAttachmentsForMessageResult;
     CreateConversation: ICreateConversationResult;
     GetConversationById: IGetConversationByIdResult;
+    SetGeneratedConversationTitle: ISetGeneratedConversationTitleResult;
     ListConversationsForUser: IListConversationsForUserResult;
     SetConversationCurrNode: ISetConversationCurrNodeResult;
     UpdateConversationModelSettings: IUpdateConversationModelSettingsResult;

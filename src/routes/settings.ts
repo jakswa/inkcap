@@ -30,6 +30,10 @@ settingsRoutes.get('/settings', async (c) => {
     loopNotificationPrompt: userSettings.loopNotificationPrompt,
     notificationPolicySaved: c.req.query('notification_policy') === 'saved',
     notificationPolicyError: c.req.query('notification_policy') === 'invalid',
+    autoTitleEnabled: userSettings.autoTitleEnabled,
+    autoTitlePrompt: userSettings.autoTitlePrompt,
+    namingSaved: c.req.query('naming') === 'saved',
+    namingError: c.req.query('naming') === 'invalid',
   })
 })
 
@@ -43,6 +47,24 @@ settingsRoutes.post('/settings/notification-policy', async (c) => {
   }
   await patchUserSettings({ userId: user.id, patch: { loopNotificationPrompt } })
   return c.redirect('/settings?notification_policy=saved#notifications')
+})
+
+settingsRoutes.post('/settings/naming', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+  const form = await c.req.formData()
+  const autoTitlePrompt = readString(form, 'auto_title_prompt').trim()
+  if (!autoTitlePrompt || autoTitlePrompt.length > 4_000) {
+    return c.redirect('/settings?naming=invalid#naming')
+  }
+  await patchUserSettings({
+    userId: user.id,
+    patch: {
+      autoTitleEnabled: form.get('auto_title_enabled') === 'on',
+      autoTitlePrompt,
+    },
+  })
+  return c.redirect('/settings?naming=saved#naming')
 })
 
 settingsRoutes.post('/settings/timezone', async (c) => {

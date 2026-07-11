@@ -50,6 +50,27 @@
     </div>
   </div>
 
+  <section id="naming" class="card grid gap-4 scroll-mt-24">
+    <div>
+      <h2 class="text-xl font-bold">Chat naming</h2>
+      <p class="mb-0 text-sm text-ink-dim">Optionally run a separate inference beside the first reply to replace the first-message fallback with a concise title.</p>
+    </div>
+    <% if (it.namingSaved) { %><div class="alert-ok" role="status"><p class="mb-0">Naming preference saved.</p></div><% } %>
+    <% if (it.namingError) { %><div class="alert-danger" role="alert"><p class="mb-0">Enter naming guidance between 1 and 4,000 characters.</p></div><% } %>
+    <form class="grid gap-3" method="post" action="/settings/naming">
+      <label class="flex items-start gap-3">
+        <input class="mt-1" type="checkbox" name="auto_title_enabled" <%= it.autoTitleEnabled ? 'checked' : '' %>>
+        <span><strong>Automatically name new chats</strong><span class="mt-1 block text-xs text-ink-faint">Off by default. This uses the conversation provider and model and does not delay the main response.</span></span>
+      </label>
+      <label class="grid gap-1.5" for="auto_title_prompt">
+        <span>How should chats be named?</span>
+        <textarea id="auto_title_prompt" name="auto_title_prompt" class="input min-h-24" maxlength="4000" required><%= it.autoTitlePrompt %></textarea>
+        <span class="text-xs text-ink-faint">Applied as an ephemeral instruction after the initial system prompt and message.</span>
+      </label>
+      <button class="btn btn-primary justify-self-start" type="submit">Save naming preference</button>
+    </form>
+  </section>
+
   <section id="regional" class="card grid gap-4 scroll-mt-24">
     <div>
       <h2 class="text-xl font-bold">Time &amp; region</h2>
