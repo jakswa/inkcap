@@ -15,6 +15,7 @@ import {
 } from '../utils/private-session'
 import { requestIsSecure } from '../utils/public-origin'
 import { normalizeEmail, readString } from '../utils/validation'
+import { validTimeZone } from '../utils/timezone'
 
 export const authRoutes = new Hono()
 
@@ -81,6 +82,7 @@ authRoutes.post('/register', async (c) => {
   const name = readString(form, 'name').trim()
   const email = readString(form, 'email').trim()
   const password = readString(form, 'password')
+  const timeZone = validTimeZone(readString(form, 'timezone')) ?? 'UTC'
   const emailNormalized = normalizeEmail(email)
 
   if (!allowAttempt(`register:${clientKey(c)}`, maxRegisterAttempts)) {
@@ -127,7 +129,7 @@ authRoutes.post('/register', async (c) => {
   let user: Awaited<ReturnType<typeof createUser>>
 
   try {
-    user = await createUser({ name, email, emailNormalized, passwordHash })
+    user = await createUser({ name, email, emailNormalized, passwordHash, timeZone })
   } catch (error) {
     if (isUniqueViolation(error)) {
       return c.var.render('auth/register', {

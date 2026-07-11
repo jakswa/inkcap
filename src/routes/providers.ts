@@ -12,6 +12,7 @@ import {
   updateProvider,
   updateProviderOauthCredentials,
 } from '../db/queries/providers'
+import { listEnabledLoopsForProvider } from '../db/queries/loops'
 import {
   codexDefaultBaseUrl,
   completeCodexLoginFromCallbackUrl,
@@ -27,6 +28,7 @@ import {
   fetchCodexModels,
 } from '../services/codex-client'
 import {
+  discoverProviderModels,
   maskApiKey,
   normalizeBaseUrl,
   testProviderConnection,
@@ -81,6 +83,11 @@ function emptyProviderFormValues(): ProviderFormValues {
 }
 
 function readProviderForm(form: FormData): ProviderFormValues {
+  const submittedModels = form
+    .getAll('models')
+    .map((value) => typeof value === 'string' ? value.trim() : '')
+    .filter(Boolean)
+  const customModel = readString(form, 'custom_model').trim()
   return {
     name: readString(form, 'name').trim(),
     kind: readString(form, 'kind').trim(),
@@ -88,7 +95,7 @@ function readProviderForm(form: FormData): ProviderFormValues {
     apiKey: readString(form, 'api_key').trim(),
     clearApiKey: readString(form, 'clear_api_key') === 'on',
     defaultModel: readString(form, 'default_model').trim(),
-    modelsText: readString(form, 'models').trim(),
+    modelsText: [...submittedModels, customModel].filter(Boolean).join('\n'),
   }
 }
 
@@ -542,6 +549,54 @@ providerRoutes.get('/providers/:id/edit', async (c) => {
       modelsText: modelsText(provider.models ?? []),
     },
     testResult: null,
+    availableModels: provider.models ?? [],
+    discoveredModels: null,
+  })
+})
+
+// Discovery is a review step: never silently replace a curated catalog.
+providerRoutes.post('/providers/:id/discover', async (c) => {
+  const user = c.var.user
+  if (!user) return c.redirect('/login')
+
+  const provider = await getProviderForUser({ id: c.req.param('id'), userId: user.id })
+  if (!provider) return c.notFound()
+
+  const form = await c.req.formData()
+  const values = form.has('name')
+    ? readProviderForm(form)
+    : {
+        name: provider.name,
+        kind: provider.kind,
+        baseUrl: provider.base_url,
+        apiKey: '',
+        clearApiKey: false,
+        defaultModel: provider.default_model ?? '',
+        modelsText: modelsText(provider.models ?? []),
+      }
+  if (provider.kind === 'openai-codex') values.kind = 'openai-codex'
+  const inputModels = parseModelList(values.modelsText)
+  const formErrors = validateProviderForm(values)
+  const discovery = formErrors.length > 0
+    ? null
+    : await discoverProviderModels({
+        id: provider.id,
+        kind: values.kind,
+        base_url: normalizeBaseUrl(values.baseUrl),
+        api_key: values.clearApiKey ? null : values.apiKey || provider.api_key,
+      })
+  const discoveredModels = discovery?.ok ? discovery.models : []
+  return c.var.render('providers/edit', {
+    title: 'Edit provider',
+    errors: [
+      ...formErrors,
+      ...(discovery && !discovery.ok ? [`Model discovery failed: ${discovery.error}`] : []),
+    ],
+    provider: toProviderView(provider),
+    values,
+    testResult: null,
+    availableModels: uniqueModels([...(provider.models ?? []), ...inputModels, ...discoveredModels]),
+    discoveredModels: discovery?.ok ? discoveredModels : null,
   })
 })
 
@@ -555,6 +610,11 @@ providerRoutes.post('/providers/:id', async (c) => {
 
   const form = await c.req.formData()
   const values = readProviderForm(form)
+  // Backward-compatible form/API submissions that predate the checkbox
+  // catalog mean "keep models" when the new presence marker is absent.
+  if (!form.has('models_present') && form.getAll('models').length === 0) {
+    values.modelsText = modelsText(provider.models ?? [])
+  }
   // A codex provider's kind is fixed at connect time; the edit form carries it
   // in a hidden field, but never trust the browser with a kind change here.
   if (provider.kind === 'openai-codex') values.kind = 'openai-codex'
@@ -567,6 +627,8 @@ providerRoutes.post('/providers/:id', async (c) => {
       provider: toProviderView(provider),
       values,
       testResult: null,
+      availableModels: uniqueModels([...(provider.models ?? []), ...parseModelList(values.modelsText)]),
+      discoveredModels: null,
     })
   }
 
@@ -583,6 +645,35 @@ providerRoutes.post('/providers/:id', async (c) => {
           : provider.api_key
   const normalizedBaseUrl = normalizeBaseUrl(values.baseUrl)
   const inputModels = parseModelList(values.modelsText)
+  if (values.defaultModel && !inputModels.includes(values.defaultModel)) {
+    return c.var.render('providers/edit', {
+      title: 'Edit provider',
+      errors: ['Default model must be one of the enabled models.'],
+      provider: toProviderView(provider),
+      values,
+      testResult: null,
+      availableModels: uniqueModels([...(provider.models ?? []), ...inputModels]),
+      discoveredModels: null,
+    })
+  }
+  const enabledLoops = await listEnabledLoopsForProvider(provider.id)
+  const affectedLoops = enabledLoops.filter((loop) => {
+    const selectedModel = loop.model || values.defaultModel
+    return !selectedModel || !inputModels.includes(selectedModel)
+  })
+  if (affectedLoops.length > 0) {
+    const names = affectedLoops.slice(0, 5).map((loop) => loop.name).join(', ')
+    const remainder = affectedLoops.length > 5 ? ` and ${affectedLoops.length - 5} more` : ''
+    return c.var.render('providers/edit', {
+      title: 'Edit provider',
+      errors: [`Cannot retire models used by enabled loops: ${names}${remainder}. Pause or update those loops first.`],
+      provider: toProviderView(provider),
+      values,
+      testResult: null,
+      availableModels: uniqueModels([...(provider.models ?? []), ...inputModels]),
+      discoveredModels: null,
+    })
+  }
   const testResult = await testProviderConnection({
     id,
     kind: values.kind,
@@ -603,6 +694,8 @@ providerRoutes.post('/providers/:id', async (c) => {
         modelsText: modelsText(inputModels),
       },
       testResult,
+      availableModels: uniqueModels([...(provider.models ?? []), ...inputModels, ...(testResult.models ?? [])]),
+      discoveredModels: testResult.models ?? null,
     })
   }
 

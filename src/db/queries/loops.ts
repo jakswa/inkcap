@@ -16,6 +16,15 @@ export interface LoopFormInput {
   nextFireAt?: Date | null
 }
 
+export async function listEnabledLoopsForProvider(providerId: string) {
+  return sql.ListEnabledLoopsForProvider`
+    SELECT id, name, model
+    FROM loops
+    WHERE provider_id = ${providerId} AND enabled = true
+    ORDER BY name ASC
+  `
+}
+
 export async function createLoop(input: LoopFormInput) {
   const [loop] = await sql.CreateLoop`
     INSERT INTO loops (
@@ -197,6 +206,7 @@ export async function claimDueLoop(input: {
     UPDATE loops
     SET last_fired_at = now(),
         next_fire_at = ${input.nextFireAt},
+        enabled = ${input.nextFireAt !== null},
         updated_at = now()
     WHERE id = ${input.id}
       AND enabled = true

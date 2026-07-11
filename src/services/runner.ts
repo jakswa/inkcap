@@ -25,6 +25,7 @@ import {
   setConversationCurrNode,
 } from '../db/queries/conversations'
 import { getProviderById } from '../db/queries/providers'
+import { providerModelError } from '../utils/providers'
 import {
   appendMessageDeltas,
   createMessage,
@@ -941,6 +942,8 @@ export async function startRun(
     if (!provider.enabled) {
       throw new Error(`Provider "${provider.name}" is disabled. Enable it before sending.`)
     }
+    const modelError = providerModelError(provider, conversation.model || provider.default_model)
+    if (modelError) throw new Error(modelError)
 
     const path = await getActivePath(conversation.curr_node)
     const history = toChatMessages(path as PathRow[])
@@ -1081,6 +1084,8 @@ export async function resumeParkedRun(
     if (!provider.enabled) {
       throw new Error(`Provider "${provider.name}" is disabled. Enable it before sending.`)
     }
+    const modelError = providerModelError(provider, conversation.model || provider.default_model)
+    if (modelError) throw new Error(modelError)
 
     handle.runId = run.id
     handle.messageId = run.leaf_message_id

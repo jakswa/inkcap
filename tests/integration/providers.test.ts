@@ -348,6 +348,33 @@ describe('providers test connection', () => {
     }
   })
 
+  test('model refresh presents an explicit catalog diff without saving it', async () => {
+    const { user, headers } = await authHeadersFor()
+    const server = openAiStub({ models: ['current-model', 'new-model'] })
+    try {
+      const provider = await createProvider({
+        accountId: user.id,
+        name: uniqueName('catalog-stub'),
+        kind: 'openai-compat',
+        baseUrl: `http://localhost:${server.port}`,
+        defaultModel: 'stale-model',
+        models: ['stale-model', 'current-model'],
+      })
+
+      const response = await app.request(url(`/providers/${provider.id}/discover`), {
+        method: 'POST', headers, body: form({}),
+      })
+      expect(response.status).toBe(200)
+      const body = await response.text()
+      expect(body).toContain('new-model')
+      expect(body).toContain('Reported by provider now')
+      expect(body).toContain('Not reported now — uncheck to retire')
+      expect((await getProviderById(provider.id))?.models).toEqual(['stale-model', 'current-model'])
+    } finally {
+      server.stop(true)
+    }
+  })
+
   test('openai-compat kind reports the upstream error on 401', async () => {
     const { user, headers } = await authHeadersFor()
     const server = openAiStub({ status: 401 })

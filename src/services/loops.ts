@@ -10,6 +10,7 @@ import {
 } from '../db/queries/loops'
 import { notifyLoopStartFailure } from './push'
 import { startRun } from './runner'
+import { timeZoneLabel, zonedLocalDateTime } from '../utils/timezone'
 
 export type LoopRow = NonNullable<Awaited<ReturnType<typeof claimDueLoop>>>
 
@@ -28,22 +29,53 @@ export function nextLoopFireAt(
   from: Date = new Date(),
 ) {
   if (!schedule) return null
+  if (schedule.startsWith('once:')) {
+    const instant = zonedLocalDateTime(schedule.slice(5), timezone)
+    return instant && instant > from ? instant : null
+  }
   const job = new Cron(schedule, { paused: true, timezone, mode: '5-part' })
   const next = job.nextRun(from)
   return next ? new Date(next) : null
 }
 
+export function scheduleFormParts(schedule: string | null | undefined) {
+  if (!schedule) return { mode: 'manual', minute: '0', time: '09:00', weekday: '1', once: '', custom: '' }
+  if (schedule.startsWith('once:')) return { mode: 'once', minute: '0', time: '09:00', weekday: '1', once: schedule.slice(5), custom: '' }
+  let match = /^(\d{1,2}) \* \* \* \*$/.exec(schedule)
+  if (match) return { mode: 'hourly', minute: match[1]!, time: '09:00', weekday: '1', once: '', custom: '' }
+  match = /^(\d{1,2}) (\d{1,2}) \* \* (\*|1-5|[0-6])$/.exec(schedule)
+  if (match) {
+    const mode = match[3] === '*' ? 'daily' : match[3] === '1-5' ? 'weekdays' : 'weekly'
+    return { mode, minute: '0', time: `${match[2]!.padStart(2, '0')}:${match[1]!.padStart(2, '0')}`, weekday: match[3] === '*' || match[3] === '1-5' ? '1' : match[3]!, once: '', custom: '' }
+  }
+  return { mode: 'custom', minute: '0', time: '09:00', weekday: '1', once: '', custom: schedule }
+}
+
 export function humanizeLoopSchedule(schedule: string | null, timezone: string) {
   if (!schedule) return 'Manual only'
-  const known: Record<string, string> = {
-    '0 * * * *': 'Every hour',
-    '0 7 * * *': 'Every day at 7:00 AM',
-    '0 8 * * 1-5': 'Weekdays at 8:00 AM',
-    '0 9 * * 1': 'Mondays at 9:00 AM',
-    '30 6 * * 1': 'Mondays at 6:30 AM',
+  const parts = scheduleFormParts(schedule)
+  let next: Date | null
+  try {
+    next = nextLoopFireAt(schedule, timezone)
+  } catch {
+    return `Invalid schedule (${schedule}) in ${timezone}`
   }
-  const label = known[schedule]
-  return label ? `${label} ${timezone}` : `Scheduled in ${timezone}`
+  const zone = timeZoneLabel(timezone, next ?? new Date())
+  if (parts.mode === 'once') {
+    const instant = zonedLocalDateTime(parts.once, timezone)
+    return instant ? `Once on ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(instant)} ${zone}` : `Once in ${timezone}`
+  }
+  if (parts.mode === 'hourly') return `Hourly at :${parts.minute.padStart(2, '0')} ${zone}`
+  const [hour, minute] = parts.time.split(':').map(Number)
+  const sample = new Date(Date.UTC(2024, 0, 1, hour, minute))
+  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(sample)
+  if (parts.mode === 'daily') return `Daily at ${clock} ${zone}`
+  if (parts.mode === 'weekdays') return `Weekdays at ${clock} ${zone}`
+  if (parts.mode === 'weekly') {
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    return `Every ${days[Number(parts.weekday)]} at ${clock} ${zone}`
+  }
+  return `Custom schedule (${schedule}) in ${timezone}`
 }
 
 export function humanizeRunStatus(status: string | null | undefined) {

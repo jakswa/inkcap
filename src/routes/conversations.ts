@@ -43,7 +43,7 @@ import {
   type RunEventRecord,
 } from '../services/runner'
 import { readString } from '../utils/validation'
-import { uniqueModels } from '../utils/providers'
+import { providerModelError, uniqueModels } from '../utils/providers'
 import { toRenderable, toolCallsFor } from '../utils/message-view'
 import { relativeTime } from '../utils/relative-time'
 import {
@@ -191,6 +191,7 @@ function modelControlData(input: {
       models: models.map((model) => ({
         name: model,
         reasoning: modelSupportsReasoning(provider, model),
+        available: (provider.models ?? []).length === 0 || (provider.models ?? []).includes(model),
       })),
     }
   })
@@ -200,10 +201,10 @@ function modelControlData(input: {
       provider.models.length > 0
         ? provider.models
         : input.allowProviderSelect
-          ? [{ name: '', reasoning: false }]
+          ? [{ name: '', reasoning: false, available: true }]
           : []
     return models.map((model) => {
-      const label = model.name || 'Provider default'
+      const label = (model.name || 'Provider default') + (model.available === false ? ' (not in provider catalog)' : '')
       return {
         key: providerModelValue(provider.id, model.name),
         value: providerModelValue(provider.id, model.name),
@@ -377,6 +378,7 @@ async function renderShow(
       (server) => server.enabled && server.override_enabled,
     ).length,
     error: options.error ?? null,
+    runError: latestRun?.status === 'error' ? latestRun.error : null,
     draft: options.draft ?? '',
   })
 }
@@ -498,6 +500,14 @@ conversationRoutes.post('/conversations', async (c) => {
   }
 
   const selectedModel = model || provider.default_model || null
+  const modelError = providerModelError(provider, selectedModel)
+  if (modelError) {
+    return renderLanding(c, user.id, {
+      errors: [modelError],
+      values: { title, model, reasoningEffort, systemPrompt, providerId, content },
+      selectedMcpServerIds,
+    })
+  }
 
   const conversation = await createConversation({
     userId: user.id,
@@ -663,6 +673,10 @@ conversationRoutes.post('/conversations/:id/messages', async (c) => {
   }
 
   const selectedModel = model || provider.default_model || null
+  const modelError = providerModelError(provider, selectedModel)
+  if (modelError) {
+    return renderShow(c, conversation, { draft: content, error: modelError })
+  }
   const updatedConversation = await updateConversationModelSettings({
     id: conversation.id,
     providerId: provider.id,
@@ -721,7 +735,7 @@ async function runPreflightError(
   if (!provider.enabled) {
     return `Provider "${provider.name}" is disabled. Enable it before sending.`
   }
-  return null
+  return providerModelError(provider, conversation.model || provider.default_model)
 }
 
 // POST /conversations/:id/messages/:messageId/edit — branching edit of a user
@@ -1052,6 +1066,7 @@ conversationRoutes.get('/conversations/:id/events', async (c) => {
 
   return streamSSE(c, async (stream) => {
     let lastSentSeq = cursor
+    let sentTerminal = false
     let writeChain: Promise<unknown> = Promise.resolve()
     let finish: () => void = () => {}
     const finished = new Promise<void>((resolve) => {
@@ -1068,6 +1083,7 @@ conversationRoutes.get('/conversations/:id/events', async (c) => {
         if (event.seq <= lastSentSeq) return
         lastSentSeq = event.seq
       }
+      if (isTerminalEvent(event)) sentTerminal = true
       writeChain = writeChain
         .then(() =>
           stream.writeSSE({
@@ -1099,8 +1115,25 @@ conversationRoutes.get('/conversations/:id/events', async (c) => {
       // the cursor was past it) — close instead of tailing forever.
       if (!getActiveRunHandle(conversation.id)) {
         const current = await getLatestRunForConversation(conversation.id)
-        if (!current || current.id !== runId || isTerminalRunStatus(current.status)) {
+        if (!current || current.id !== runId) {
           finish()
+        } else if (isTerminalRunStatus(current.status)) {
+          // The SSR page can observe "running", capture a cursor, and then
+          // lose the terminal event to a very fast provider failure before
+          // EventSource connects. If the cursor is already past that event,
+          // replay is empty; send a cursorless terminal snapshot so the chat
+          // cannot sit on "Waiting…" forever.
+          if (!sentTerminal) {
+            writeChain = writeChain
+              .then(() => stream.writeSSE({
+                event: 'run-status',
+                data: JSON.stringify({ status: current.status, error: current.error }),
+              }))
+              .then(() => finish())
+              .catch(() => finish())
+          } else {
+            finish()
+          }
         }
       }
 

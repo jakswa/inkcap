@@ -55,6 +55,7 @@ export async function createUser(input: {
   email: string
   emailNormalized: string
   passwordHash: string
+  timeZone?: string
 }) {
   const userId = randomUUIDv7()
   const [user] = await sql.CreateUser`
@@ -64,8 +65,8 @@ export async function createUser(input: {
       INSERT INTO account_memberships (account_id, user_id, role)
       VALUES (${userId}, ${userId}, 'owner')
     )
-    INSERT INTO users (id, name, email, email_normalized, password_hash)
-    VALUES (${userId}, ${input.name}, ${input.email}, ${input.emailNormalized}, ${input.passwordHash})
+    INSERT INTO users (id, name, email, email_normalized, password_hash, settings)
+    VALUES (${userId}, ${input.name}, ${input.email}, ${input.emailNormalized}, ${input.passwordHash}, ${{ timeZone: input.timeZone ?? 'UTC' }})
     RETURNING id, name, email, created_at
   `
 

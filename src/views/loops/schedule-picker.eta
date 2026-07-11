@@ -1,0 +1,36 @@
+<fieldset class="schedule-picker grid gap-3">
+  <legend class="sr-only">Frequency</legend>
+  <div class="grid grid-cols-1 gap-1 rounded-xl border border-edge bg-sunken p-1 sm:grid-cols-4 lg:grid-cols-7" role="group" aria-label="Frequency">
+    <% ;[['manual','Manual'],['once','Once'],['hourly','Hourly'],['daily','Daily'],['weekdays','Weekdays'],['weekly','Weekly'],['custom','Custom']].forEach(([value, label]) => { %>
+      <label class="schedule-tab"><input class="sr-only" type="radio" name="schedule_mode" value="<%= value %>" <%= it.scheduleMode === value ? 'checked' : '' %>><span><%= label %></span></label>
+    <% }) %>
+  </div>
+
+  <div class="schedule-panel" data-schedule-panel="manual">
+    <div><p class="mb-0 font-semibold">Run on demand</p><p class="mb-0 text-sm text-ink-dim">No automatic schedule.</p></div>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="once">
+    <div><p class="mb-0 font-semibold">Run one time</p><p class="mb-0 text-sm text-ink-dim">Pauses automatically afterward.</p></div>
+    <label class="grid gap-1"><span class="text-xs font-semibold text-ink-dim">Date and time</span><input class="input" type="datetime-local" name="schedule_once" value="<%= it.scheduleOnce %>"></label>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="hourly">
+    <div><p class="mb-0 font-semibold">Every hour</p><p class="mb-0 text-sm text-ink-dim">Choose the minute past each hour.</p></div>
+    <label class="grid gap-1"><span class="text-xs font-semibold text-ink-dim">Minute</span><select class="input min-w-28" name="schedule_minute"><% ;Array.from({ length: 60 }, (_, minute) => minute).forEach((minute) => { %><option value="<%= minute %>" <%= String(minute) === it.scheduleMinute ? 'selected' : '' %>>:<%= String(minute).padStart(2, '0') %></option><% }) %></select></label>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="daily">
+    <div><p class="mb-0 font-semibold">Every day</p><p class="mb-0 text-sm text-ink-dim">At the same local time.</p></div>
+    <label class="grid gap-1"><span class="text-xs font-semibold text-ink-dim">Time</span><input class="input" type="time" name="schedule_daily_time" value="<%= it.scheduleTime %>"></label>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="weekdays">
+    <div><p class="mb-0 font-semibold">Monday through Friday</p><p class="mb-0 text-sm text-ink-dim">Skips weekends.</p></div>
+    <label class="grid gap-1"><span class="text-xs font-semibold text-ink-dim">Time</span><input class="input" type="time" name="schedule_weekdays_time" value="<%= it.scheduleTime %>"></label>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="weekly">
+    <div><p class="mb-0 font-semibold">Once each week</p><p class="mb-0 text-sm text-ink-dim">Choose a day and local time.</p></div>
+    <div class="flex flex-wrap gap-2"><label class="grid flex-1 gap-1"><span class="text-xs font-semibold text-ink-dim">Day</span><select class="input" name="schedule_weekday"><% ;['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].forEach((day, index) => { %><option value="<%= index %>" <%= String(index) === it.scheduleWeekday ? 'selected' : '' %>><%= day %></option><% }) %></select></label><label class="grid gap-1"><span class="text-xs font-semibold text-ink-dim">Time</span><input class="input" type="time" name="schedule_weekly_time" value="<%= it.scheduleTime %>"></label></div>
+  </div>
+  <div class="schedule-panel" data-schedule-panel="custom">
+    <div><p class="mb-0 font-semibold">Custom cron</p><p class="mb-0 text-sm text-ink-dim">Minute, hour, day of month, month, day of week.</p></div>
+    <label class="grid min-w-0 gap-1"><span class="text-xs font-semibold text-ink-dim">Expression</span><input class="input font-mono" name="schedule_custom" value="<%= it.scheduleCustom %>" placeholder="0 7 * * *"></label>
+  </div>
+</fieldset>

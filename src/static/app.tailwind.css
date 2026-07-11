@@ -184,7 +184,7 @@
     @apply flex flex-wrap items-end justify-between gap-5;
   }
   .page-intro h1 {
-    @apply max-w-[18ch] text-[clamp(2rem,5vw,3.25rem)] leading-[1.05] font-extrabold tracking-tight;
+    @apply text-[clamp(2rem,5vw,3.25rem)] leading-[1.05] font-extrabold tracking-tight;
   }
   .page-intro p:last-child {
     @apply mt-4 max-w-2xl text-ink-dim;
@@ -225,6 +225,24 @@
   }
   .empty-state {
     @apply rounded-2xl border border-dashed border-edge-strong bg-raised/60 p-8 text-ink-dim;
+  }
+  .schedule-tab {
+    @apply cursor-pointer rounded-lg px-3 py-1.5 text-left text-xs font-semibold text-ink-dim transition-colors hover:bg-ink/5 hover:text-ink sm:px-2 sm:py-2 sm:text-center;
+  }
+  .schedule-tab:has(input:checked) {
+    @apply bg-raised text-accent shadow-sm shadow-black/10;
+  }
+  .schedule-panel {
+    @apply hidden min-h-24 items-center gap-4 rounded-xl border border-edge bg-raised/50 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(12rem,18rem)];
+  }
+  .schedule-picker:has(input[name="schedule_mode"][value="manual"]:checked) [data-schedule-panel="manual"],
+  .schedule-picker:has(input[name="schedule_mode"][value="once"]:checked) [data-schedule-panel="once"],
+  .schedule-picker:has(input[name="schedule_mode"][value="hourly"]:checked) [data-schedule-panel="hourly"],
+  .schedule-picker:has(input[name="schedule_mode"][value="daily"]:checked) [data-schedule-panel="daily"],
+  .schedule-picker:has(input[name="schedule_mode"][value="weekdays"]:checked) [data-schedule-panel="weekdays"],
+  .schedule-picker:has(input[name="schedule_mode"][value="weekly"]:checked) [data-schedule-panel="weekly"],
+  .schedule-picker:has(input[name="schedule_mode"][value="custom"]:checked) [data-schedule-panel="custom"] {
+    display: grid;
   }
 }
 

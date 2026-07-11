@@ -74,21 +74,45 @@
       </label>
     <% } %>
 
+    <%
+      const enabledModels = new Set((it.values.modelsText || '').split(/[\n,]/).map((model) => model.trim()).filter(Boolean))
+      const discoveredModels = it.discoveredModels === null ? null : new Set(it.discoveredModels || [])
+    %>
+    <div class="grid gap-2">
+      <input type="hidden" name="models_present" value="1">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span class="font-semibold">Models available to chats</span>
+          <p class="mb-0 text-xs text-ink-faint">You decide what changes. Refresh compares the saved catalog with the provider; it does not update anything until you save.</p>
+        </div>
+        <button class="btn btn-ghost" type="submit" formaction="/providers/<%= it.provider.id %>/discover" formmethod="post">Refresh model catalog</button>
+      </div>
+      <% if (it.availableModels.length === 0) { %>
+        <div class="rounded-xl border border-dashed border-edge p-4 text-sm text-ink-faint">No models stored. Refresh discovery, or add a model the endpoint does not report.</div>
+      <% } else { %>
+        <div class="scroll-thin grid max-h-72 gap-1 overflow-y-auto rounded-xl border border-edge p-2">
+          <% it.availableModels.forEach((model) => { const reported = discoveredModels?.has(model) %>
+            <label class="flex min-w-0 items-start gap-3 rounded-lg px-2 py-2 hover:bg-ink/5">
+              <input class="mt-1" type="checkbox" name="models" value="<%= model %>" <%= enabledModels.has(model) ? 'checked' : '' %>>
+              <span class="min-w-0 flex-1"><strong class="block break-all font-mono text-sm"><%= model %></strong><% if (discoveredModels !== null) { %><span class="text-xs <%= reported ? 'text-ink-faint' : 'text-warn' %>"><%= reported ? 'Reported by provider now' : 'Not reported now — uncheck to retire' %></span><% } %></span>
+            </label>
+          <% }) %>
+        </div>
+      <% } %>
+      <details class="text-sm">
+        <summary class="link cursor-pointer">Provider does not report a model?</summary>
+        <label class="mt-2 grid gap-1.5"><span>Add its exact model ID when saving</span><input class="input font-mono" name="custom_model" maxlength="200" placeholder="model-id"></label>
+      </details>
+    </div>
+
     <label class="grid gap-1.5">
       <span>Default model</span>
-      <input class="input" name="default_model" maxlength="200" list="provider-models" value="<%= it.values.defaultModel || '' %>">
+      <select class="input" name="default_model">
+        <option value="">No explicit default</option>
+        <% it.availableModels.forEach((model) => { %><option value="<%= model %>" <%= it.values.defaultModel === model ? 'selected' : '' %>><%= model %></option><% }) %>
+      </select>
+      <span class="text-xs text-ink-faint">The exact selected ID is sent; inkcap never substitutes another model.</span>
     </label>
-
-    <label class="grid gap-1.5">
-      <span>Available models <span class="text-ink-faint">(one per line or comma-separated)</span></span>
-      <textarea class="input font-mono text-sm" name="models" rows="6"><%= it.values.modelsText || '' %></textarea>
-    </label>
-
-    <datalist id="provider-models">
-      <% ;(it.values.modelsText || '').split(/[\n,]/).map((model) => model.trim()).filter(Boolean).forEach((model) => { %>
-        <option value="<%= model %>"></option>
-      <% }) %>
-    </datalist>
 
     <% if (it.testResult) { %>
       <% if (it.testResult.ok) { %>

@@ -71,6 +71,13 @@
       <div class="alert-danger <%= it.error ? '' : 'hidden' %>" role="alert" data-composer-error>
         <span data-composer-error-text><%= it.error || '' %></span>
       </div>
+      <% if (it.runError) { %>
+        <div class="alert-danger" role="alert" data-run-error>
+          <p class="mb-1 font-bold">The model could not complete this reply</p>
+          <p class="mb-0 break-words"><%= it.runError %></p>
+          <p class="mb-0 mt-2 text-sm">Review the error, adjust the model or provider settings if needed, then send again.</p>
+        </div>
+      <% } %>
 
       <form id="mcp-tools-form" class="hidden" method="post" action="/conversations/<%= it.conversation.id %>/tools">
         <input type="hidden" name="redirect_to" value="conversation">

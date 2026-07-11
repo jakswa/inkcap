@@ -236,6 +236,31 @@ describe('message-final SSE payload', () => {
   }, 15_000)
 })
 
+describe('chat model validation', () => {
+  test('rejects an out-of-catalog model before starting a silent run', async () => {
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const provider = await createProvider({
+      accountId: user.id,
+      name: `catalog-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'stub-model',
+      models: ['stub-model'],
+      enabled: true,
+    })
+    const response = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: origin },
+      body: form({ providerId: provider.id, model: 'zork-best', content: 'hello' }),
+    })
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('Model &quot;zork-best&quot; is not in')
+    expect(body).toContain('refresh the provider')
+  })
+})
+
 describe('the chat island asset', () => {
   test('is served as JavaScript from /static', async () => {
     const res = await app.request('/assets/test/chat.js')

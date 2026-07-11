@@ -99,7 +99,7 @@ export async function testProviderConnection(provider: {
   }
 }
 
-async function discoverProviderModels(provider: {
+export async function discoverProviderModels(provider: {
   id?: string
   kind: string
   base_url: string
@@ -368,6 +368,15 @@ function ensureMetadataForModels(
 
 function authHeaders(provider: { api_key: string | null }): HeadersInit {
   return provider.api_key ? { Authorization: `Bearer ${provider.api_key}` } : {}
+}
+
+export function providerModelError(
+  provider: { name: string; models?: string[] | null },
+  model: string | null,
+): string | null {
+  if (!model || !provider.models || provider.models.length === 0) return null
+  if (provider.models.includes(model)) return null
+  return `Model "${model}" is not in ${provider.name}'s model list. Choose an available model or refresh the provider's model catalog.`
 }
 
 export function uniqueModels(models: string[]): string[] {

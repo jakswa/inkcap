@@ -14,8 +14,10 @@ import {
 import { countPushSubscriptionsForUser } from '../db/queries/push-subscriptions'
 import { listMcpServersForUser } from '../db/queries/mcp-servers'
 import { getProviderForUser, listProvidersForUser } from '../db/queries/providers'
-import { fireLoop, defaultLoopTimezone, humanizeLoopSchedule, humanizeRunStatus, nextLoopFireAt, normalizeSchedule, validateLoopSchedule } from '../services/loops'
+import { fireLoop, defaultLoopTimezone, humanizeLoopSchedule, humanizeRunStatus, nextLoopFireAt, normalizeSchedule, scheduleFormParts, validateLoopSchedule } from '../services/loops'
 import { readString } from '../utils/validation'
+import { providerModelError } from '../utils/providers'
+import { getUserSettings } from '../db/queries/users'
 import { relativeTime } from '../utils/relative-time'
 
 export const loopRoutes = new Hono()
@@ -38,6 +40,19 @@ function readStringList(form: FormData, name: string): string[] {
 
 function normalizeReasoningEffort(value: string) {
   return validReasoningEfforts.has(value) ? value : 'medium'
+}
+
+function parseProviderModel(value: string) {
+  const separator = value.indexOf(':')
+  if (separator < 0) return null
+  try {
+    return {
+      providerId: value.slice(0, separator),
+      model: decodeURIComponent(value.slice(separator + 1)),
+    }
+  } catch {
+    return null
+  }
 }
 
 function modelSupportsReasoning(
@@ -94,13 +109,15 @@ async function renderForm(
   },
 ) {
   const user = requireUser(c)!
-  const [providers, servers] = await Promise.all([
+  const [providers, servers, userSettings, pushSubscriptionCount] = await Promise.all([
     listProvidersForUser(user.id),
     options.loop
       ? listMcpServersWithLoopSelection({ loopId: options.loop.id, userId: user.id })
       : listMcpServersForUser(user.id).then((rows) =>
           rows.map((row) => ({ ...row, loop_enabled: false, loop_auto_approve: false })),
         ),
+    getUserSettings(user.id),
+    countPushSubscriptionsForUser(user.id),
   ])
 
   const selectedMcpIds = new Set(options.selectedMcpIds)
@@ -125,15 +142,12 @@ async function renderForm(
     }),
     errors: options.errors ?? [],
     values,
-    schedulePresets: [
-      { label: 'Every hour', value: '0 * * * *' },
-      { label: 'Every day at 7:00', value: '0 7 * * *' },
-      { label: 'Weekdays at 8:00', value: '0 8 * * 1-5' },
-      { label: 'Mondays at 9:00', value: '0 9 * * 1' },
-    ],
+    scheduleParts: scheduleFormParts(values.schedule ?? options.loop?.schedule),
+    timeZone: options.loop?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone(),
+    notificationsEnabled: pushSubscriptionCount > 0,
     schedulePreview: (() => {
       const schedule = normalizeSchedule(values.schedule ?? options.loop?.schedule)
-      const timezone = values.timezone ?? options.loop?.timezone ?? defaultLoopTimezone()
+      const timezone = options.loop?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone()
       if (!schedule) return null
       try {
         const next = nextLoopFireAt(schedule, timezone)
@@ -151,15 +165,34 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
   const name = readString(form, 'name').trim()
   const prompt = readString(form, 'prompt').trim()
   const systemPrompt = readString(form, 'system_prompt')
-  const providerId = readString(form, 'provider_id').trim()
-  const model = readString(form, 'model').trim()
+  const providerModel = parseProviderModel(readString(form, 'provider_model'))
+  const providerId = readString(form, 'provider_id').trim() || providerModel?.providerId || ''
+  const model = readString(form, 'model').trim() || providerModel?.model || ''
   const reasoningEffort = normalizeReasoningEffort(readString(form, 'reasoning_effort').trim())
-  const scheduleMode = readString(form, 'schedule_mode') === 'scheduled' ? 'scheduled' : 'manual'
-  const advancedSchedule = readString(form, 'schedule').trim()
-  const presetSchedule = readString(form, 'schedule_preset').trim()
-  const schedule = scheduleMode === 'scheduled' ? normalizeSchedule(advancedSchedule || presetSchedule) : null
-  const timezone = readString(form, 'timezone').trim() || defaultLoopTimezone()
-  const enabled = scheduleMode === 'scheduled' && readString(form, 'enabled') === 'on'
+  const rawMode = readString(form, 'schedule_mode').trim()
+  const legacySchedule = readString(form, 'schedule').trim() || readString(form, 'schedule_preset').trim()
+  const scheduleMode = ['once', 'hourly', 'daily', 'weekdays', 'weekly', 'custom'].includes(rawMode)
+    ? rawMode
+    : rawMode === 'scheduled'
+      ? 'custom'
+      : 'manual'
+  const minute = readString(form, 'schedule_minute').trim() || '0'
+  const timeField = scheduleMode === 'weekdays' ? 'schedule_weekdays_time' : scheduleMode === 'weekly' ? 'schedule_weekly_time' : 'schedule_daily_time'
+  const time = readString(form, timeField).trim() || '09:00'
+  const weekday = readString(form, 'schedule_weekday').trim() || '1'
+  const once = readString(form, 'schedule_once').trim()
+  const custom = readString(form, 'schedule_custom').trim() || legacySchedule
+  const timeMatch = /^(\d{2}):(\d{2})$/.exec(time)
+  const schedule = scheduleMode === 'manual' ? null
+    : scheduleMode === 'once' ? normalizeSchedule(`once:${once}`)
+    : scheduleMode === 'hourly' ? normalizeSchedule(`${minute} * * * *`)
+    : scheduleMode === 'daily' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * *`
+    : scheduleMode === 'weekdays' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * 1-5`
+    : scheduleMode === 'weekly' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * ${weekday}`
+    : normalizeSchedule(custom)
+  const userSettings = await getUserSettings(user.id)
+  const timezone = existing?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone()
+  const enabled = scheduleMode !== 'manual' && readString(form, 'enabled') === 'on'
   const selectedMcpIdsRaw = readStringList(form, 'enabled_mcp_server_id')
   const approvedMcpIdsRaw = readStringList(form, 'auto_approve_mcp_server_id')
 
@@ -169,16 +202,27 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
   if (!prompt) errors.push('Prompt is required')
   if (prompt.length > maxPromptLength) errors.push(`Prompt must be ${maxPromptLength} characters or fewer`)
   if (model.length > maxModelLength) errors.push(`Model must be ${maxModelLength} characters or fewer`)
+  if (scheduleMode === 'hourly' && (!/^\d{1,2}$/.test(minute) || Number(minute) > 59)) errors.push('Choose a minute from 0 to 59')
+  if (['daily', 'weekdays', 'weekly'].includes(scheduleMode) && (!timeMatch || Number(timeMatch[1]) > 23 || Number(timeMatch[2]) > 59)) errors.push('Choose a valid time of day')
+  if (scheduleMode === 'weekly' && !/^[0-6]$/.test(weekday)) errors.push('Choose a day of the week')
+  if (scheduleMode === 'once' && !once) errors.push('Choose the date and time for this one-time run')
+  if (scheduleMode === 'custom' && !custom) errors.push('Enter a cron expression')
 
   const provider = providerId ? await getProviderForUser({ id: providerId, userId: user.id }) : null
   if (!provider || !provider.enabled) errors.push('Choose an enabled provider')
+  if (provider?.enabled) {
+    const modelError = providerModelError(provider, model || provider.default_model)
+    if (modelError) errors.push(modelError)
+  }
 
   let nextFireAt: Date | null = null
   if (enabled && !schedule) {
     errors.push('Enabled loops need a cron schedule. Leave the loop disabled for manual-only runs.')
   } else {
     try {
-      nextFireAt = enabled ? validateLoopSchedule(schedule, timezone) : null
+      const validatedNextFireAt = validateLoopSchedule(schedule, timezone)
+      nextFireAt = enabled ? validatedNextFireAt : null
+      if (enabled && !nextFireAt) errors.push('Choose a future run time.')
     } catch (error) {
       errors.push(error instanceof Error ? error.message : String(error))
     }
@@ -210,7 +254,7 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     })),
     selectedMcpIds,
     approvedMcpIds: [...approvedMcpIds],
-    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', scheduleMode, timezone, enabled: enabled ? 'on' : '' },
+    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', scheduleMode, scheduleMinute: minute, scheduleTime: time, scheduleWeekday: weekday, scheduleOnce: once, scheduleCustom: custom, timezone, enabled: enabled ? 'on' : '' },
   }
 }
 

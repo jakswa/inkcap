@@ -1,7 +1,12 @@
 import * as webpush from 'web-push'
 import { getLatestArtifactForConversation } from '../db/queries/artifacts'
 import { getConversationById } from '../db/queries/conversations'
+import { getActivePath } from '../db/queries/messages'
+import { getProviderById } from '../db/queries/providers'
+import { getUserSettings } from '../db/queries/users'
+import { completeOnce, type ChatMessage, type ChatRole } from './provider-client'
 import {
+  countPushSubscriptionsForUser,
   deletePushSubscriptionByEndpoint,
   listPushSubscriptionsForUser,
   markPushSubscriptionUsed,
@@ -69,13 +74,56 @@ export async function sendPushToUser(userId: string, payload: PushPayload) {
   }
 }
 
+async function completedLoopWarrantsNotification(conversation: NonNullable<Awaited<ReturnType<typeof getConversationById>>>) {
+  if (!conversation.provider_id || !conversation.curr_node) return true
+  const [provider, path, settings] = await Promise.all([
+    getProviderById(conversation.provider_id),
+    getActivePath(conversation.curr_node),
+    getUserSettings(conversation.user_id),
+  ])
+  if (!provider?.enabled) return true
+
+  const messages: ChatMessage[] = path.flatMap((row) => {
+    const role = row.role as ChatRole | null
+    if (!role || (role === 'system' && !(row.content ?? '').trim())) return []
+    const message: ChatMessage = { role, content: row.content ?? '' }
+    if (role === 'assistant') {
+      if (row.reasoning_content) message.reasoning_content = row.reasoning_content
+      if (Array.isArray(row.tool_calls) && row.tool_calls.length) message.tool_calls = row.tool_calls
+    }
+    if (role === 'tool' && row.tool_call_id) message.tool_call_id = row.tool_call_id
+    return [message]
+  })
+  messages.push({
+    role: 'user',
+    content: `This is an ephemeral notification checkpoint; do not continue the task. Decide whether the completed loop warrants interrupting the user. Apply this app-wide notification guidance:\n\n${settings.loopNotificationPrompt}\n\nReply with only JSON in exactly this shape: {"notify":true} or {"notify":false}.`,
+  })
+
+  const result = await completeOnce(provider, conversation.model, messages)
+  const match = result.content.match(/\{\s*"notify"\s*:\s*(true|false)\s*\}/i)
+  if (!match) throw new Error('notification checkpoint returned an invalid decision')
+  return match[1]?.toLowerCase() === 'true'
+}
+
 export async function notifyLoopRunStatus(
   conversationId: string,
   status: 'done' | 'waiting_approval' | 'error',
   errorMessage?: string | null,
 ) {
   const conversation = await getConversationById(conversationId)
-  if (!conversation?.routine_id) return
+  if (!conversation?.routine_id || !pushConfigured()) return
+  if ((await countPushSubscriptionsForUser(conversation.user_id)) === 0) return
+
+  // Attention-required states are unconditional. Successful runs get one
+  // ephemeral provider turn over the completed conversation. On judge failure
+  // preserve the old, fail-open behavior rather than silently losing a result.
+  if (status === 'done') {
+    try {
+      if (!(await completedLoopWarrantsNotification(conversation))) return
+    } catch (error) {
+      console.warn('loop notification checkpoint failed; notifying by default', error)
+    }
+  }
 
   const origin = publicOrigin()
   const latestArtifact =

@@ -5,9 +5,10 @@ const { app } = await import('../../src/app')
 const { createLoop, getLoopForUser, listLoopMcpServers, listLoopsForUser } = await import('../../src/db/queries/loops')
 const { createMcpServer } = await import('../../src/db/queries/mcp-servers')
 const { createProvider } = await import('../../src/db/queries/providers')
-const { createUser } = await import('../../src/db/queries/users')
+const { createUser, patchUserSettings } = await import('../../src/db/queries/users')
 const { getLatestRunForConversation } = await import('../../src/db/queries/runs')
 const { encryptSession } = await import('../../src/utils/private-session')
+const { scheduleFormParts } = await import('../../src/services/loops')
 
 const origin = 'http://localhost:3000'
 const url = (path: string) => `${origin}${path}`
@@ -117,7 +118,61 @@ describe('loops', () => {
     expect(await getLoopForUser({ id, userId: user.id })).toBeUndefined()
   })
 
-  test('validation retains submitted values and rejects invalid schedules', async () => {
+  test('loop form picks models from provider catalogs instead of typing IDs', async () => {
+    const { headers } = await fixture()
+    const response = await app.request(url('/loops/new'), { headers })
+    const body = await response.text()
+    expect(body).toContain('<select id="provider_model" name="provider_model"')
+    expect(body).toContain('Provider &amp; model')
+    expect(body).toContain('model-test')
+    expect(body).not.toContain('<input id="model"')
+  })
+
+  test('builds clear common schedules in the user timezone', async () => {
+    const { user, headers, provider } = await fixture()
+    await patchUserSettings({ userId: user.id, patch: { timeZone: 'America/New_York' } })
+    const response = await app.request(url('/loops'), {
+      method: 'POST',
+      headers,
+      body: loopForm(provider.id, {
+        name: 'Daily local report',
+        schedule_mode: 'daily',
+        schedule_daily_time: '09:30',
+        enabled: 'on',
+      }),
+    })
+    expect(response.status).toBe(302)
+    const loop = (await listLoopsForUser(user.id)).find((row) => row.name === 'Daily local report')
+    expect(loop?.schedule).toBe('30 9 * * *')
+    expect(loop?.timezone).toBe('America/New_York')
+    expect(loop?.next_fire_at).toBeInstanceOf(Date)
+  })
+
+  test('supports a one-time local date and pauses after that occurrence', async () => {
+    const { user, headers, provider } = await fixture()
+    const future = new Date(Date.now() + 86_400_000)
+    const local = `${future.getUTCFullYear()}-${String(future.getUTCMonth() + 1).padStart(2, '0')}-${String(future.getUTCDate()).padStart(2, '0')}T12:00`
+    const response = await app.request(url('/loops'), {
+      method: 'POST', headers, body: loopForm(provider.id, {
+        name: 'One shot', schedule_mode: 'once', schedule_once: local, enabled: 'on',
+      }),
+    })
+    expect(response.status).toBe(302)
+    const loop = (await listLoopsForUser(user.id)).find((row) => row.name === 'One shot')
+    expect(loop?.schedule).toBe(`once:${local}`)
+    expect(loop?.next_fire_at).toBeInstanceOf(Date)
+  })
+
+  test('hourly schedules round-trip every minute through the preset UI', () => {
+    for (let minute = 0; minute < 60; minute += 1) {
+      expect(scheduleFormParts(`${minute} * * * *`)).toMatchObject({
+        mode: 'hourly',
+        minute: String(minute),
+      })
+    }
+  })
+
+  test('validation retains submitted values and rejects invalid schedules even while paused', async () => {
     const { headers, provider } = await fixture()
     const response = await app.request(url('/loops'), {
       method: 'POST',
@@ -126,7 +181,6 @@ describe('loops', () => {
         name: 'Retained name',
         schedule_mode: 'scheduled',
         schedule: 'not cron',
-        enabled: 'on',
       }),
     })
     expect(response.status).toBe(200)
@@ -134,6 +188,15 @@ describe('loops', () => {
     expect(body).toContain('Retained name')
     expect(body).toContain('Schedule is not a valid 5-field cron expression')
     expect(body).toContain('value="not cron"')
+  })
+
+  test('rejects a model outside the selected provider catalog', async () => {
+    const { headers, provider } = await fixture()
+    const response = await app.request(url('/loops'), {
+      method: 'POST', headers, body: loopForm(provider.id, { model: 'zork-best' }),
+    })
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('is not in')
   })
 
   test('MCP auto-approval is stored only for a selected owned server', async () => {

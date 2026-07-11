@@ -82,21 +82,12 @@
       <input class="input" name="api_key" type="password" autocomplete="off" value="<%= it.values.apiKey || '' %>">
     </label>
 
-    <label class="grid gap-1.5">
-      <span>Default model</span>
-      <input class="input" name="default_model" maxlength="200" list="provider-models" value="<%= it.values.defaultModel || '' %>" placeholder="Auto-filled from the test when blank">
-    </label>
-
-    <label class="grid gap-1.5">
-      <span>Available models <span class="text-ink-faint">(one per line or comma-separated)</span></span>
-      <textarea class="input font-mono text-sm" name="models" rows="5" placeholder="Leave blank to use discovered models"><%= it.values.modelsText || '' %></textarea>
-    </label>
-
-    <datalist id="provider-models">
-      <% ;(it.values.modelsText || '').split(/[\n,]/).map((model) => model.trim()).filter(Boolean).forEach((model) => { %>
-        <option value="<%= model %>"></option>
-      <% }) %>
-    </datalist>
+    <div class="rounded-xl border border-edge bg-sunken p-4 text-sm">
+      <p class="mb-1 font-semibold">Models are discovered for you</p>
+      <p class="mb-0 text-ink-dim">The connection test reads the provider's catalog, verifies inference, and chooses the model the provider actually reports. After adding it, use <strong>Edit provider</strong> to review and filter that catalog—no model IDs to memorize.</p>
+    </div>
+    <input type="hidden" name="default_model" value="">
+    <input type="hidden" name="models" value="">
 
     <% if (it.testResult) { %>
       <% if (it.testResult.ok) { %>

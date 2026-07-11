@@ -29,7 +29,9 @@
       <input class="input" name="password" type="password" autocomplete="new-password" minlength="8" required>
     </label>
 
+    <input type="hidden" name="timezone" value="UTC" data-browser-timezone>
     <button class="btn btn-primary" type="submit">Create account</button>
     <p class="mb-0 text-ink-dim">Already registered? <a class="link" href="/login">Log in</a>.</p>
   </form>
 </section>
+<script src="/assets/<%= it.assetVersion %>/timezone.js" defer></script>

@@ -251,6 +251,13 @@ export interface IFindConversationMatchResult {
     updated_at: Date;
 }
 
+/** Result of query `ListEnabledLoopsForProvider`. */
+export interface IListEnabledLoopsForProviderResult {
+    id: string;
+    name: string;
+    model: string | null;
+}
+
 /** Result of query `CreateLoop`. */
 export interface ICreateLoopResult {
     id: string;
@@ -1137,6 +1144,7 @@ export interface Queries {
     CreateImportedConversation: ICreateImportedConversationResult;
     SetConversationSeedState: ISetConversationSeedStateResult;
     FindConversationMatch: IFindConversationMatchResult;
+    ListEnabledLoopsForProvider: IListEnabledLoopsForProviderResult;
     CreateLoop: ICreateLoopResult;
     UpdateLoop: IUpdateLoopResult;
     GetLoopForUser: IGetLoopForUserResult;

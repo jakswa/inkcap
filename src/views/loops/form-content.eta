@@ -3,13 +3,15 @@
   const values = it.values || {}
   const field = (name, fallback = '') => values[name] !== undefined ? values[name] : (loop[name] ?? fallback)
   const selectedProvider = field('providerId', loop.provider_id || '')
+  const selectedModel = field('model', loop.model || '')
   const selectedReasoning = field('reasoningEffort', loop.reasoning_effort || 'medium')
-  const scheduleValue = field('schedule', loop.schedule || '')
-  const scheduleMode = field('scheduleMode', scheduleValue ? 'scheduled' : 'manual')
-  const presetValues = new Set(it.schedulePresets.map((preset) => preset.value))
-  const selectedPreset = presetValues.has(scheduleValue) ? scheduleValue : ''
-  const advancedSchedule = scheduleValue && !selectedPreset ? scheduleValue : ''
-  const timezoneValue = field('timezone', loop.timezone || 'UTC')
+  const scheduleMode = field('scheduleMode', it.scheduleParts.mode)
+  const scheduleMinute = field('scheduleMinute', it.scheduleParts.minute)
+  const scheduleTime = field('scheduleTime', it.scheduleParts.time)
+  const scheduleWeekday = field('scheduleWeekday', it.scheduleParts.weekday)
+  const scheduleOnce = field('scheduleOnce', it.scheduleParts.once)
+  const scheduleCustom = field('scheduleCustom', it.scheduleParts.custom)
+  const timezoneValue = it.timeZone
   const enabledValue = values.enabled !== undefined ? values.enabled === 'on' : Boolean(loop.enabled)
   const reasoningOptions = ['off', 'low', 'medium', 'high', 'max']
 %>
@@ -41,6 +43,7 @@
         <label class="text-sm font-semibold" for="prompt">Prompt</label>
         <textarea id="prompt" name="prompt" class="input min-h-44" required placeholder="Write the thing this loop should do..."><%= field('prompt', '') %></textarea>
         <p class="mb-0 text-xs text-ink-faint">Tip: ask the model to call <code>submit_artifact</code> when it has the finished user-facing result.</p>
+        <% if (it.notificationsEnabled) { %><p class="mb-0 text-xs text-ink-faint">After completion, the model applies your app-wide <a class="link" href="/settings#notifications">notification guidance</a> to this chat. You can include specifics such as “notify me if there’s movement” in the prompt.</p><% } %>
       </div>
 
       <details class="grid gap-2">
@@ -51,20 +54,20 @@
 
     <div class="card grid gap-4">
       <div><p class="eyebrow mb-1">Step 2</p><h2 class="text-xl font-bold">Model</h2><p class="mb-0 text-sm text-ink-dim">Choose the connection and model that should do the work.</p></div>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="provider_id">Provider</label>
-          <select id="provider_id" name="provider_id" class="input" required>
-            <option value="">Choose provider…</option>
-            <% it.providers.forEach((provider) => { %>
-              <option value="<%= provider.id %>" <%= provider.id === selectedProvider ? 'selected' : '' %>><%= provider.name %><%= provider.enabled ? '' : ' (disabled)' %></option>
-            <% }) %>
-          </select>
-        </div>
-        <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="model">Model</label>
-          <input id="model" name="model" class="input" maxlength="200" value="<%= field('model', loop.model || '') %>" placeholder="Provider default">
-        </div>
+      <div class="grid gap-2 sm:max-w-2xl">
+        <label class="text-sm font-semibold" for="provider_model">Provider &amp; model</label>
+        <select id="provider_model" name="provider_model" class="input" required>
+          <option value="">Choose a model…</option>
+          <% it.providers.forEach((provider) => { const models = provider.models || []; const choices = models.length > 0 ? models : [''] %>
+            <optgroup label="<%= provider.name %><%= provider.enabled ? '' : ' (disabled)' %>">
+              <% choices.forEach((model) => { const chosen = provider.id === selectedProvider && (model === selectedModel || (!selectedModel && model === provider.default_model)) %>
+                <option value="<%= provider.id %>:<%= encodeURIComponent(model) %>" <%= chosen ? 'selected' : '' %> <%= provider.enabled ? '' : 'disabled' %>><%= model || 'Provider default' %></option>
+              <% }) %>
+            </optgroup>
+          <% }) %>
+          <% if (selectedProvider && selectedModel && !it.providers.some((provider) => provider.id === selectedProvider && (provider.models || []).includes(selectedModel))) { %><option value="<%= selectedProvider %>:<%= encodeURIComponent(selectedModel) %>" selected><%= selectedModel %> (not in provider catalog)</option><% } %>
+        </select>
+        <p class="mb-0 text-xs text-ink-faint">Models come from Providers. Refresh a provider there when its server changes.</p>
       </div>
       <div class="grid gap-2 sm:max-w-xs">
         <label class="text-sm font-semibold" for="reasoning_effort">Reasoning effort</label>
@@ -79,38 +82,11 @@
     <div class="card grid gap-4">
       <div>
         <p class="eyebrow mb-1">Step 3</p><h2 class="text-xl font-bold">When</h2>
-        <p class="mb-0 text-sm text-ink-dim">Keep it available on demand, or give it a schedule. Scheduled loops still start paused unless you enable them.</p>
+        <p class="mb-0 text-sm text-ink-dim">Times use <strong class="text-ink"><%= timezoneValue %></strong>. Change your default in <a class="link" href="/settings#regional">Settings</a>; existing loops keep their timezone.</p>
       </div>
-      <fieldset class="grid gap-3">
-        <legend class="text-sm font-semibold">Run mode</legend>
-        <div class="grid gap-2 sm:grid-cols-2">
-          <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="radio" name="schedule_mode" value="manual" <%= scheduleMode !== 'scheduled' ? 'checked' : '' %>><span><strong class="block">Manual only</strong><span class="text-ink-dim">Run it when you choose.</span></span></label>
-          <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="radio" name="schedule_mode" value="scheduled" <%= scheduleMode === 'scheduled' ? 'checked' : '' %>><span><strong class="block">Scheduled</strong><span class="text-ink-dim">Use a preset or cron expression below.</span></span></label>
-        </div>
-      </fieldset>
-      <div class="grid gap-4 sm:grid-cols-2">
-        <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="schedule_preset">Common schedule</label>
-          <select id="schedule_preset" name="schedule_preset" class="input">
-            <option value="">Custom cron…</option>
-            <% it.schedulePresets.forEach((preset) => { %><option value="<%= preset.value %>" <%= selectedPreset === preset.value ? 'selected' : '' %>><%= preset.label %></option><% }) %>
-          </select>
-        </div>
-        <div class="grid gap-2">
-          <label class="text-sm font-semibold" for="timezone">Timezone</label>
-          <input id="timezone" name="timezone" class="input" value="<%= timezoneValue %>" placeholder="UTC">
-        </div>
-      </div>
-      <details <%= advancedSchedule ? 'open' : '' %>>
-        <summary class="cursor-pointer text-sm font-semibold text-ink-dim">Advanced cron</summary>
-        <div class="mt-2 grid gap-2">
-          <label class="sr-only" for="schedule">Five-field cron expression</label>
-          <input id="schedule" name="schedule" class="input font-mono" value="<%= advancedSchedule %>" placeholder="0 7 * * *" aria-describedby="schedule-help">
-          <p id="schedule-help" class="mb-0 text-xs text-ink-faint">Five fields: minute, hour, day of month, month, day of week. A custom value overrides the preset.</p>
-        </div>
-      </details>
-      <% if (it.schedulePreview) { %><p class="mb-0 text-sm text-ink-dim"><strong class="text-ink">Next occurrence:</strong> <%= it.schedulePreview %></p><% } else if (scheduleMode === 'scheduled') { %><p class="mb-0 text-sm text-ink-dim">Choose a valid schedule and save to calculate its next occurrence.</p><% } %>
-      <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="checkbox" name="enabled" <%= enabledValue ? 'checked' : '' %>><span><strong class="block">Enable this schedule</strong><span class="text-ink-dim">Unchecked keeps the loop paused; you can still use Run now.</span></span></label>
+      <%~ include('./schedule-picker', { scheduleMode, scheduleMinute, scheduleTime, scheduleWeekday, scheduleOnce, scheduleCustom }) %>
+      <% if (it.schedulePreview) { %><div class="alert-ok"><p class="mb-0"><strong>Next run:</strong> <%= it.schedulePreview %></p></div><% } else if (scheduleMode !== 'manual') { %><p class="mb-0 text-sm text-ink-dim">Save a valid schedule to calculate its next run.</p><% } %>
+      <label class="flex items-start gap-3 rounded-xl border border-edge p-3 text-sm"><input class="mt-1" type="checkbox" name="enabled" <%= enabledValue ? 'checked' : '' %>><span><strong class="block">Enable this schedule</strong><span class="text-ink-dim">Unchecked keeps it paused; Run now still works.</span></span></label>
     </div>
 
     <div class="card grid gap-4">
