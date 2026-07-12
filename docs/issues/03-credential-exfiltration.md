@@ -1,7 +1,11 @@
 # 03 — Provider/MCP credential exfiltration via base_url swap
 
-**Severity:** High
-**Reachable by:** any authenticated user (chains off [02](resolved/02-global-unowned-catalog.md))
+**Severity:** Medium (credential-retention footgun)
+**Reachable by:** an account member who can edit the account's provider or MCP configuration
+
+**Partial resolution:** account ownership scoping fixed the original cross-tenant
+attack in issue 02. The remaining risk is reusing a stored credential after an
+authorized editor changes its destination host.
 
 ## Problem
 
@@ -12,10 +16,10 @@ api_key = values.clearApiKey ? null : values.apiKey ? values.apiKey : provider.a
 ```
 (`src/routes/providers.ts:172`)
 
-Combined with the global unowned catalog ([02](resolved/02-global-unowned-catalog.md)) — any user
-can edit any provider — an attacker can edit a victim's provider, leave the key field
-blank (retaining the victim's real key), and change `base_url` to an attacker-controlled
-host.
+Before account scoping, the global unowned catalog let any user edit any provider.
+That attack is resolved. Within an account, an editor can still leave the key field
+blank (retaining the stored key) while changing `base_url`; this can accidentally send
+the credential to the new host.
 
 ## Exploit
 

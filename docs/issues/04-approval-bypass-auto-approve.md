@@ -1,7 +1,10 @@
 # 04 — Approval bypass via global auto_approve
 
-**Severity:** High
-**Reachable by:** any authenticated user (chains off [02](resolved/02-global-unowned-catalog.md))
+**Severity:** Low (defense-in-depth after account scoping)
+
+**Partial resolution:** issue 02 made MCP servers account-owned, so unrelated users
+can no longer change another account's approval policy. The remaining concern is the
+risk inherent in an account member explicitly granting unattended tool access.
 
 ## Problem
 
@@ -14,10 +17,10 @@ and executes model-chosen tool calls with model-chosen arguments, in a loop up t
 - `isAutoApproved` — `src/services/runner.ts:410` (`server?.auto_approve === true`)
 - inline execution / bypass — `src/services/runner.ts:611-627`
 
-Because the catalog is global and unowned ([02](resolved/02-global-unowned-catalog.md)), any user
-can create — or flip on an existing shared server that others have enabled — an
-`auto_approve: true` server. If that server points to an attacker-controlled public
-endpoint, its tool calls then run server-side with no gate.
+Before account scoping, any user could create or alter a shared server and enable
+`auto_approve`. That cross-tenant bypass is resolved. An account member can still grant
+unattended access to a malicious or compromised server, so invocation limits and clear
+trust boundaries remain useful defense in depth.
 
 Prompt-injection surface compounds this: tool `description`/`inputSchema`
 (`mcp-client.ts:110-118`) and tool **result text** (`extractResultText`, `:123-134`) are

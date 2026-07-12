@@ -1,6 +1,7 @@
 # Artifacts
 
-Status: scoped, not started.
+Status: completed 2026-07-10. This is the original implementation plan; see the
+current code in `src/routes/artifacts.ts` and `src/services/runner.ts`.
 
 An artifact is a saved, user-openable result produced by a run. Chat remains the
 provenance and follow-up surface; the artifact is the nicer thing to open when a

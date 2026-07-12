@@ -1,8 +1,9 @@
-# Status (2026-07-08)
+# Status (2026-07-12)
 
 inkcap is usable: server-owned chat runs, branching messages, providers, MCP
 approval parking, llama-ui import, account scoping, registration gate,
-ChatGPT/Codex provider, demo seed data, Docker build, and tests are in place.
+ChatGPT/Codex provider, scheduled and manual loops, artifacts, browser push,
+automatic chat titles, demo seed data, Docker build, and tests are in place.
 
 Verify before meaningful code changes:
 
@@ -27,5 +28,5 @@ bun test
 
 - Roadmap features and polish: `docs/roadmap/README.md`
 - Security/correctness hardening: `docs/issues/README.md`
-- Finished design history: `docs/completed/THE_PLAN.md`
+- Finished design history: `docs/completed/`
 - Codex provider details: `docs/specs/openai-codex.md`

@@ -1,6 +1,8 @@
-# Scheduled prompts / routines
+# Scheduled prompts / loops
 
-Status: scoped, not started.
+Status: completed 2026-07-10. This is the original implementation plan; the
+shipped UI calls routines “loops.” See `src/routes/loops.ts` and
+`src/services/loops.ts` for current behavior.
 
 A routine is a saved prompt with provider/model/tool config and a schedule. A
 fire creates a normal headless conversation/run, so durability, MCP approvals,

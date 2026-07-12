@@ -1,6 +1,7 @@
 # Browser push notifications
 
-Status: scoped, not started.
+Status: completed 2026-07-10. This is the original implementation plan; see
+`src/routes/push.ts` and `src/services/push.ts` for current behavior.
 
 First use case: headless routine outcomes. Notify when a routine completes,
 parks for approval, or fails. General chat notifications can wait.

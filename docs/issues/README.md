@@ -2,8 +2,9 @@
 
 Findings from five adversarial reviews (injection, auth/sessions, runner/concurrency,
 MCP/approval, general security) run against the repo on 2026-07-06, plus a sixth
-security pass and an ops-readiness audit on 2026-07-07. Resolved issues move to
-`resolved/`. Two root causes dominate: **the durable runner still has
+security pass and an ops-readiness audit on 2026-07-07. Rechecked against the code on
+2026-07-12. Resolved issues move to `resolved/`; partially resolved files describe only
+the remaining risk. Two root causes dominate: **the durable runner still has
 recovery/transactional gaps** (even though the non-terminal-run uniqueness invariant
 is now enforced in Postgres), and **the process has no graceful lifecycle** — no
 drain on shutdown, no health signal, no operator-visible run errors.
@@ -24,14 +25,13 @@ Fix in this sequence:
 - [22a — MCP SSRF via redirect-following](22-outbound-guard-redirects-and-rebinding.md) — MCP fetches now refuse redirects (`redirect: 'manual'`), matching the provider/codex clients (2026-07-07); rebinding + dev-noop residuals still tracked in 22
 
 ### High
-- [03 — Provider/MCP credential exfiltration via base_url swap](03-credential-exfiltration.md) — cross-tenant vector closed by 02; base_url-change credential invalidation still open
-- [04 — Approval bypass via global auto_approve](04-approval-bypass-auto-approve.md) — cross-tenant vector closed by 02; prompt-injection surface remains
-- [05 — Tool approval not bound to execution endpoint (TOCTOU)](05-approval-toctou.md) — single-tenant TOCTOU + name-collision routing still open
+- [05 — Tool approval not bound to execution endpoint (TOCTOU)](05-approval-toctou.md) — account-local TOCTOU + name-collision routing still open
 - [06 — Runner recovery lacks ownership leases/heartbeats](06-runner-active-run-invariant-in-process.md)
 - [07 — Non-transactional multi-row writes leave zombie streaming messages](07-runner-nontransactional-writes.md)
 - [19 — No graceful shutdown: SIGTERM drops in-flight tokens](19-graceful-shutdown-drain.md)
 
 ### Medium
+- [03 — Stored credential survives a base_url change](03-credential-exfiltration.md) — cross-tenant attack closed by 02; destination-change invalidation remains
 - [09 — Non-revocable stateless sessions carry stale identity](09-nonrevocable-sessions.md)
 - [13 — Non-idempotent tool execution (at-least-once, no journaling)](13-tool-execution-idempotency.md)
 - [14 — Driverless running rows on finishRun failure](14-driverless-running-rows.md)
@@ -41,6 +41,7 @@ Fix in this sequence:
 - [22 — Outbound guard: DNS-rebinding TOCTOU + dev no-op (redirect half fixed)](22-outbound-guard-redirects-and-rebinding.md)
 
 ### Low
+- [04 — Unattended MCP trust and prompt-injection hardening](04-approval-bypass-auto-approve.md) — cross-tenant bypass closed by 02
 - [17 — Low-priority hardening bundle](17-low-priority-hardening.md)
 - [18 — Split-origin support accepts the insecure session cookie everywhere](18-split-origin-session-cookie-downgrade.md)
 
