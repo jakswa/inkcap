@@ -253,6 +253,9 @@ async function waitForReadiness(): Promise<void> {
 }
 
 const CAPTURE_MATRIX: CaptureTarget[] = [
+  { name: 'home-moss-light', route: '/?grove=moss', viewport: { width: 1440, height: 900 }, colorScheme: 'light', fullPage: true },
+  { name: 'home-moon-light', route: '/?grove=moon', viewport: { width: 1440, height: 900 }, colorScheme: 'light', fullPage: true },
+  { name: 'home-lichen-light', route: '/?grove=lichen', viewport: { width: 1440, height: 900 }, colorScheme: 'light', fullPage: true },
   { name: 'chat-hero-light', route: '__HERO__', viewport: { width: 1440, height: 900 }, colorScheme: 'light', fullPage: false },
   { name: 'chat-hero-dark', route: '__HERO__', viewport: { width: 1440, height: 900 }, colorScheme: 'dark', fullPage: false },
   { name: 'providers-light', route: '/providers', viewport: { width: 1440, height: 1000 }, colorScheme: 'light', fullPage: false },

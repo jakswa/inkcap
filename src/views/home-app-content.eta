@@ -7,9 +7,12 @@
   </div>
 
   <div class="grid w-full max-w-2xl gap-7 text-center">
-    <h1 class="text-[clamp(2.5rem,7vw,4.75rem)] leading-none font-black tracking-[-0.06em]">Hello there</h1>
-
-    <div class="<%= it.providers.length > 0 ? 'app-landing-composer rounded-[2rem] p-1.5' : '' %> text-left">
+    <div class="<%= it.providers.length > 0 ? 'app-landing-composer composer-corner-frame relative isolate mt-24 rounded-[2rem] p-1.5 sm:mt-28' : '' %> text-left">
+      <% if (it.providers.length > 0) { %>
+        <span class="composer-corner-growth" aria-hidden="true">
+          <%~ include('./home-composer-scene', { grove: it.grove }) %>
+        </span>
+      <% } %>
       <%~ include('./conversations/new-chat-composer', { ...it, composerPlaceholder: 'Type a message…', newChatSource: 'home' }) %>
     </div>
 

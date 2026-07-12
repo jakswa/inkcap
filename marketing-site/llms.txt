@@ -16,7 +16,7 @@ Low complexity by design: one boring stack—PostgreSQL with raw SQL, a Bun/Type
 
 Runs are durable server jobs: streaming, tool loops, and persistence continue without a browser. PostgreSQL is truth; browsers render state, subscribe to replayable SSE, and submit ordinary forms. Credentials remain server-side. Messages form a tree, so edit, regenerate, and fork preserve branches.
 
-Browser footprint: 5.9 KB Brotli-compressed chat JavaScript, 8.7 KB shared CSS, no frontend framework, and no webfonts. HTML and model traffic excluded; measured 2026-07-11.
+Browser footprint: 5.9 KB Brotli-compressed chat JavaScript, 9.7 KB shared CSS, no frontend framework, and no webfonts. HTML and model traffic excluded; measured 2026-07-12.
 
 ## Run it
 

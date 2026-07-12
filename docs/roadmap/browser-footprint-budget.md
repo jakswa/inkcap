@@ -15,17 +15,17 @@ like-for-like method.
 
 ## Baseline snapshot
 
-Measured 2026-07-11 from the current worktree. CSS was generated to a temporary
+Measured 2026-07-12 from the current worktree. CSS was generated to a temporary
 file with Tailwind's production `--minify` option; Brotli used quality 11, which
 matches the Docker image's precompression path.
 
 | Asset | Raw | Brotli |
 | --- | ---: | ---: |
-| Generated application CSS | 54,422 B | 8,677 B |
+| Generated application CSS | 62,181 B | 9,736 B |
 | `chat.js` | 24,368 B | 5,893 B |
-| Chat CSS + JavaScript | 78,790 B | 14,570 B |
-| `notifications.js` | 3,857 B | 1,064 B |
-| `timezone.js` | 248 B | 153 B |
+| Chat CSS + JavaScript | 86,549 B | 15,629 B |
+| `notifications.js` | 3,857 B | 1,063 B |
+| `timezone.js` | 248 B | 152 B |
 
 These are static asset transfer sizes, not total page weight, memory use, CPU
 cost, HTML size, or provider traffic. Most CRUD pages currently reference no

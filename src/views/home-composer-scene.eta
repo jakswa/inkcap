@@ -1,0 +1,38 @@
+<% if (it.grove === 'moon') { %>
+  <svg class="composer-fungi composer-scene-moon" viewBox="0 0 400 112" aria-hidden="true">
+    <circle class="composer-moon-disc" cx="304" cy="53" r="47"/>
+    <g class="composer-spores">
+      <circle cx="94" cy="42" r="2.5"/><circle cx="139" cy="19" r="2"/><circle cx="205" cy="34" r="3"/>
+      <circle cx="251" cy="13" r="1.8"/><circle cx="361" cy="23" r="2.4"/>
+    </g>
+    <path class="composer-moss composer-moss-back" d="M8 112C32 78 63 80 88 112c26-48 72-47 102 0 27-37 65-38 91 0 28-52 80-53 111 0Z"/>
+    <path class="composer-stem" d="M91 112c4-18 5-33 1-47h14c-3 16-2 32 4 47Zm96 0c4-13 4-25 1-35h12c-2 12-1 23 4 35Zm93 0c8-31 10-59 3-84h23c-6 28-4 56 6 84Z"/>
+    <path class="composer-cap" d="M72 67c6-23 42-27 53 0-14-6-40-6-53 0Zm98 12c5-19 35-23 46 0-12-5-34-5-46 0Z"/>
+    <path class="composer-cap composer-cap-hero" d="M247 33c11-43 72-46 88 0-23-10-66-10-88 0Z"/>
+    <path class="composer-moss composer-moss-front" d="M4 112c30-25 67-24 101 0 32-29 72-28 105 0 35-27 75-27 109 0 26-22 51-22 77 0Z"/>
+  </svg>
+<% } else if (it.grove === 'lichen') { %>
+  <svg class="composer-fungi composer-scene-log" viewBox="0 0 400 112" aria-hidden="true">
+    <g class="composer-spores">
+      <circle cx="75" cy="30" r="2"/><circle cx="118" cy="17" r="2.8"/><circle cx="286" cy="24" r="2.2"/>
+      <circle cx="331" cy="11" r="1.7"/><circle cx="369" cy="37" r="2.5"/>
+    </g>
+    <path class="composer-moss composer-moss-back" d="M8 112c25-35 58-35 84 0 28-42 69-43 97 0 27-34 62-35 89 0 29-44 75-43 114 0Z"/>
+    <path class="composer-log" d="M52 83c72-13 186-9 283 2 22 3 34 13 42 27H31c3-15 9-25 21-29Z"/>
+    <path class="composer-stem" d="M105 91c3-18 3-34 0-47h14c-3 15-2 31 3 46Zm121 5c3-13 3-24 0-34h11c-2 11-1 22 3 34Z"/>
+    <path class="composer-cap" d="M86 47c6-24 40-27 53 0-15-6-40-6-53 0Zm123 17c5-19 34-22 44 0-12-5-32-5-44 0Z"/>
+    <path class="composer-moss composer-moss-front" d="M4 112c31-23 65-23 98 0 33-27 73-27 106 0 34-24 72-25 106 0 28-21 55-21 82 0Z"/>
+  </svg>
+<% } else { %>
+  <svg class="composer-fungi composer-scene-ridge" viewBox="0 0 400 112" aria-hidden="true">
+    <g class="composer-spores">
+      <circle cx="79" cy="48" r="3"/><circle cx="113" cy="21" r="2"/><circle cx="181" cy="37" r="2.5"/>
+      <circle cx="261" cy="18" r="3"/><circle cx="332" cy="31" r="1.8"/><circle cx="370" cy="11" r="2.4"/>
+    </g>
+    <path class="composer-moss composer-moss-back" d="M8 112c24-38 60-40 87 0 28-53 76-54 108 0 27-42 68-43 97 0 28-47 71-48 92 0Z"/>
+    <path class="composer-stem" d="M83 112c5-13 5-25 2-36h13c-3 13-2 25 3 36Zm70 0c5-23 6-43 1-61h17c-4 20-3 40 4 61Zm91 0c4-17 4-31 1-44h14c-3 15-2 29 4 44Zm76 0c7-29 8-55 2-78h20c-5 26-3 52 5 78Z"/>
+    <path class="composer-cap composer-cap-back" d="M300 37c8-35 63-38 76 0-20-9-56-9-76 0Z"/>
+    <path class="composer-cap" d="M68 78c5-19 34-22 45 0-12-5-34-5-45 0Zm65-25c7-29 51-34 64 0-17-7-48-7-64 0Zm94 18c6-23 43-27 54 0-14-6-41-6-54 0Z"/>
+    <path class="composer-moss composer-moss-front" d="M4 112c31-27 70-27 105 0 34-31 77-31 112 0 35-27 76-27 110 0 24-21 45-21 65 0Z"/>
+  </svg>
+<% } %>

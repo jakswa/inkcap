@@ -246,6 +246,42 @@
   }
 }
 
+/* Filled corner growth for the landing composer. It sits behind the glass,
+   with no connecting vine or outline competing with the input's border. */
+.composer-corner-frame > form {
+  position: relative;
+  z-index: 1;
+}
+.composer-corner-growth {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.62;
+  transition: opacity 240ms ease;
+}
+.composer-corner-frame:focus-within .composer-corner-growth { opacity: 0.82; }
+.composer-fungi {
+  position: absolute;
+  bottom: calc(100% - 0.35rem);
+  left: 50%;
+  width: min(36rem, calc(100% - 2rem));
+  transform: translateX(-50%);
+  overflow: visible;
+}
+.composer-fungi .composer-moss-back { fill: color-mix(in srgb, var(--ok) 35%, var(--surface-raised)); }
+.composer-fungi .composer-moss-front { fill: color-mix(in srgb, var(--ok) 58%, var(--surface-raised)); }
+.composer-fungi .composer-stem { fill: var(--mushroom-gill); }
+.composer-fungi .composer-cap { fill: color-mix(in srgb, var(--accent) 76%, var(--surface-raised)); }
+.composer-fungi .composer-cap-back { fill: color-mix(in srgb, var(--accent) 46%, var(--surface-raised)); }
+.composer-fungi .composer-cap-hero { fill: color-mix(in srgb, var(--accent) 82%, var(--surface-raised)); }
+.composer-fungi .composer-spores { fill: color-mix(in srgb, var(--accent) 58%, transparent); }
+.composer-fungi .composer-moon-disc { fill: color-mix(in srgb, var(--accent) 8%, transparent); }
+.composer-fungi .composer-log { fill: color-mix(in srgb, var(--warn) 18%, var(--surface-raised)); }
+@media (prefers-reduced-motion: reduce) {
+  .composer-corner-growth { transition: none; }
+}
+
 /* Logged-in home: the normal inkcap palette, with three quiet variations in
    geometry and atmosphere. The interface stays identical in every version. */
 .app-landing {
