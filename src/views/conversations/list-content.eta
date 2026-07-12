@@ -15,57 +15,7 @@
       <% } %>
     </div>
 
-    <% if (it.providers.length === 0) { %>
-      <% /* Onboarding: no enabled providers yet — walk through the one setup
-            step instead of showing a composer that can't send. */ %>
-      <div class="card grid w-full gap-4">
-        <div class="grid gap-1">
-          <h2 class="text-lg font-bold">Connect a provider first</h2>
-          <p class="mb-0 text-sm text-ink-dim">
-            inkcap talks to your own endpoints — a local llama-server or any
-            OpenAI-compatible API. Keys stay on the server, never in the browser.
-          </p>
-        </div>
-        <ol class="grid list-decimal gap-1.5 pl-5 text-sm text-ink-dim">
-          <li>Start your server, e.g. <code class="rounded bg-ink/5 px-1 py-0.5 font-mono text-xs">llama-server -m model.gguf --port 8001</code></li>
-          <li>Register its URL as a provider</li>
-          <li>Come back here and say hello</li>
-        </ol>
-        <a class="btn btn-primary justify-self-start" href="/providers/new">Add your first provider</a>
-      </div>
-    <% } else { %>
-      <form id="new-chat" class="grid w-full scroll-mt-4 gap-2 rounded-[1.75rem] border border-edge bg-veil p-3 shadow-xl shadow-black/5 backdrop-blur-xl" method="post" action="/conversations" data-new-chat>
-        <% if (it.errors.length > 0) { %>
-          <div class="alert-danger" role="alert">
-            <% it.errors.forEach((error) => { %>
-              <p class="mb-0 last:mb-0"><%= error %></p>
-            <% }) %>
-          </div>
-        <% } %>
-
-        <textarea class="max-h-64 w-full resize-none border-0 bg-transparent px-2 py-1.5 text-ink outline-none placeholder:text-ink-faint" name="content" rows="2" placeholder="Type a message…" data-chat-input><%= it.values.content || '' %></textarea>
-
-        <div class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 sm:flex sm:flex-nowrap">
-          <details class="relative" data-close-on-outside>
-            <summary class="chip cursor-pointer transition-colors select-none hover:border-edge-strong hover:text-ink">
-              <%~ include('../partials/icon', { name: 'sliders', class: 'size-3.5' }) %>
-              Tools
-              <span class="rounded-full bg-accent/15 px-1.5 py-0.5 text-[0.6875rem] font-bold text-accent <%= it.enabledMcpServerCount > 0 ? '' : 'hidden' %>" data-tools-count><%= it.enabledMcpServerCount %></span>
-            </summary>
-            <div class="absolute bottom-full left-0 z-10 mb-2 grid w-[min(26rem,calc(100vw-3rem))] gap-3 rounded-2xl border border-edge bg-raised p-4 shadow-xl shadow-black/10" data-menu-panel>
-              <%~ include('./mcp-picker', { servers: it.mcpServers, note: 'Your last selection is remembered for new chats.' }) %>
-            </div>
-          </details>
-
-          <div class="flex min-w-0 items-center justify-end gap-2 sm:ml-auto">
-            <%~ include('./model-controls', { controls: it.modelControls }) %>
-            <button class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-0 bg-accent text-on-accent transition-colors hover:bg-accent-hover" type="submit" aria-label="Send">
-              <%~ include('../partials/icon', { name: 'send', class: 'size-4' }) %>
-            </button>
-          </div>
-        </div>
-      </form>
-    <% } %>
+    <%~ include('./new-chat-composer', it) %>
 
     <section class="grid w-full gap-2 rounded-2xl border border-edge bg-raised p-2 shadow-sm shadow-black/5 lg:hidden" aria-labelledby="mobile-recent-chats">
       <div class="flex items-baseline justify-between gap-3 px-2 pt-1">

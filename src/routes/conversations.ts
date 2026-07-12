@@ -383,19 +383,23 @@ async function renderShow(
   })
 }
 
-// Landing page render: the "Hello there" hero composer plus the chats
-// sidebar. Shared by GET and the POST validation-error path.
-async function renderLanding(
-  c: Context,
+export type NewChatDataOptions = {
+  errors?: string[]
+  values?: Record<string, string>
+  selectedMcpServerIds?: string[]
+  includeSidebar?: boolean
+}
+
+// Shared by the chats landing and the login-aware app home. Keeping this in
+// one place means both composers have identical provider/tool defaults.
+export async function newChatData(
   userId: string,
-  options: {
-    errors?: string[]
-    values?: Record<string, string>
-    selectedMcpServerIds?: string[]
-  } = {},
+  options: NewChatDataOptions = {},
 ) {
   const [conversations, providers, mcpServers, settings] = await Promise.all([
-    listConversationsForUser(userId),
+    options.includeSidebar === false
+      ? Promise.resolve([])
+      : listConversationsForUser(userId),
     listProvidersForUser(userId),
     listMcpServersForUser(userId),
     getUserSettings(userId),
@@ -411,10 +415,7 @@ async function renderLanding(
     (server) => server.enabled && selectedMcpServerIds.has(server.id),
   ).length
 
-  c.header('Cache-Control', 'private, no-store')
-  return c.var.render('conversations/list', {
-    title: 'Chats',
-    shell: 'chat',
+  return {
     sidebar: conversations.map((row) => ({
       id: row.id,
       title: row.title,
@@ -436,6 +437,41 @@ async function renderLanding(
     }),
     errors: options.errors ?? [],
     values: options.values ?? {},
+  }
+}
+
+// Landing page render: the "Hello there" hero composer plus the chats
+// sidebar. Shared by GET and the POST validation-error path.
+async function renderLanding(
+  c: Context,
+  userId: string,
+  options: NewChatDataOptions = {},
+) {
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('conversations/list', {
+    title: 'Chats',
+    shell: 'chat',
+    ...(await newChatData(userId, options)),
+  })
+}
+
+const homeGroves = new Set(['moss', 'moon', 'lichen'])
+
+async function renderCreateError(
+  c: Context,
+  userId: string,
+  options: NewChatDataOptions,
+  source: string,
+  requestedGrove: string,
+) {
+  if (source !== 'home') return renderLanding(c, userId, options)
+
+  c.header('Cache-Control', 'private, no-store')
+  return c.var.render('home', {
+    title: 'New chat · inkcap',
+    fullBleed: true,
+    grove: homeGroves.has(requestedGrove) ? requestedGrove : 'moss',
+    ...(await newChatData(userId, { ...options, includeSidebar: false })),
   })
 }
 
@@ -471,6 +507,8 @@ conversationRoutes.post('/conversations', async (c) => {
   const systemPrompt = readString(form, 'systemPrompt')
   const content = readString(form, 'content').trim()
   const selectedMcpServerIds = readStringList(form, 'enabled_mcp_server_id')
+  const source = readString(form, 'source') === 'home' ? 'home' : 'conversations'
+  const requestedGrove = readString(form, 'grove')
 
   const providers = await listProvidersForUser(user.id)
   const enabledProviders = providers.filter((p) => p.enabled)
@@ -492,21 +530,21 @@ conversationRoutes.post('/conversations', async (c) => {
   }
 
   if (errors.length > 0 || !provider) {
-    return renderLanding(c, user.id, {
+    return renderCreateError(c, user.id, {
       errors,
       values: { title, model, reasoningEffort, systemPrompt, providerId, content },
       selectedMcpServerIds,
-    })
+    }, source, requestedGrove)
   }
 
   const selectedModel = model || provider.default_model || null
   const modelError = providerModelError(provider, selectedModel)
   if (modelError) {
-    return renderLanding(c, user.id, {
+    return renderCreateError(c, user.id, {
       errors: [modelError],
       values: { title, model, reasoningEffort, systemPrompt, providerId, content },
       selectedMcpServerIds,
-    })
+    }, source, requestedGrove)
   }
 
   const conversation = await createConversation({

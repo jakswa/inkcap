@@ -1,0 +1,23 @@
+<section class="app-landing relative isolate grid min-h-[32rem] w-full flex-1 place-items-center overflow-hidden bg-raised/40 px-5 py-20 sm:px-10" data-grove="<%= it.grove %>">
+  <div class="app-landing-ambience absolute inset-0 -z-10" aria-hidden="true">
+    <span class="app-landing-shape app-landing-shape-a"></span>
+    <span class="app-landing-shape app-landing-shape-b"></span>
+    <span class="app-landing-shape app-landing-shape-c"></span>
+    <div class="app-landing-mushroom"><%~ include('./partials/mushroom') %></div>
+  </div>
+
+  <div class="grid w-full max-w-2xl gap-7 text-center">
+    <h1 class="text-[clamp(2.5rem,7vw,4.75rem)] leading-none font-black tracking-[-0.06em]">Hello there</h1>
+
+    <div class="<%= it.providers.length > 0 ? 'app-landing-composer rounded-[2rem] p-1.5' : '' %> text-left">
+      <%~ include('./conversations/new-chat-composer', { ...it, composerPlaceholder: 'Type a message…', newChatSource: 'home' }) %>
+    </div>
+
+    <a class="btn btn-ghost mx-auto rounded-full px-4 py-2" href="/conversations">
+      View all chats
+      <%~ include('./partials/icon', { name: 'chevronRight', class: 'size-3.5' }) %>
+    </a>
+  </div>
+</section>
+
+<script src="/assets/<%= it.assetVersion %>/chat.js" defer></script>

@@ -118,6 +118,51 @@ async function createConversationViaForm(
 }
 
 describe('conversations chat loop', () => {
+  test('authenticated home renders new-chat states and keeps validation errors in place', async () => {
+    const noProviderUser = await makeUser()
+    const noProviderRes = await app.request(url('/?grove=lichen'), {
+      headers: { Cookie: sessionFor(noProviderUser) },
+    })
+    expect(noProviderRes.status).toBe(200)
+    expect(noProviderRes.headers.get('cache-control')).toBe('private, no-store')
+    expect(await noProviderRes.text()).toContain('Add your first provider')
+
+    const user = await makeUser()
+    const cookie = sessionFor(user)
+    const provider = await createProvider({
+      accountId: user.id,
+      name: `home-${randomUUIDv7()}`,
+      kind: 'openai-compat',
+      baseUrl: stubBaseUrl,
+      defaultModel: 'stub-model',
+      models: ['stub-model'],
+      enabled: true,
+    })
+    const homeRes = await app.request(url('/?grove=moon'), {
+      headers: { Cookie: cookie },
+    })
+    const homeHtml = await homeRes.text()
+    expect(homeHtml).toContain('data-grove="moon"')
+    expect(homeHtml).toContain('name="source" value="home"')
+    expect(homeHtml).toContain('method="post" action="/conversations"')
+
+    const invalidRes = await app.request(url('/conversations'), {
+      method: 'POST',
+      headers: { Cookie: cookie, Origin: origin },
+      body: form({
+        source: 'home',
+        grove: 'moon',
+        providerId: provider.id,
+        model: 'stub-model',
+        title: 'x'.repeat(201),
+      }),
+    })
+    const invalidHtml = await invalidRes.text()
+    expect(invalidRes.status).toBe(200)
+    expect(invalidHtml).toContain('data-grove="moon"')
+    expect(invalidHtml).toContain('Title must be 200 characters or fewer')
+  })
+
   test('new-chat composer uses provider-backed model and reasoning controls', async () => {
     const user = await makeUser()
     const cookie = sessionFor(user)

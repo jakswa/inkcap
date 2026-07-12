@@ -25,7 +25,7 @@
         <%~ it.body %>
       </main>
     <% } else { %>
-      <main class="mx-auto w-full max-w-5xl flex-1 px-4 py-[clamp(2rem,6vw,4.5rem)]">
+      <main class="<%= it.fullBleed ? 'flex w-full flex-1' : 'mx-auto w-full max-w-5xl flex-1 px-4 py-[clamp(2rem,6vw,4.5rem)]' %>">
         <%~ it.body %>
       </main>
       <%~ include('../partials/footer', it) %>

@@ -246,6 +246,121 @@
   }
 }
 
+/* Logged-in home: the normal inkcap palette, with three quiet variations in
+   geometry and atmosphere. The interface stays identical in every version. */
+.app-landing {
+  box-shadow: inset 0 1px color-mix(in srgb, var(--ink) 5%, transparent);
+}
+.app-landing-ambience {
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 32%, var(--glow-a), transparent 38%),
+    linear-gradient(to bottom, transparent, color-mix(in srgb, var(--ok) 5%, transparent));
+}
+.app-landing-shape {
+  position: absolute;
+  display: block;
+  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.app-landing-shape-a {
+  width: 48rem;
+  height: 18rem;
+  right: -17rem;
+  bottom: -10rem;
+  border-radius: 60% 40% 0 0 / 100% 80% 0 0;
+  transform: rotate(-7deg);
+}
+.app-landing-shape-b {
+  width: 36rem;
+  height: 14rem;
+  left: -14rem;
+  bottom: -9rem;
+  border-radius: 45% 55% 0 0 / 100% 90% 0 0;
+  transform: rotate(8deg);
+}
+.app-landing-shape-c {
+  width: 0.55rem;
+  height: 0.55rem;
+  top: 17%;
+  left: 18%;
+  border: 0;
+  border-radius: 999px;
+  box-shadow:
+    3rem 2rem 0 color-mix(in srgb, var(--ok) 18%, transparent),
+    48rem 4rem 0 color-mix(in srgb, var(--accent) 14%, transparent),
+    42rem 22rem 0 color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.app-landing-mushroom {
+  position: absolute;
+  right: -4rem;
+  bottom: -7rem;
+  width: 22rem;
+  opacity: 0.09;
+  transform: rotate(8deg);
+}
+.app-landing-mushroom > svg { width: 100%; }
+.app-landing-composer {
+  background: color-mix(in srgb, var(--surface-raised) 42%, transparent);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.08);
+}
+.app-landing-composer > form { box-shadow: none; }
+
+/* Moon: concentric pools and a low, centered fruiting body. */
+.app-landing[data-grove="moon"] .app-landing-ambience {
+  background:
+    radial-gradient(circle at 50% 42%, transparent 0 10rem, color-mix(in srgb, var(--accent) 7%, transparent) 10.1rem 10.2rem, transparent 10.3rem 15rem, color-mix(in srgb, var(--accent) 5%, transparent) 15.1rem 15.2rem, transparent 15.3rem),
+    radial-gradient(circle at 50% 40%, var(--glow-a), transparent 48%);
+}
+.app-landing[data-grove="moon"] .app-landing-shape-a {
+  width: 34rem;
+  height: 34rem;
+  right: calc(50% - 17rem);
+  bottom: -27rem;
+  border-radius: 999px;
+  transform: none;
+}
+.app-landing[data-grove="moon"] .app-landing-shape-b { display: none; }
+.app-landing[data-grove="moon"] .app-landing-mushroom {
+  right: calc(50% - 7rem);
+  bottom: -8rem;
+  width: 14rem;
+  opacity: 0.07;
+  transform: none;
+}
+
+/* Lichen: offset stone forms and restrained contour lines. */
+.app-landing[data-grove="lichen"] .app-landing-ambience {
+  background:
+    repeating-radial-gradient(ellipse at 82% 72%, transparent 0 3.5rem, color-mix(in srgb, var(--ok) 7%, transparent) 3.55rem 3.62rem),
+    radial-gradient(circle at 18% 24%, var(--glow-b), transparent 34%);
+}
+.app-landing[data-grove="lichen"] .app-landing-shape-a {
+  width: 21rem;
+  height: 14rem;
+  right: -6rem;
+  bottom: -5rem;
+  border-radius: 43% 57% 38% 62%;
+  transform: rotate(-18deg);
+}
+.app-landing[data-grove="lichen"] .app-landing-shape-b {
+  width: 13rem;
+  height: 9rem;
+  left: -4rem;
+  bottom: auto;
+  top: -4rem;
+  border-radius: 61% 39% 55% 45%;
+  transform: rotate(22deg);
+}
+.app-landing[data-grove="lichen"] .app-landing-mushroom {
+  right: auto;
+  left: -5rem;
+  bottom: -6rem;
+  width: 18rem;
+  opacity: 0.06;
+  transform: rotate(-10deg);
+}
+
 /* Thin, theme-aware scrollbars for the chat scroller and sidebar. */
 .scroll-thin {
   scrollbar-width: thin;
