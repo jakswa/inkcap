@@ -55,10 +55,15 @@
 
       <section class="product-proof" id="product" aria-label="Product view">
         <figure class="shot hero-shot">
-          <picture>
-            <source srcset="shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
-            <img src="shots/chat-desktop-light.webp" alt="An inkcap conversation with model reasoning, a code answer, token details, MCP tool controls, and a composer" width="1440" height="900">
-          </picture>
+          <div class="hero-demo">
+            <video autoplay muted playsinline controls preload="metadata" poster="shots/chat-desktop-dark.webp" aria-label="An inkcap conversation using a web-search tool and streaming the answer">
+              <source src="shots/chat-demo-dark.mp4" type="video/mp4">
+            </video>
+            <picture>
+              <source srcset="shots/chat-desktop-dark.webp" media="(prefers-color-scheme: dark)">
+              <img src="shots/chat-desktop-light.webp" alt="An inkcap conversation with model reasoning, a code answer, token details, MCP tool controls, and a composer" width="1440" height="900">
+            </picture>
+          </div>
           <figcaption>One conversation with the controls that matter close at hand.</figcaption>
         </figure>
       </section>
