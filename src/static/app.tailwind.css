@@ -271,7 +271,7 @@
 }
 .composer-fungi .composer-moss-back { fill: color-mix(in srgb, var(--ok) 35%, var(--surface-raised)); }
 .composer-fungi .composer-moss-front { fill: color-mix(in srgb, var(--ok) 58%, var(--surface-raised)); }
-.composer-fungi .composer-stem { fill: var(--mushroom-gill); }
+.composer-fungi .composer-stem { fill: var(--ink-faint); }
 .composer-fungi .composer-cap { fill: color-mix(in srgb, var(--accent) 76%, var(--surface-raised)); }
 .composer-fungi .composer-cap-back { fill: color-mix(in srgb, var(--accent) 46%, var(--surface-raised)); }
 .composer-fungi .composer-cap-hero { fill: color-mix(in srgb, var(--accent) 82%, var(--surface-raised)); }
