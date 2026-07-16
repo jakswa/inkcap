@@ -25,6 +25,8 @@ This file doubles as `AGENTS.md` / `CLAUDE.md`, so keep it useful and short.
   and recovers interrupted runs on boot.
 - Provider/MCP credentials stay server-side. Guard outbound targets with
   `src/utils/outbound-url.ts`.
+- Timestamps are UTC throughout PostgreSQL and the application unless a domain
+  explicitly needs local wall-clock context (`loops.next_fire_at`).
 - Messages are a tree: `messages.parent_id` plus `conversations.curr_node`.
   Edit/regenerate/fork create or select branches; do not flatten this model.
 - Markdown is rendered server-side via `src/utils/markdown.ts`. Stream plain

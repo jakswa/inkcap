@@ -49,6 +49,24 @@ async function makeProvider(accountId: string) {
   })
 }
 
+describe('timestamps', () => {
+  test('uses UTC sessions and timestamp-without-timezone columns', async () => {
+    const [zone] = await sql`SHOW TIME ZONE`
+    expect(zone?.TimeZone).toBe('UTC')
+
+    const withTimeZone = await sql`
+      SELECT table_name, column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND data_type = 'timestamp with time zone'
+    `
+    expect(withTimeZone).toHaveLength(0)
+
+    const [parsed] = await sql`SELECT '2026-06-01 09:30:00'::timestamp AS value`
+    expect(parsed?.value).toBeInstanceOf(Date)
+    expect(parsed?.value.toISOString()).toBe('2026-06-01T09:30:00.000Z')
+  })
+})
+
 describe('providers', () => {
   test('rejects an unknown kind', async () => {
     await assertRejects(

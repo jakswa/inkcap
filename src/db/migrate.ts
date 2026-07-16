@@ -2,15 +2,16 @@ import { SQL } from 'bun'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { paths } from '../utils/paths'
+import { utcDatabaseUrl } from './utc'
 
 export async function migrate(databaseUrl: string, options: { quiet?: boolean } = {}) {
-  const sql = new SQL(databaseUrl)
+  const sql = new SQL(utcDatabaseUrl(databaseUrl))
 
   try {
     await sql`
       CREATE TABLE IF NOT EXISTS schema_migrations (
         filename text PRIMARY KEY,
-        applied_at timestamptz NOT NULL DEFAULT now()
+        applied_at timestamp NOT NULL DEFAULT now()
       )
     `
 
