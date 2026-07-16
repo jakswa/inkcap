@@ -79,6 +79,13 @@ async function renderList(c: Context) {
     listLoopsForUser(user.id),
     countPushSubscriptionsForUser(user.id),
   ])
+  const ownerTimeZones = new Map(
+    await Promise.all(
+      [...new Set(loops.map((loop) => loop.user_id))].map(async (userId) =>
+        [userId, (await getUserSettings(userId)).timeZone] as const,
+      ),
+    ),
+  )
   const error = c.req.query('error') ?? null
   const notice = c.req.query('notice') ?? null
   c.header('Cache-Control', 'private, no-store')
@@ -87,13 +94,17 @@ async function renderList(c: Context) {
     error,
     notice,
     pushSubscriptionCount,
-    loops: loops.map((loop) => ({
-      ...loop,
-      lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
-      nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
-      scheduleLabel: humanizeLoopSchedule(loop.schedule, loop.timezone),
-      runStatusLabel: humanizeRunStatus(loop.last_run_status),
-    })),
+    loops: loops.map((loop) => {
+      const timezone = ownerTimeZones.get(loop.user_id) ?? defaultLoopTimezone()
+      return {
+        ...loop,
+        timezone,
+        lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
+        nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+        scheduleLabel: humanizeLoopSchedule(loop.schedule, timezone),
+        runStatusLabel: humanizeRunStatus(loop.last_run_status),
+      }
+    }),
   })
 }
 
@@ -116,7 +127,7 @@ async function renderForm(
       : listMcpServersForUser(user.id).then((rows) =>
           rows.map((row) => ({ ...row, loop_enabled: false, loop_auto_approve: false })),
         ),
-    getUserSettings(user.id),
+    getUserSettings(options.loop?.user_id ?? user.id),
     countPushSubscriptionsForUser(user.id),
   ])
 
@@ -143,11 +154,11 @@ async function renderForm(
     errors: options.errors ?? [],
     values,
     scheduleParts: scheduleFormParts(values.schedule ?? options.loop?.schedule),
-    timeZone: options.loop?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone(),
+    timeZone: userSettings.timeZone ?? defaultLoopTimezone(),
     notificationsEnabled: pushSubscriptionCount > 0,
     schedulePreview: (() => {
       const schedule = normalizeSchedule(values.schedule ?? options.loop?.schedule)
-      const timezone = options.loop?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone()
+      const timezone = userSettings.timeZone ?? defaultLoopTimezone()
       if (!schedule) return null
       try {
         const next = nextLoopFireAt(schedule, timezone)
@@ -190,8 +201,8 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     : scheduleMode === 'weekdays' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * 1-5`
     : scheduleMode === 'weekly' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * ${weekday}`
     : normalizeSchedule(custom)
-  const userSettings = await getUserSettings(user.id)
-  const timezone = existing?.timezone ?? userSettings.timeZone ?? defaultLoopTimezone()
+  const userSettings = await getUserSettings(existing?.user_id ?? user.id)
+  const timezone = userSettings.timeZone ?? defaultLoopTimezone()
   const enabled = scheduleMode !== 'manual' && readString(form, 'enabled') === 'on'
   const selectedMcpIdsRaw = readStringList(form, 'enabled_mcp_server_id')
   const approvedMcpIdsRaw = readStringList(form, 'auto_approve_mcp_server_id')
@@ -244,7 +255,6 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
       model: model || provider?.default_model || null,
       reasoningEffort: provider && modelSupportsReasoning(provider, model || provider.default_model || null) ? reasoningEffort : null,
       schedule,
-      timezone,
       enabled,
       nextFireAt,
     },
@@ -301,9 +311,10 @@ loopRoutes.get('/loops/:id', async (c) => {
   if (!user) return c.redirect('/login')
   const loop = await getLoopForUser({ id: c.req.param('id'), userId: user.id })
   if (!loop) return c.notFound()
-  const [history, pushSubscriptionCount] = await Promise.all([
+  const [history, pushSubscriptionCount, ownerSettings] = await Promise.all([
     listLoopRunHistory({ loopId: loop.id, userId: user.id, limit: 30 }),
     countPushSubscriptionsForUser(user.id),
+    getUserSettings(loop.user_id),
   ])
   c.header('Cache-Control', 'private, no-store')
   return c.var.render('loops/show', {
@@ -311,9 +322,10 @@ loopRoutes.get('/loops/:id', async (c) => {
     error: c.req.query('error') ?? null,
     loop: {
       ...loop,
+      timezone: ownerSettings.timeZone,
       lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
       nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
-      scheduleLabel: humanizeLoopSchedule(loop.schedule, loop.timezone),
+      scheduleLabel: humanizeLoopSchedule(loop.schedule, ownerSettings.timeZone),
     },
     history: history.map((run) => ({
       ...run,
@@ -354,7 +366,8 @@ loopRoutes.post('/loops/:id/toggle', async (c) => {
   const enabled = !loop.enabled
   let nextFireAt: Date | null = null
   try {
-    nextFireAt = enabled ? validateLoopSchedule(normalizeSchedule(loop.schedule), loop.timezone) : null
+    const timezone = (await getUserSettings(loop.user_id)).timeZone
+    nextFireAt = enabled ? validateLoopSchedule(normalizeSchedule(loop.schedule), timezone) : null
   } catch {
     nextFireAt = null
   }

@@ -3,6 +3,7 @@ import { getLatestArtifactForConversation } from '../db/queries/artifacts'
 import { getConversationById } from '../db/queries/conversations'
 import { getActivePath } from '../db/queries/messages'
 import { getProviderById } from '../db/queries/providers'
+import { isOnlyRunForConversation } from '../db/queries/runs'
 import { getUserSettings } from '../db/queries/users'
 import { completeOnce, type ChatMessage, type ChatRole } from './provider-client'
 import {
@@ -113,6 +114,11 @@ export async function notifyLoopRunStatus(
   const conversation = await getConversationById(conversationId)
   if (!conversation?.routine_id || !pushConfigured()) return
   if ((await countPushSubscriptionsForUser(conversation.user_id)) === 0) return
+
+  // routine_id identifies the conversation created by a loop, not every later
+  // message sent in that chat. Only its originating run owns loop notification
+  // hooks; user continuations create additional runs and must stay quiet.
+  if (!(await isOnlyRunForConversation(conversation.id))) return
 
   // Attention-required states are unconditional. Successful runs get one
   // ephemeral provider turn over the completed conversation. On judge failure

@@ -5,9 +5,13 @@ import { setConversationMcpOverride } from '../db/queries/mcp-servers'
 import {
   claimDueLoop,
   listDueLoops,
+  listEnabledScheduledLoopsForUser,
   listLoopMcpServers,
+  listLoopsMissingNextFireAt,
   noteLoopFired,
+  setLoopNextFireAt,
 } from '../db/queries/loops'
+import { getUserSettings } from '../db/queries/users'
 import { notifyLoopStartFailure } from './push'
 import { startRun } from './runner'
 import { timeZoneLabel, zonedLocalDateTime } from '../utils/timezone'
@@ -98,6 +102,46 @@ export function validateLoopSchedule(schedule: string | null, timezone: string) 
   }
 }
 
+// next_fire_at is a materialized scheduler cursor. Rebuild it when the user's
+// timezone changes so an already-enabled loop immediately follows the new
+// setting rather than firing once more at its old local time.
+export async function rescheduleLoopsForUser(userId: string, timezone: string) {
+  const loops = await listEnabledScheduledLoopsForUser(userId)
+  const now = new Date()
+  for (const loop of loops) {
+    let nextFireAt: Date | null = null
+    try {
+      nextFireAt = nextLoopFireAt(loop.schedule, timezone, now)
+    } catch (error) {
+      console.warn(`invalid loop schedule for ${loop.id}:`, error)
+    }
+    await setLoopNextFireAt({ id: loop.id, userId, nextFireAt })
+  }
+}
+
+// Migration 018 clears enabled cursors before dropping the old per-loop
+// timezone snapshot. Rehydrate only missing cursors on boot, preserving normal
+// catch-up behavior for schedules that became due while the app was offline.
+export async function rescheduleLoopsMissingNextFireAt() {
+  const loops = await listLoopsMissingNextFireAt()
+  const settingsByUser = new Map<string, Awaited<ReturnType<typeof getUserSettings>>>()
+  const now = new Date()
+  for (const loop of loops) {
+    let settings = settingsByUser.get(loop.user_id)
+    if (!settings) {
+      settings = await getUserSettings(loop.user_id)
+      settingsByUser.set(loop.user_id, settings)
+    }
+    let nextFireAt: Date | null = null
+    try {
+      nextFireAt = nextLoopFireAt(loop.schedule, settings.timeZone, now)
+    } catch (error) {
+      console.warn(`invalid loop schedule for ${loop.id}:`, error)
+    }
+    await setLoopNextFireAt({ id: loop.id, userId: loop.user_id, nextFireAt })
+  }
+}
+
 export async function fireLoop(loop: {
   id: string
   user_id: string
@@ -172,7 +216,8 @@ export async function tickLoops() {
       if (!seen.next_fire_at || !seen.schedule) continue
       let nextFireAt: Date | null = null
       try {
-        nextFireAt = nextLoopFireAt(seen.schedule, seen.timezone ?? defaultLoopTimezone(), now)
+        const settings = await getUserSettings(seen.user_id)
+        nextFireAt = nextLoopFireAt(seen.schedule, settings.timeZone, now)
       } catch (error) {
         console.warn(`invalid loop schedule for ${seen.id}:`, error)
       }
@@ -210,7 +255,9 @@ export function startLoopScheduler() {
     interval = setInterval(() => void tickLoops(), 60_000)
     interval.unref?.()
   }
-  void tickLoops()
+  void rescheduleLoopsMissingNextFireAt()
+    .then(() => tickLoops())
+    .catch((error) => console.error('failed to prepare loop scheduler', error))
 }
 
 export function stopLoopSchedulerForTests() {

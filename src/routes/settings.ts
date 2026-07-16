@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { countPushSubscriptionsForUser } from '../db/queries/push-subscriptions'
 import { pushConfigured, vapidPublicKey } from '../services/push'
+import { rescheduleLoopsForUser } from '../services/loops'
 import { getUserSettings, patchUserSettings } from '../db/queries/users'
 import { readString } from '../utils/validation'
 import { validTimeZone } from '../utils/timezone'
@@ -74,5 +75,6 @@ settingsRoutes.post('/settings/timezone', async (c) => {
   const timeZone = validTimeZone(readString(form, 'timezone'))
   if (!timeZone) return c.redirect('/settings?timezone=invalid#regional')
   await patchUserSettings({ userId: user.id, patch: { timeZone } })
+  await rescheduleLoopsForUser(user.id, timeZone)
   return c.redirect('/settings?timezone=saved#regional')
 })

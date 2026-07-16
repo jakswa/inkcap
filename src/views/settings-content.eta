@@ -74,7 +74,7 @@
   <section id="regional" class="card grid gap-4 scroll-mt-24">
     <div>
       <h2 class="text-xl font-bold">Time &amp; region</h2>
-      <p class="mb-0 text-sm text-ink-dim">Loops use this timezone when you create them. Existing loops keep their saved timezone so their timing never changes silently.</p>
+      <p class="mb-0 text-sm text-ink-dim">All loops follow this timezone. Changing it immediately reschedules enabled loops.</p>
     </div>
     <% if (it.timeZoneSaved) { %><div class="alert-ok" role="status"><p class="mb-0">Timezone saved.</p></div><% } %>
     <% if (it.timeZoneError) { %><div class="alert-danger" role="alert"><p class="mb-0">Enter a valid IANA timezone, such as America/New_York.</p></div><% } %>

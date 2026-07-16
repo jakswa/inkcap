@@ -3,12 +3,13 @@ import { randomUUIDv7 } from 'bun'
 
 const { app } = await import('../../src/app')
 const { createLoop, getLoopForUser, listLoopMcpServers, listLoopsForUser } = await import('../../src/db/queries/loops')
+const { createConversation } = await import('../../src/db/queries/conversations')
 const { createMcpServer } = await import('../../src/db/queries/mcp-servers')
 const { createProvider } = await import('../../src/db/queries/providers')
-const { createUser, patchUserSettings } = await import('../../src/db/queries/users')
-const { getLatestRunForConversation } = await import('../../src/db/queries/runs')
+const { createUser, getUserSettings, patchUserSettings } = await import('../../src/db/queries/users')
+const { createRun, getLatestRunForConversation, isOnlyRunForConversation } = await import('../../src/db/queries/runs')
 const { encryptSession } = await import('../../src/utils/private-session')
-const { scheduleFormParts } = await import('../../src/services/loops')
+const { nextLoopFireAt, scheduleFormParts } = await import('../../src/services/loops')
 
 const origin = 'http://localhost:3000'
 const url = (path: string) => `${origin}${path}`
@@ -59,7 +60,6 @@ function loopForm(providerId: string, overrides: Record<string, string | string[
     model: 'model-test',
     reasoning_effort: 'high',
     schedule_mode: 'manual',
-    timezone: 'UTC',
     ...overrides,
   })
 }
@@ -144,8 +144,36 @@ describe('loops', () => {
     expect(response.status).toBe(302)
     const loop = (await listLoopsForUser(user.id)).find((row) => row.name === 'Daily local report')
     expect(loop?.schedule).toBe('30 9 * * *')
-    expect(loop?.timezone).toBe('America/New_York')
     expect(loop?.next_fire_at).toBeInstanceOf(Date)
+  })
+
+  test('timezone changes immediately reschedule existing loops', async () => {
+    const { user, headers, provider } = await fixture()
+    await patchUserSettings({ userId: user.id, patch: { timeZone: 'America/New_York' } })
+    await app.request(url('/loops'), {
+      method: 'POST',
+      headers,
+      body: loopForm(provider.id, {
+        name: 'Timezone follower',
+        schedule_mode: 'daily',
+        schedule_daily_time: '09:30',
+        enabled: 'on',
+      }),
+    })
+    const before = (await listLoopsForUser(user.id)).find((row) => row.name === 'Timezone follower')!
+    const expected = nextLoopFireAt(before.schedule, 'Europe/Paris', new Date())
+
+    const response = await app.request(url('/settings/timezone'), {
+      method: 'POST',
+      headers,
+      body: form({ timezone: 'Europe/Paris' }),
+    })
+    expect(response.status).toBe(302)
+
+    const after = await getLoopForUser({ id: before.id, userId: user.id })
+    expect((await getUserSettings(user.id)).timeZone).toBe('Europe/Paris')
+    expect(after?.next_fire_at?.getTime()).toBe(expected?.getTime())
+    expect(after?.next_fire_at?.getTime()).not.toBe(before.next_fire_at?.getTime())
   })
 
   test('supports a one-time local date and pauses after that occurrence', async () => {
@@ -225,7 +253,6 @@ describe('loops', () => {
       name: 'Private loop',
       prompt: 'private',
       providerId: owner.provider.id,
-      timezone: 'UTC',
       enabled: false,
     })
 
@@ -247,6 +274,29 @@ describe('loops', () => {
     expect(await invalidProvider.text()).toContain('Choose an enabled provider')
   })
 
+  test('only the originating run of a loop conversation owns notifications', async () => {
+    const { user, provider } = await fixture()
+    const loop = await createLoop({
+      accountId: user.id,
+      userId: user.id,
+      name: 'Notification owner',
+      prompt: 'Check once',
+      providerId: provider.id,
+      enabled: false,
+    })
+    const conversation = await createConversation({
+      userId: user.id,
+      providerId: provider.id,
+      routineId: loop.id,
+    })
+
+    await createRun({ conversationId: conversation.id, status: 'done' })
+    expect(await isOnlyRunForConversation(conversation.id)).toBe(true)
+
+    await createRun({ conversationId: conversation.id, status: 'done' })
+    expect(await isOnlyRunForConversation(conversation.id)).toBe(false)
+  })
+
   test('run now creates an inspectable conversation', async () => {
     const { user, headers, provider } = await fixture()
     const loop = await createLoop({
@@ -256,7 +306,6 @@ describe('loops', () => {
       prompt: 'Say hello',
       providerId: provider.id,
       model: 'model-test',
-      timezone: 'UTC',
       enabled: false,
     })
     const response = await app.request(url(`/loops/${loop.id}/run`), { method: 'POST', headers })

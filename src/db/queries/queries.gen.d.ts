@@ -279,7 +279,6 @@ export interface ICreateLoopResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -300,7 +299,6 @@ export interface IUpdateLoopResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -321,7 +319,6 @@ export interface IGetLoopForUserResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -344,7 +341,6 @@ export interface IListLoopsForUserResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -387,13 +383,32 @@ export interface ISetLoopEnabledResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
+}
+
+/** Result of query `ListEnabledScheduledLoopsForUser`. */
+export interface IListEnabledScheduledLoopsForUserResult {
+    id: string;
+    schedule: string | null;
+}
+
+/** Result of query `ListLoopsMissingNextFireAt`. */
+export interface IListLoopsMissingNextFireAtResult {
+    id: string;
+    user_id: string;
+    schedule: string | null;
+}
+
+/** Result of query `SetLoopNextFireAt`. */
+export interface ISetLoopNextFireAtResult {
+    id: string;
+    enabled: boolean;
+    next_fire_at: Date | null;
 }
 
 /** Result of query `DeleteLoop`. */
@@ -413,7 +428,6 @@ export interface IListDueLoopsResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -434,7 +448,6 @@ export interface IClaimDueLoopResult {
     model: string | null;
     reasoning_effort: string | null;
     schedule: string | null;
-    timezone: string;
     enabled: boolean;
     last_fired_at: Date | null;
     next_fire_at: Date | null;
@@ -1021,6 +1034,11 @@ export interface IGetLatestRunForConversationResult {
     updated_at: Date;
 }
 
+/** Result of query `IsOnlyRunForConversation`. */
+export interface IIsOnlyRunForConversationResult {
+    is_only_run: boolean | null;
+}
+
 /** Result of query `SetRunLeafMessage`. */
 export interface ISetRunLeafMessageResult {
     id: string;
@@ -1161,6 +1179,9 @@ export interface Queries {
     ListLoopsForUser: IListLoopsForUserResult;
     ListLoopRunHistory: IListLoopRunHistoryResult;
     SetLoopEnabled: ISetLoopEnabledResult;
+    ListEnabledScheduledLoopsForUser: IListEnabledScheduledLoopsForUserResult;
+    ListLoopsMissingNextFireAt: IListLoopsMissingNextFireAtResult;
+    SetLoopNextFireAt: ISetLoopNextFireAtResult;
     DeleteLoop: IDeleteLoopResult;
     ListDueLoops: IListDueLoopsResult;
     ClaimDueLoop: IClaimDueLoopResult;
@@ -1214,6 +1235,7 @@ export interface Queries {
     GetRunningRunForConversation: IGetRunningRunForConversationResult;
     GetBlockingRunForConversation: IGetBlockingRunForConversationResult;
     GetLatestRunForConversation: IGetLatestRunForConversationResult;
+    IsOnlyRunForConversation: IIsOnlyRunForConversationResult;
     SetRunLeafMessage: ISetRunLeafMessageResult;
     IncrementRunTurnCount: IIncrementRunTurnCountResult;
     ListRunningRuns: IListRunningRunsResult;

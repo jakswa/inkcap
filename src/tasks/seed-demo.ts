@@ -29,7 +29,7 @@ import {
 } from '../db/queries/providers'
 import { createRun } from '../db/queries/runs'
 import { createToolApproval } from '../db/queries/tool-approvals'
-import { createUser, getUserByEmailNormalized } from '../db/queries/users'
+import { createUser, getUserByEmailNormalized, patchUserSettings } from '../db/queries/users'
 import { hashPassword } from '../utils/password'
 import { normalizeEmail } from '../utils/validation'
 import { randomUUIDv7 } from 'bun'
@@ -103,6 +103,7 @@ try {
     console.log(`Created demo user ${email} (password: ${password})`)
   }
   const accountId = userId // personal account id === user id (migration 012)
+  await patchUserSettings({ userId, patch: { timeZone: 'America/New_York' } })
 
   // Fresh slate for conversations only; providers/MCP servers are reused.
   for (const row of await listConversationsForUser(userId)) {
@@ -167,7 +168,6 @@ try {
       prompt: 'Review the latest local-model and inference-server releases. Summarize only changes that could improve our current setup, then submit a short briefing artifact.',
       model: 'qwen3-32b',
       schedule: '0 8 * * 1-5',
-      timezone: 'America/New_York',
       enabled: true,
       nextFireAt: new Date(nowMs() + minutes(11 * 60)),
       tools: [{ mcpServerId: mcpIds[1]!, autoApprove: true }],
@@ -177,7 +177,6 @@ try {
       prompt: 'Inspect analytics database index health. Explain meaningful regressions and prepare SQL recommendations, but require approval before making any changes.',
       model: 'llama-3.3-70b-instruct',
       schedule: '30 6 * * 1',
-      timezone: 'UTC',
       enabled: true,
       nextFireAt: new Date(nowMs() + minutes(2 * 24 * 60)),
       tools: [{ mcpServerId: mcpIds[0]!, autoApprove: false }],
@@ -187,7 +186,6 @@ try {
       prompt: 'Turn the merged changes since the last tag into concise release notes for technical users. Group fixes, features, and operational changes.',
       model: 'qwen3-32b',
       schedule: null,
-      timezone: 'UTC',
       enabled: false,
       nextFireAt: null,
       tools: [],
@@ -203,7 +201,6 @@ try {
       model: seed.model,
       reasoningEffort: 'medium',
       schedule: seed.schedule,
-      timezone: seed.timezone,
       enabled: seed.enabled,
       nextFireAt: seed.nextFireAt,
     })

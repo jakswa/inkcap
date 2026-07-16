@@ -82,7 +82,7 @@
     <div class="card grid gap-4">
       <div>
         <p class="eyebrow mb-1">Step 3</p><h2 class="text-xl font-bold">When</h2>
-        <p class="mb-0 text-sm text-ink-dim">Times use <strong class="text-ink"><%= timezoneValue %></strong>. Change your default in <a class="link" href="/settings#regional">Settings</a>; existing loops keep their timezone.</p>
+        <p class="mb-0 text-sm text-ink-dim">Times use <strong class="text-ink"><%= timezoneValue %></strong>. All loops follow the timezone in <a class="link" href="/settings#regional">Settings</a>.</p>
       </div>
       <%~ include('./schedule-picker', { scheduleMode, scheduleMinute, scheduleTime, scheduleWeekday, scheduleOnce, scheduleCustom }) %>
       <% if (it.schedulePreview) { %><div class="alert-ok"><p class="mb-0"><strong>Next run:</strong> <%= it.schedulePreview %></p></div><% } else if (scheduleMode !== 'manual') { %><p class="mb-0 text-sm text-ink-dim">Save a valid schedule to calculate its next run.</p><% } %>

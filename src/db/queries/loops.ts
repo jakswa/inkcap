@@ -11,7 +11,6 @@ export interface LoopFormInput {
   model?: string | null
   reasoningEffort?: string | null
   schedule?: string | null
-  timezone: string
   enabled: boolean
   nextFireAt?: Date | null
 }
@@ -29,17 +28,16 @@ export async function createLoop(input: LoopFormInput) {
   const [loop] = await sql.CreateLoop`
     INSERT INTO loops (
       id, account_id, user_id, name, prompt, system_prompt, provider_id, model,
-      reasoning_effort, schedule, timezone, enabled, next_fire_at
+      reasoning_effort, schedule, enabled, next_fire_at
     )
     VALUES (
       ${randomUUIDv7()}, ${input.accountId}, ${input.userId}, ${input.name},
       ${input.prompt}, ${input.systemPrompt ?? null}, ${input.providerId},
       ${input.model ?? null}, ${input.reasoningEffort ?? null},
-      ${input.schedule ?? null}, ${input.timezone}, ${input.enabled},
-      ${input.nextFireAt ?? null}
+      ${input.schedule ?? null}, ${input.enabled}, ${input.nextFireAt ?? null}
     )
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
-              model, reasoning_effort, schedule, timezone, enabled,
+              model, reasoning_effort, schedule, enabled,
               last_fired_at, next_fire_at, last_conversation_id,
               created_at, updated_at
   `
@@ -56,13 +54,12 @@ export async function updateLoop(input: LoopFormInput & { id: string }) {
         model = ${input.model ?? null},
         reasoning_effort = ${input.reasoningEffort ?? null},
         schedule = ${input.schedule ?? null},
-        timezone = ${input.timezone},
         enabled = ${input.enabled},
         next_fire_at = ${input.nextFireAt ?? null},
         updated_at = now()
     WHERE id = ${input.id} AND user_id = ${input.userId}
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
-              model, reasoning_effort, schedule, timezone, enabled,
+              model, reasoning_effort, schedule, enabled,
               last_fired_at, next_fire_at, last_conversation_id,
               created_at, updated_at
   `
@@ -72,7 +69,7 @@ export async function updateLoop(input: LoopFormInput & { id: string }) {
 export async function getLoopForUser(input: { id: string; userId: string }) {
   const [loop] = await sql.GetLoopForUser`
     SELECT l.id, l.account_id, l.user_id, l.name, l.prompt, l.system_prompt,
-           l.provider_id, l.model, l.reasoning_effort, l.schedule, l.timezone,
+           l.provider_id, l.model, l.reasoning_effort, l.schedule,
            l.enabled, l.last_fired_at, l.next_fire_at, l.last_conversation_id,
            l.created_at, l.updated_at,
            p.name AS provider_name,
@@ -89,7 +86,7 @@ export async function getLoopForUser(input: { id: string; userId: string }) {
 export async function listLoopsForUser(userId: string) {
   return sql.ListLoopsForUser`
     SELECT l.id, l.account_id, l.user_id, l.name, l.prompt, l.system_prompt,
-           l.provider_id, l.model, l.reasoning_effort, l.schedule, l.timezone,
+           l.provider_id, l.model, l.reasoning_effort, l.schedule,
            l.enabled, l.last_fired_at, l.next_fire_at, l.last_conversation_id,
            l.created_at, l.updated_at,
            p.name AS provider_name,
@@ -168,9 +165,43 @@ export async function setLoopEnabled(input: {
         updated_at = now()
     WHERE id = ${input.id} AND user_id = ${input.userId}
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
-              model, reasoning_effort, schedule, timezone, enabled,
+              model, reasoning_effort, schedule, enabled,
               last_fired_at, next_fire_at, last_conversation_id,
               created_at, updated_at
+  `
+  return loop
+}
+
+export async function listEnabledScheduledLoopsForUser(userId: string) {
+  return sql.ListEnabledScheduledLoopsForUser`
+    SELECT id, schedule
+    FROM loops
+    WHERE user_id = ${userId} AND enabled = true AND schedule IS NOT NULL
+    ORDER BY created_at ASC
+  `
+}
+
+export async function listLoopsMissingNextFireAt() {
+  return sql.ListLoopsMissingNextFireAt`
+    SELECT id, user_id, schedule
+    FROM loops
+    WHERE enabled = true AND schedule IS NOT NULL AND next_fire_at IS NULL
+    ORDER BY created_at ASC
+  `
+}
+
+export async function setLoopNextFireAt(input: {
+  id: string
+  userId: string
+  nextFireAt: Date | null
+}) {
+  const [loop] = await sql.SetLoopNextFireAt`
+    UPDATE loops
+    SET next_fire_at = ${input.nextFireAt},
+        enabled = ${input.nextFireAt !== null},
+        updated_at = now()
+    WHERE id = ${input.id} AND user_id = ${input.userId}
+    RETURNING id, enabled, next_fire_at
   `
   return loop
 }
@@ -187,7 +218,7 @@ export async function deleteLoop(input: { id: string; userId: string }) {
 export async function listDueLoops(now: Date) {
   return sql.ListDueLoops`
     SELECT id, account_id, user_id, name, prompt, system_prompt, provider_id,
-           model, reasoning_effort, schedule, timezone, enabled,
+           model, reasoning_effort, schedule, enabled,
            last_fired_at, next_fire_at, last_conversation_id,
            created_at, updated_at
     FROM loops
@@ -212,7 +243,7 @@ export async function claimDueLoop(input: {
       AND enabled = true
       AND next_fire_at = ${input.seenNextFireAt}
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
-              model, reasoning_effort, schedule, timezone, enabled,
+              model, reasoning_effort, schedule, enabled,
               last_fired_at, next_fire_at, last_conversation_id,
               created_at, updated_at
   `

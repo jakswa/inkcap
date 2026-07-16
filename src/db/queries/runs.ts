@@ -108,6 +108,15 @@ export async function getLatestRunForConversation(conversationId: string) {
   return run
 }
 
+export async function isOnlyRunForConversation(conversationId: string) {
+  const [row] = await sql.IsOnlyRunForConversation`
+    SELECT count(*) = 1 AS is_only_run
+    FROM runs
+    WHERE conversation_id = ${conversationId}
+  `
+  return row?.is_only_run ?? false
+}
+
 // Advance the run's leaf pointer as the tool loop creates each next assistant
 // message. Recovery/replay use leaf_message_id to find the message to seal.
 export async function setRunLeafMessage(input: { id: string; leafMessageId: string }) {
