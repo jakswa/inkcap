@@ -398,7 +398,8 @@ loopRoutes.post('/loops/:id/run', async (c) => {
   const loop = await getLoopForUser({ id: c.req.param('id'), userId: user.id })
   if (!loop) return c.notFound()
   try {
-    const conversation = await fireLoop(loop)
+    const timezone = (await getUserSettings(loop.user_id)).timeZone
+    const conversation = await fireLoop(loop, timezone)
     return c.redirect(`/conversations/${conversation.id}`)
   } catch (error) {
     const message = encodeURIComponent(error instanceof Error ? error.message : String(error))

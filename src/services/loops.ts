@@ -14,6 +14,15 @@ import { nextLoopWallTime, wallClockTime } from './loop-schedule'
 
 export type LoopRow = NonNullable<Awaited<ReturnType<typeof claimDueLoop>>>
 
+export function loopConversationTitle(name: string, timezone: string, now: Date = new Date()) {
+  const timestamp = new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: timezone,
+  }).format(now)
+  return `${name} — ${timestamp}`
+}
+
 export function humanizeRunStatus(status: string | null | undefined) {
   const labels: Record<string, string> = {
     queued: 'Queued', running: 'Running', streaming: 'Running',
@@ -32,17 +41,12 @@ export async function fireLoop(loop: {
   provider_id: string | null
   model: string | null
   reasoning_effort: string | null
-}) {
+}, timezone: string) {
   if (!loop.provider_id) throw new Error('Loop has no provider configured.')
-
-  const title = `${loop.name} — ${new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date())}`
 
   const conversation = await createConversation({
     userId: loop.user_id,
-    title,
+    title: loopConversationTitle(loop.name, timezone),
     providerId: loop.provider_id,
     model: loop.model,
     reasoningEffort: loop.reasoning_effort,
@@ -115,7 +119,7 @@ export async function tickLoops() {
       })
       if (!claimed) continue
       try {
-        await fireLoop(claimed)
+        await fireLoop(claimed, settings.timeZone)
       } catch (error) {
         console.error(`loop ${claimed.id} failed to start`, error)
         await notifyLoopStartFailure({

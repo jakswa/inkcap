@@ -10,6 +10,7 @@ const { createUser, getUserSettings, patchUserSettings } = await import('../../s
 const { createRun, getLatestRunForConversation, isOriginatingRun } = await import('../../src/db/queries/runs')
 const { encryptSession } = await import('../../src/utils/private-session')
 const { scheduleFormParts, wallTimeToInstant } = await import('../../src/services/loop-schedule')
+const { loopConversationTitle } = await import('../../src/services/loops')
 
 const origin = 'http://localhost:3000'
 const url = (path: string) => `${origin}${path}`
@@ -126,6 +127,12 @@ describe('loops', () => {
     expect(body).toContain('Provider &amp; model')
     expect(body).toContain('model-test')
     expect(body).not.toContain('<input id="model"')
+  })
+
+  test('formats loop conversation titles in the user timezone', () => {
+    const instant = new Date('2026-07-17T00:30:00Z')
+    expect(loopConversationTitle('Morning report', 'America/Los_Angeles', instant))
+      .toBe('Morning report — Jul 16, 2026, 5:30 PM')
   })
 
   test('builds clear common schedules in the user timezone', async () => {
