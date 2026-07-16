@@ -281,7 +281,7 @@ export interface ICreateLoopResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -301,7 +301,7 @@ export interface IUpdateLoopResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -321,7 +321,7 @@ export interface IGetLoopForUserResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -343,7 +343,7 @@ export interface IListLoopsForUserResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -385,30 +385,10 @@ export interface ISetLoopEnabledResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
-}
-
-/** Result of query `ListEnabledScheduledLoopsForUser`. */
-export interface IListEnabledScheduledLoopsForUserResult {
-    id: string;
-    schedule: string | null;
-}
-
-/** Result of query `ListLoopsMissingNextFireAt`. */
-export interface IListLoopsMissingNextFireAtResult {
-    id: string;
-    user_id: string;
-    schedule: string | null;
-}
-
-/** Result of query `SetLoopNextFireAt`. */
-export interface ISetLoopNextFireAtResult {
-    id: string;
-    enabled: boolean;
-    next_fire_at: Date | null;
 }
 
 /** Result of query `DeleteLoop`. */
@@ -416,8 +396,8 @@ export interface IDeleteLoopResult {
     id: string;
 }
 
-/** Result of query `ListDueLoops`. */
-export interface IListDueLoopsResult {
+/** Result of query `ListScheduledLoops`. */
+export interface IListScheduledLoopsResult {
     id: string;
     account_id: string;
     user_id: string;
@@ -430,7 +410,7 @@ export interface IListDueLoopsResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -450,7 +430,7 @@ export interface IClaimDueLoopResult {
     schedule: string | null;
     enabled: boolean;
     last_fired_at: Date | null;
-    next_fire_at: Date | null;
+    next_fire_at: string | null;
     last_conversation_id: string | null;
     created_at: Date;
     updated_at: Date;
@@ -1034,9 +1014,9 @@ export interface IGetLatestRunForConversationResult {
     updated_at: Date;
 }
 
-/** Result of query `IsOnlyRunForConversation`. */
-export interface IIsOnlyRunForConversationResult {
-    is_only_run: boolean | null;
+/** Result of query `IsOriginatingRun`. */
+export interface IIsOriginatingRunResult {
+    is_originating: boolean | null;
 }
 
 /** Result of query `SetRunLeafMessage`. */
@@ -1179,11 +1159,8 @@ export interface Queries {
     ListLoopsForUser: IListLoopsForUserResult;
     ListLoopRunHistory: IListLoopRunHistoryResult;
     SetLoopEnabled: ISetLoopEnabledResult;
-    ListEnabledScheduledLoopsForUser: IListEnabledScheduledLoopsForUserResult;
-    ListLoopsMissingNextFireAt: IListLoopsMissingNextFireAtResult;
-    SetLoopNextFireAt: ISetLoopNextFireAtResult;
     DeleteLoop: IDeleteLoopResult;
-    ListDueLoops: IListDueLoopsResult;
+    ListScheduledLoops: IListScheduledLoopsResult;
     ClaimDueLoop: IClaimDueLoopResult;
     NoteLoopFired: INoteLoopFiredResult;
     ListLoopMcpServers: IListLoopMcpServersResult;
@@ -1235,7 +1212,7 @@ export interface Queries {
     GetRunningRunForConversation: IGetRunningRunForConversationResult;
     GetBlockingRunForConversation: IGetBlockingRunForConversationResult;
     GetLatestRunForConversation: IGetLatestRunForConversationResult;
-    IsOnlyRunForConversation: IIsOnlyRunForConversationResult;
+    IsOriginatingRun: IIsOriginatingRunResult;
     SetRunLeafMessage: ISetRunLeafMessageResult;
     IncrementRunTurnCount: IIncrementRunTurnCountResult;
     ListRunningRuns: IListRunningRunsResult;

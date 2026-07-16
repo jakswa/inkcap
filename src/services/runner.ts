@@ -562,7 +562,7 @@ async function finishRun(
     error: errorMessage,
   })
   if (status === 'done' || status === 'error') {
-    void notifyLoopRunStatus(handle.conversationId, status, errorMessage).catch((error) =>
+    void notifyLoopRunStatus(handle.runId, handle.conversationId, status, errorMessage).catch((error) =>
       console.warn('loop notification failed', error),
     )
   }
@@ -790,7 +790,7 @@ async function parkForApproval(
     status: 'waiting_approval',
     error: null,
   })
-  void notifyLoopRunStatus(handle.conversationId, 'waiting_approval').catch((error) =>
+  void notifyLoopRunStatus(handle.runId, handle.conversationId, 'waiting_approval').catch((error) =>
     console.warn('loop approval notification failed', error),
   )
 }

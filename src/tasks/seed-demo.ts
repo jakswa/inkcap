@@ -30,6 +30,7 @@ import {
 import { createRun } from '../db/queries/runs'
 import { createToolApproval } from '../db/queries/tool-approvals'
 import { createUser, getUserByEmailNormalized, patchUserSettings } from '../db/queries/users'
+import { nextLoopWallTime } from '../services/loop-schedule'
 import { hashPassword } from '../utils/password'
 import { normalizeEmail } from '../utils/validation'
 import { randomUUIDv7 } from 'bun'
@@ -169,7 +170,6 @@ try {
       model: 'qwen3-32b',
       schedule: '0 8 * * 1-5',
       enabled: true,
-      nextFireAt: new Date(nowMs() + minutes(11 * 60)),
       tools: [{ mcpServerId: mcpIds[1]!, autoApprove: true }],
     },
     {
@@ -178,7 +178,6 @@ try {
       model: 'llama-3.3-70b-instruct',
       schedule: '30 6 * * 1',
       enabled: true,
-      nextFireAt: new Date(nowMs() + minutes(2 * 24 * 60)),
       tools: [{ mcpServerId: mcpIds[0]!, autoApprove: false }],
     },
     {
@@ -187,7 +186,6 @@ try {
       model: 'qwen3-32b',
       schedule: null,
       enabled: false,
-      nextFireAt: null,
       tools: [],
     },
   ]
@@ -202,7 +200,7 @@ try {
       reasoningEffort: 'medium',
       schedule: seed.schedule,
       enabled: seed.enabled,
-      nextFireAt: seed.nextFireAt,
+      nextFireAt: nextLoopWallTime(seed.schedule, 'America/New_York', new Date(nowMs())),
     })
     await replaceLoopMcpServers({ loopId: loop.id, servers: seed.tools })
   }

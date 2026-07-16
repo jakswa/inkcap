@@ -108,13 +108,15 @@ export async function getLatestRunForConversation(conversationId: string) {
   return run
 }
 
-export async function isOnlyRunForConversation(conversationId: string) {
-  const [row] = await sql.IsOnlyRunForConversation`
-    SELECT count(*) = 1 AS is_only_run
+export async function isOriginatingRun(input: { runId: string; conversationId: string }) {
+  const [row] = await sql.IsOriginatingRun`
+    SELECT id = ${input.runId} AS is_originating
     FROM runs
-    WHERE conversation_id = ${conversationId}
+    WHERE conversation_id = ${input.conversationId}
+    ORDER BY created_at ASC, id ASC
+    LIMIT 1
   `
-  return row?.is_only_run ?? false
+  return row?.is_originating ?? false
 }
 
 // Advance the run's leaf pointer as the tool loop creates each next assistant

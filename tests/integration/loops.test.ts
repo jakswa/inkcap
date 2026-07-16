@@ -7,9 +7,9 @@ const { createConversation } = await import('../../src/db/queries/conversations'
 const { createMcpServer } = await import('../../src/db/queries/mcp-servers')
 const { createProvider } = await import('../../src/db/queries/providers')
 const { createUser, getUserSettings, patchUserSettings } = await import('../../src/db/queries/users')
-const { createRun, getLatestRunForConversation, isOnlyRunForConversation } = await import('../../src/db/queries/runs')
+const { createRun, getLatestRunForConversation, isOriginatingRun } = await import('../../src/db/queries/runs')
 const { encryptSession } = await import('../../src/utils/private-session')
-const { nextLoopFireAt, scheduleFormParts } = await import('../../src/services/loops')
+const { scheduleFormParts, wallTimeToInstant } = await import('../../src/services/loop-schedule')
 
 const origin = 'http://localhost:3000'
 const url = (path: string) => `${origin}${path}`
@@ -104,7 +104,7 @@ describe('loops', () => {
     expect(scheduled?.name).toBe('Weekday report')
     expect(scheduled?.schedule).toBe('0 8 * * 1-5')
     expect(scheduled?.enabled).toBe(true)
-    expect(scheduled?.next_fire_at).toBeInstanceOf(Date)
+    expect(scheduled?.next_fire_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/)
 
     const disable = await app.request(url(`/loops/${id}/toggle`), { method: 'POST', headers })
     expect(disable.status).toBe(302)
@@ -144,10 +144,10 @@ describe('loops', () => {
     expect(response.status).toBe(302)
     const loop = (await listLoopsForUser(user.id)).find((row) => row.name === 'Daily local report')
     expect(loop?.schedule).toBe('30 9 * * *')
-    expect(loop?.next_fire_at).toBeInstanceOf(Date)
+    expect(loop?.next_fire_at).toMatch(/^\d{4}-\d{2}-\d{2}T09:30:00$/)
   })
 
-  test('timezone changes immediately reschedule existing loops', async () => {
+  test('timezone changes reinterpret the same local loop time', async () => {
     const { user, headers, provider } = await fixture()
     await patchUserSettings({ userId: user.id, patch: { timeZone: 'America/New_York' } })
     await app.request(url('/loops'), {
@@ -161,7 +161,7 @@ describe('loops', () => {
       }),
     })
     const before = (await listLoopsForUser(user.id)).find((row) => row.name === 'Timezone follower')!
-    const expected = nextLoopFireAt(before.schedule, 'Europe/Paris', new Date())
+    const beforeInstant = wallTimeToInstant(before.next_fire_at!, 'America/New_York')
 
     const response = await app.request(url('/settings/timezone'), {
       method: 'POST',
@@ -172,8 +172,9 @@ describe('loops', () => {
 
     const after = await getLoopForUser({ id: before.id, userId: user.id })
     expect((await getUserSettings(user.id)).timeZone).toBe('Europe/Paris')
-    expect(after?.next_fire_at?.getTime()).toBe(expected?.getTime())
-    expect(after?.next_fire_at?.getTime()).not.toBe(before.next_fire_at?.getTime())
+    expect(after?.next_fire_at).toBe(before.next_fire_at)
+    expect(wallTimeToInstant(after!.next_fire_at!, 'Europe/Paris')?.getTime())
+      .not.toBe(beforeInstant?.getTime())
   })
 
   test('supports a one-time local date and pauses after that occurrence', async () => {
@@ -188,7 +189,7 @@ describe('loops', () => {
     expect(response.status).toBe(302)
     const loop = (await listLoopsForUser(user.id)).find((row) => row.name === 'One shot')
     expect(loop?.schedule).toBe(`once:${local}`)
-    expect(loop?.next_fire_at).toBeInstanceOf(Date)
+    expect(loop?.next_fire_at).toBe(`${local}:00`)
   })
 
   test('hourly schedules round-trip every minute through the preset UI', () => {
@@ -290,11 +291,12 @@ describe('loops', () => {
       routineId: loop.id,
     })
 
-    await createRun({ conversationId: conversation.id, status: 'done' })
-    expect(await isOnlyRunForConversation(conversation.id)).toBe(true)
+    const originating = await createRun({ conversationId: conversation.id, status: 'done' })
+    expect(await isOriginatingRun({ runId: originating.id, conversationId: conversation.id })).toBe(true)
 
-    await createRun({ conversationId: conversation.id, status: 'done' })
-    expect(await isOnlyRunForConversation(conversation.id)).toBe(false)
+    const continuation = await createRun({ conversationId: conversation.id, status: 'done' })
+    expect(await isOriginatingRun({ runId: continuation.id, conversationId: conversation.id })).toBe(false)
+    expect(await isOriginatingRun({ runId: originating.id, conversationId: conversation.id })).toBe(true)
   })
 
   test('run now creates an inspectable conversation', async () => {

@@ -14,7 +14,15 @@ import {
 import { countPushSubscriptionsForUser } from '../db/queries/push-subscriptions'
 import { listMcpServersForUser } from '../db/queries/mcp-servers'
 import { getProviderForUser, listProvidersForUser } from '../db/queries/providers'
-import { fireLoop, defaultLoopTimezone, humanizeLoopSchedule, humanizeRunStatus, nextLoopFireAt, normalizeSchedule, scheduleFormParts, validateLoopSchedule } from '../services/loops'
+import { fireLoop, humanizeRunStatus } from '../services/loops'
+import {
+  humanizeLoopSchedule,
+  nextLoopFireAt,
+  normalizeSchedule,
+  scheduleFormParts,
+  validateLoopSchedule,
+  wallTimeToInstant,
+} from '../services/loop-schedule'
 import { readString } from '../utils/validation'
 import { providerModelError } from '../utils/providers'
 import { getUserSettings } from '../db/queries/users'
@@ -29,6 +37,11 @@ const validReasoningEfforts = new Set(['off', 'low', 'medium', 'high', 'max'])
 
 function requireUser(c: Context) {
   return c.var.user
+}
+
+function relativeWallTime(value: string | null, timezone: string) {
+  if (!value) return null
+  return relativeTime(wallTimeToInstant(value, timezone) ?? value)
 }
 
 function readStringList(form: FormData, name: string): string[] {
@@ -95,12 +108,12 @@ async function renderList(c: Context) {
     notice,
     pushSubscriptionCount,
     loops: loops.map((loop) => {
-      const timezone = ownerTimeZones.get(loop.user_id) ?? defaultLoopTimezone()
+      const timezone = ownerTimeZones.get(loop.user_id) ?? 'UTC'
       return {
         ...loop,
         timezone,
         lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
-        nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+        nextFireLabel: relativeWallTime(loop.next_fire_at, timezone),
         scheduleLabel: humanizeLoopSchedule(loop.schedule, timezone),
         runStatusLabel: humanizeRunStatus(loop.last_run_status),
       }
@@ -154,11 +167,11 @@ async function renderForm(
     errors: options.errors ?? [],
     values,
     scheduleParts: scheduleFormParts(values.schedule ?? options.loop?.schedule),
-    timeZone: userSettings.timeZone ?? defaultLoopTimezone(),
+    timeZone: userSettings.timeZone,
     notificationsEnabled: pushSubscriptionCount > 0,
     schedulePreview: (() => {
       const schedule = normalizeSchedule(values.schedule ?? options.loop?.schedule)
-      const timezone = userSettings.timeZone ?? defaultLoopTimezone()
+      const timezone = userSettings.timeZone
       if (!schedule) return null
       try {
         const next = nextLoopFireAt(schedule, timezone)
@@ -202,7 +215,7 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     : scheduleMode === 'weekly' && timeMatch ? `${Number(timeMatch[2])} ${Number(timeMatch[1])} * * ${weekday}`
     : normalizeSchedule(custom)
   const userSettings = await getUserSettings(existing?.user_id ?? user.id)
-  const timezone = userSettings.timeZone ?? defaultLoopTimezone()
+  const timezone = userSettings.timeZone
   const enabled = scheduleMode !== 'manual' && readString(form, 'enabled') === 'on'
   const selectedMcpIdsRaw = readStringList(form, 'enabled_mcp_server_id')
   const approvedMcpIdsRaw = readStringList(form, 'auto_approve_mcp_server_id')
@@ -226,7 +239,7 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     if (modelError) errors.push(modelError)
   }
 
-  let nextFireAt: Date | null = null
+  let nextFireAt: string | null = null
   if (enabled && !schedule) {
     errors.push('Enabled loops need a cron schedule. Leave the loop disabled for manual-only runs.')
   } else {
@@ -264,7 +277,7 @@ async function readLoopForm(c: Context, existing?: Awaited<ReturnType<typeof get
     })),
     selectedMcpIds,
     approvedMcpIds: [...approvedMcpIds],
-    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', scheduleMode, scheduleMinute: minute, scheduleTime: time, scheduleWeekday: weekday, scheduleOnce: once, scheduleCustom: custom, timezone, enabled: enabled ? 'on' : '' },
+    values: { name, prompt, systemPrompt, providerId, model, reasoningEffort, schedule: schedule ?? '', scheduleMode, scheduleMinute: minute, scheduleTime: time, scheduleWeekday: weekday, scheduleOnce: once, scheduleCustom: custom, enabled: enabled ? 'on' : '' },
   }
 }
 
@@ -324,7 +337,7 @@ loopRoutes.get('/loops/:id', async (c) => {
       ...loop,
       timezone: ownerSettings.timeZone,
       lastFiredLabel: loop.last_fired_at ? relativeTime(loop.last_fired_at) : 'Never',
-      nextFireLabel: loop.next_fire_at ? relativeTime(loop.next_fire_at) : null,
+      nextFireLabel: relativeWallTime(loop.next_fire_at, ownerSettings.timeZone),
       scheduleLabel: humanizeLoopSchedule(loop.schedule, ownerSettings.timeZone),
     },
     history: history.map((run) => ({
@@ -364,7 +377,7 @@ loopRoutes.post('/loops/:id/toggle', async (c) => {
   const loop = await getLoopForUser({ id: c.req.param('id'), userId: user.id })
   if (!loop) return c.notFound()
   const enabled = !loop.enabled
-  let nextFireAt: Date | null = null
+  let nextFireAt: string | null = null
   try {
     const timezone = (await getUserSettings(loop.user_id)).timeZone
     nextFireAt = enabled ? validateLoopSchedule(normalizeSchedule(loop.schedule), timezone) : null

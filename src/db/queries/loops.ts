@@ -1,6 +1,10 @@
 import { sql } from '../client'
 import { randomUUIDv7 } from 'bun'
 
+function wallTimestamp(value: string | null | undefined) {
+  return value?.replace('T', ' ') ?? null
+}
+
 export interface LoopFormInput {
   accountId: string
   userId: string
@@ -12,7 +16,7 @@ export interface LoopFormInput {
   reasoningEffort?: string | null
   schedule?: string | null
   enabled: boolean
-  nextFireAt?: Date | null
+  nextFireAt?: string | null
 }
 
 export async function listEnabledLoopsForProvider(providerId: string) {
@@ -34,11 +38,12 @@ export async function createLoop(input: LoopFormInput) {
       ${randomUUIDv7()}, ${input.accountId}, ${input.userId}, ${input.name},
       ${input.prompt}, ${input.systemPrompt ?? null}, ${input.providerId},
       ${input.model ?? null}, ${input.reasoningEffort ?? null},
-      ${input.schedule ?? null}, ${input.enabled}, ${input.nextFireAt ?? null}
+      ${input.schedule ?? null}, ${input.enabled}, ${wallTimestamp(input.nextFireAt)}::timestamp
     )
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
               model, reasoning_effort, schedule, enabled,
-              last_fired_at, next_fire_at, last_conversation_id,
+              last_fired_at, replace(next_fire_at::text, ' ', 'T') AS next_fire_at,
+              last_conversation_id,
               created_at, updated_at
   `
   return loop
@@ -55,12 +60,13 @@ export async function updateLoop(input: LoopFormInput & { id: string }) {
         reasoning_effort = ${input.reasoningEffort ?? null},
         schedule = ${input.schedule ?? null},
         enabled = ${input.enabled},
-        next_fire_at = ${input.nextFireAt ?? null},
+        next_fire_at = ${wallTimestamp(input.nextFireAt)}::timestamp,
         updated_at = now()
     WHERE id = ${input.id} AND user_id = ${input.userId}
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
               model, reasoning_effort, schedule, enabled,
-              last_fired_at, next_fire_at, last_conversation_id,
+              last_fired_at, replace(next_fire_at::text, ' ', 'T') AS next_fire_at,
+              last_conversation_id,
               created_at, updated_at
   `
   return loop
@@ -70,8 +76,9 @@ export async function getLoopForUser(input: { id: string; userId: string }) {
   const [loop] = await sql.GetLoopForUser`
     SELECT l.id, l.account_id, l.user_id, l.name, l.prompt, l.system_prompt,
            l.provider_id, l.model, l.reasoning_effort, l.schedule,
-           l.enabled, l.last_fired_at, l.next_fire_at, l.last_conversation_id,
-           l.created_at, l.updated_at,
+           l.enabled, l.last_fired_at,
+           replace(l.next_fire_at::text, ' ', 'T') AS next_fire_at,
+           l.last_conversation_id, l.created_at, l.updated_at,
            p.name AS provider_name,
            c.title AS last_conversation_title
     FROM loops l
@@ -87,8 +94,9 @@ export async function listLoopsForUser(userId: string) {
   return sql.ListLoopsForUser`
     SELECT l.id, l.account_id, l.user_id, l.name, l.prompt, l.system_prompt,
            l.provider_id, l.model, l.reasoning_effort, l.schedule,
-           l.enabled, l.last_fired_at, l.next_fire_at, l.last_conversation_id,
-           l.created_at, l.updated_at,
+           l.enabled, l.last_fired_at,
+           replace(l.next_fire_at::text, ' ', 'T') AS next_fire_at,
+           l.last_conversation_id, l.created_at, l.updated_at,
            p.name AS provider_name,
            c.title AS last_conversation_title,
            last_run.status AS last_run_status,
@@ -156,52 +164,19 @@ export async function setLoopEnabled(input: {
   id: string
   userId: string
   enabled: boolean
-  nextFireAt?: Date | null
+  nextFireAt?: string | null
 }) {
   const [loop] = await sql.SetLoopEnabled`
     UPDATE loops
     SET enabled = ${input.enabled},
-        next_fire_at = ${input.nextFireAt ?? null},
+        next_fire_at = ${wallTimestamp(input.nextFireAt)}::timestamp,
         updated_at = now()
     WHERE id = ${input.id} AND user_id = ${input.userId}
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
               model, reasoning_effort, schedule, enabled,
-              last_fired_at, next_fire_at, last_conversation_id,
+              last_fired_at, replace(next_fire_at::text, ' ', 'T') AS next_fire_at,
+              last_conversation_id,
               created_at, updated_at
-  `
-  return loop
-}
-
-export async function listEnabledScheduledLoopsForUser(userId: string) {
-  return sql.ListEnabledScheduledLoopsForUser`
-    SELECT id, schedule
-    FROM loops
-    WHERE user_id = ${userId} AND enabled = true AND schedule IS NOT NULL
-    ORDER BY created_at ASC
-  `
-}
-
-export async function listLoopsMissingNextFireAt() {
-  return sql.ListLoopsMissingNextFireAt`
-    SELECT id, user_id, schedule
-    FROM loops
-    WHERE enabled = true AND schedule IS NOT NULL AND next_fire_at IS NULL
-    ORDER BY created_at ASC
-  `
-}
-
-export async function setLoopNextFireAt(input: {
-  id: string
-  userId: string
-  nextFireAt: Date | null
-}) {
-  const [loop] = await sql.SetLoopNextFireAt`
-    UPDATE loops
-    SET next_fire_at = ${input.nextFireAt},
-        enabled = ${input.nextFireAt !== null},
-        updated_at = now()
-    WHERE id = ${input.id} AND user_id = ${input.userId}
-    RETURNING id, enabled, next_fire_at
   `
   return loop
 }
@@ -215,36 +190,36 @@ export async function deleteLoop(input: { id: string; userId: string }) {
   return loop
 }
 
-export async function listDueLoops(now: Date) {
-  return sql.ListDueLoops`
+export async function listScheduledLoops() {
+  return sql.ListScheduledLoops`
     SELECT id, account_id, user_id, name, prompt, system_prompt, provider_id,
-           model, reasoning_effort, schedule, enabled,
-           last_fired_at, next_fire_at, last_conversation_id,
-           created_at, updated_at
+           model, reasoning_effort, schedule, enabled, last_fired_at,
+           replace(next_fire_at::text, ' ', 'T') AS next_fire_at,
+           last_conversation_id, created_at, updated_at
     FROM loops
-    WHERE enabled = true AND next_fire_at IS NOT NULL AND next_fire_at <= ${now}
+    WHERE enabled = true AND next_fire_at IS NOT NULL
     ORDER BY next_fire_at ASC
-    LIMIT 25
   `
 }
 
 export async function claimDueLoop(input: {
   id: string
-  seenNextFireAt: Date
-  nextFireAt: Date | null
+  seenNextFireAt: string
+  nextFireAt: string | null
 }) {
   const [loop] = await sql.ClaimDueLoop`
     UPDATE loops
     SET last_fired_at = now(),
-        next_fire_at = ${input.nextFireAt},
+        next_fire_at = ${wallTimestamp(input.nextFireAt)}::timestamp,
         enabled = ${input.nextFireAt !== null},
         updated_at = now()
     WHERE id = ${input.id}
       AND enabled = true
-      AND next_fire_at = ${input.seenNextFireAt}
+      AND next_fire_at = ${wallTimestamp(input.seenNextFireAt)}::timestamp
     RETURNING id, account_id, user_id, name, prompt, system_prompt, provider_id,
               model, reasoning_effort, schedule, enabled,
-              last_fired_at, next_fire_at, last_conversation_id,
+              last_fired_at, replace(next_fire_at::text, ' ', 'T') AS next_fire_at,
+              last_conversation_id,
               created_at, updated_at
   `
   return loop

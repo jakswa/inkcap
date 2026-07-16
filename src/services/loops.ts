@@ -1,86 +1,18 @@
-import { Cron } from 'croner'
 import { createConversation, setConversationCurrNode } from '../db/queries/conversations'
 import { createMessage } from '../db/queries/messages'
 import { setConversationMcpOverride } from '../db/queries/mcp-servers'
 import {
   claimDueLoop,
-  listDueLoops,
-  listEnabledScheduledLoopsForUser,
   listLoopMcpServers,
-  listLoopsMissingNextFireAt,
+  listScheduledLoops,
   noteLoopFired,
-  setLoopNextFireAt,
 } from '../db/queries/loops'
 import { getUserSettings } from '../db/queries/users'
 import { notifyLoopStartFailure } from './push'
 import { startRun } from './runner'
-import { timeZoneLabel, zonedLocalDateTime } from '../utils/timezone'
+import { nextLoopWallTime, wallClockTime } from './loop-schedule'
 
 export type LoopRow = NonNullable<Awaited<ReturnType<typeof claimDueLoop>>>
-
-export function normalizeSchedule(value: string | null | undefined) {
-  const schedule = (value ?? '').trim()
-  return schedule.length > 0 ? schedule : null
-}
-
-export function defaultLoopTimezone() {
-  return process.env['TZ'] || 'UTC'
-}
-
-export function nextLoopFireAt(
-  schedule: string | null,
-  timezone: string,
-  from: Date = new Date(),
-) {
-  if (!schedule) return null
-  if (schedule.startsWith('once:')) {
-    const instant = zonedLocalDateTime(schedule.slice(5), timezone)
-    return instant && instant > from ? instant : null
-  }
-  const job = new Cron(schedule, { paused: true, timezone, mode: '5-part' })
-  const next = job.nextRun(from)
-  return next ? new Date(next) : null
-}
-
-export function scheduleFormParts(schedule: string | null | undefined) {
-  if (!schedule) return { mode: 'manual', minute: '0', time: '09:00', weekday: '1', once: '', custom: '' }
-  if (schedule.startsWith('once:')) return { mode: 'once', minute: '0', time: '09:00', weekday: '1', once: schedule.slice(5), custom: '' }
-  let match = /^(\d{1,2}) \* \* \* \*$/.exec(schedule)
-  if (match) return { mode: 'hourly', minute: match[1]!, time: '09:00', weekday: '1', once: '', custom: '' }
-  match = /^(\d{1,2}) (\d{1,2}) \* \* (\*|1-5|[0-6])$/.exec(schedule)
-  if (match) {
-    const mode = match[3] === '*' ? 'daily' : match[3] === '1-5' ? 'weekdays' : 'weekly'
-    return { mode, minute: '0', time: `${match[2]!.padStart(2, '0')}:${match[1]!.padStart(2, '0')}`, weekday: match[3] === '*' || match[3] === '1-5' ? '1' : match[3]!, once: '', custom: '' }
-  }
-  return { mode: 'custom', minute: '0', time: '09:00', weekday: '1', once: '', custom: schedule }
-}
-
-export function humanizeLoopSchedule(schedule: string | null, timezone: string) {
-  if (!schedule) return 'Manual only'
-  const parts = scheduleFormParts(schedule)
-  let next: Date | null
-  try {
-    next = nextLoopFireAt(schedule, timezone)
-  } catch {
-    return `Invalid schedule (${schedule}) in ${timezone}`
-  }
-  const zone = timeZoneLabel(timezone, next ?? new Date())
-  if (parts.mode === 'once') {
-    const instant = zonedLocalDateTime(parts.once, timezone)
-    return instant ? `Once on ${new Intl.DateTimeFormat('en-US', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'short' }).format(instant)} ${zone}` : `Once in ${timezone}`
-  }
-  if (parts.mode === 'hourly') return `Hourly at :${parts.minute.padStart(2, '0')} ${zone}`
-  const [hour, minute] = parts.time.split(':').map(Number)
-  const sample = new Date(Date.UTC(2024, 0, 1, hour, minute))
-  const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(sample)
-  if (parts.mode === 'daily') return `Daily at ${clock} ${zone}`
-  if (parts.mode === 'weekdays') return `Weekdays at ${clock} ${zone}`
-  if (parts.mode === 'weekly') {
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    return `Every ${days[Number(parts.weekday)]} at ${clock} ${zone}`
-  }
-  return `Custom schedule (${schedule}) in ${timezone}`
-}
 
 export function humanizeRunStatus(status: string | null | undefined) {
   const labels: Record<string, string> = {
@@ -89,57 +21,6 @@ export function humanizeRunStatus(status: string | null | undefined) {
     error: 'Failed', failed: 'Failed', cancelled: 'Cancelled',
   }
   return status ? (labels[status] ?? 'In progress') : 'Never run'
-}
-
-export function validateLoopSchedule(schedule: string | null, timezone: string) {
-  if (!schedule) return null
-  try {
-    return nextLoopFireAt(schedule, timezone)
-  } catch (error) {
-    throw new Error(
-      `Schedule is not a valid 5-field cron expression: ${error instanceof Error ? error.message : String(error)}`,
-    )
-  }
-}
-
-// next_fire_at is a materialized scheduler cursor. Rebuild it when the user's
-// timezone changes so an already-enabled loop immediately follows the new
-// setting rather than firing once more at its old local time.
-export async function rescheduleLoopsForUser(userId: string, timezone: string) {
-  const loops = await listEnabledScheduledLoopsForUser(userId)
-  const now = new Date()
-  for (const loop of loops) {
-    let nextFireAt: Date | null = null
-    try {
-      nextFireAt = nextLoopFireAt(loop.schedule, timezone, now)
-    } catch (error) {
-      console.warn(`invalid loop schedule for ${loop.id}:`, error)
-    }
-    await setLoopNextFireAt({ id: loop.id, userId, nextFireAt })
-  }
-}
-
-// Migration 018 clears enabled cursors before dropping the old per-loop
-// timezone snapshot. Rehydrate only missing cursors on boot, preserving normal
-// catch-up behavior for schedules that became due while the app was offline.
-export async function rescheduleLoopsMissingNextFireAt() {
-  const loops = await listLoopsMissingNextFireAt()
-  const settingsByUser = new Map<string, Awaited<ReturnType<typeof getUserSettings>>>()
-  const now = new Date()
-  for (const loop of loops) {
-    let settings = settingsByUser.get(loop.user_id)
-    if (!settings) {
-      settings = await getUserSettings(loop.user_id)
-      settingsByUser.set(loop.user_id, settings)
-    }
-    let nextFireAt: Date | null = null
-    try {
-      nextFireAt = nextLoopFireAt(loop.schedule, settings.timeZone, now)
-    } catch (error) {
-      console.warn(`invalid loop schedule for ${loop.id}:`, error)
-    }
-    await setLoopNextFireAt({ id: loop.id, userId: loop.user_id, nextFireAt })
-  }
 }
 
 export async function fireLoop(loop: {
@@ -211,13 +92,19 @@ export async function tickLoops() {
   schedulerBusy = true
   try {
     const now = new Date()
-    const due = await listDueLoops(now)
-    for (const seen of due) {
+    const scheduled = await listScheduledLoops()
+    const settingsByUser = new Map<string, Awaited<ReturnType<typeof getUserSettings>>>()
+    for (const seen of scheduled) {
       if (!seen.next_fire_at || !seen.schedule) continue
-      let nextFireAt: Date | null = null
+      let settings = settingsByUser.get(seen.user_id)
+      if (!settings) {
+        settings = await getUserSettings(seen.user_id)
+        settingsByUser.set(seen.user_id, settings)
+      }
+      if (seen.next_fire_at > wallClockTime(now, settings.timeZone)) continue
+      let nextFireAt: string | null = null
       try {
-        const settings = await getUserSettings(seen.user_id)
-        nextFireAt = nextLoopFireAt(seen.schedule, settings.timeZone, now)
+        nextFireAt = nextLoopWallTime(seen.schedule, settings.timeZone, now)
       } catch (error) {
         console.warn(`invalid loop schedule for ${seen.id}:`, error)
       }
@@ -255,9 +142,7 @@ export function startLoopScheduler() {
     interval = setInterval(() => void tickLoops(), 60_000)
     interval.unref?.()
   }
-  void rescheduleLoopsMissingNextFireAt()
-    .then(() => tickLoops())
-    .catch((error) => console.error('failed to prepare loop scheduler', error))
+  void tickLoops()
 }
 
 export function stopLoopSchedulerForTests() {
