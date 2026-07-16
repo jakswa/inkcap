@@ -13,9 +13,9 @@
       <p class="mt-4 text-ink-dim"><%= it.loop.provider_name || 'Missing provider' %><% if (it.loop.model) { %> · <%= it.loop.model %><% } %></p>
     </div>
     <div class="flex flex-wrap gap-2">
+      <a class="btn btn-ghost" href="/loops/<%= it.loop.id %>/edit">Edit loop</a>
       <form method="post" action="/loops/<%= it.loop.id %>/run"><button class="btn btn-primary" type="submit">Run now</button></form>
-      <form method="post" action="/loops/<%= it.loop.id %>/toggle"><button class="btn btn-ghost" type="submit"><%= it.loop.enabled ? 'Disable' : 'Enable' %></button></form>
-      <a class="btn btn-ghost" href="/loops/<%= it.loop.id %>/edit">Edit</a>
+      <% if (it.loop.schedule) { %><form method="post" action="/loops/<%= it.loop.id %>/toggle"><button class="btn btn-ghost" type="submit"><%= it.loop.enabled ? 'Pause schedule' : 'Enable schedule' %></button></form><% } %>
       <a class="btn btn-ghost" href="/loops">All loops</a>
     </div>
   </div>

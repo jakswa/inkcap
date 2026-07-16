@@ -83,6 +83,9 @@ describe('loops', () => {
     expect(listBody).toContain('Morning report')
     expect(listBody).toContain('Manual only')
     expect(listBody).toContain('Paused automation')
+    expect(listBody).toContain('>Edit loop</a>')
+    expect(listBody).not.toContain('<summary>Manage</summary>')
+    expect(listBody).not.toContain('>Enable schedule</button>')
     const id = (await listLoopsForUser(user.id)).find((loop) => loop.name === 'Morning report')?.id ?? ''
     expect(id).not.toBe('')
 
